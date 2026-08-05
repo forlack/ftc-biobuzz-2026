@@ -21,7 +21,9 @@ apply plugin: 'com.android.application'
 
 android {
 
-    compileSdkVersion 30
+    // Bumped from 30 to 34: Pedro Pathing's androidx transitive deps require compileSdk >= 34.
+    // minSdk/targetSdk are intentionally unchanged, so runtime behavior matches stock FTC SDK.
+    compileSdk 34
 
     signingConfigs {
         release {

@@ -39,9 +39,12 @@ proguard/
 # Android Studio captures folder
 captures/
 
-# IntelliJ
+# IntelliJ / Android Studio
 *.iml
 .idea/
+
+# VS Code
+.vscode/
 
 # For Mac users
 .DS_Store
