@@ -50,6 +50,27 @@ rotation contaminates that pod's reading. The forward pod's fore/aft position an
 pod's left/right position are not part of the math, so the 6" spacing never appears in
 `Constants.java`.
 
+### Where to mount pods on the NEXT robot
+
+**Minimize each pod's offset from the center of rotation.** Rotating at rate `w`, a pod at
+perpendicular distance `d` reads a spurious `w * d`. The Pinpoint cancels it using the
+configured offset, but the leftover error scales with `d` — both from heading-rate error and
+from error in the measured offset. At `d = 0` there is nothing to cancel.
+
+| Pod | Ideal | Test platform |
+|---|---|---|
+| Forward / parallel | on the centerline, `forwardPodY ~ 0` | 2.125" |
+| Strafe / perpendicular | at the center of rotation, `strafePodX ~ 0` | **6.15"** |
+
+> **Do NOT apply 3-pod reasoning here.** In a classic dead-wheel setup two parallel pods
+> derive heading from their difference, so a wide separation improves angular resolution.
+> The **Pinpoint has its own IMU** for heading (`recalibrateIMU`, `resetPosAndIMU`,
+> `yawScalar`), so pod SEPARATION is irrelevant. Only each pod's offset from the center of
+> rotation matters, and smaller is better.
+
+This is a refinement, not a correctness issue — the offsets exist so imperfect mounting works.
+It matters most in autos with lots of rotation, where the error accumulates.
+
 **Robot network:** SSID `2222-RC` (5 GHz). Control Hub is the AP at **192.168.43.1**;
 Driver Hub associates at 192.168.43.13. Team is **24620**.
 
