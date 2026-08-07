@@ -14,7 +14,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 /**
- * Pedro Pathing configuration for team 2222.
+ * Pedro Pathing configuration for team 24620.
  *
  * Hardware comes from 2222-Config.xml: mecanum drive on FrontLeft/FrontRight/BackLeft/
  * BackRight, goBILDA Pinpoint on "odo".

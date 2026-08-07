@@ -43,8 +43,12 @@ pod's left/right position are not part of the math, so the 6" spacing never appe
 `Constants.java`.
 
 **Robot network:** SSID `2222-RC` (5 GHz). Control Hub is the AP at **192.168.43.1**;
-Driver Hub associates at 192.168.43.13. Team appears to be **2222**; active robot config
-is `2222-Config.xml`.
+Driver Hub associates at 192.168.43.13. Team is **24620**.
+
+> **Naming mismatch:** the active robot config is `2222-Config.xml` and the RC WiFi SSID is
+> `2222-RC` — both carry an old team number. Harmless for code (the filenames are just
+> strings), but the SSID should be the real team number for competition. Rename on the
+> Driver Station: config via Configure Robot, SSID via the Control Hub's network settings.
 
 The laptop's normal WiFi (`Ender`, 10.0.0.x) **cannot reach the robot**. To talk to the
 Control Hub, either plug in USB (preferred — keeps internet) or join `2222-RC`.
@@ -141,7 +145,7 @@ dashboard with a lone "Templates" button almost always means **no Panels-aware O
 running**, not a broken install. Templates only define widget layout; they don't produce data.
 
 **Blocks OpModes cannot drive Panels.** The API is Java-only (`PanelsTelemetry`,
-`PanelsField`, `@Configurable`). Team 2222's existing teleop `Field Centric (Best)` is a
+`PanelsField`, `@Configurable`). Team 24620's existing teleop `Field Centric (Best)` is a
 Blocks program, so it will never populate the dashboard. Pedro Pathing is likewise Java-only
 — porting that teleop to a Java OpMode in TeamCode is a prerequisite for both.
 
