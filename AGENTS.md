@@ -8,6 +8,14 @@ Last updated: 2026-08-03
 
 ## Hardware
 
+> **This is a TEST/DEVELOPMENT PLATFORM, not the competition robot.**
+>
+> Everything about the *setup* transfers to the competition bot — SDK version, Pedro
+> integration, Panels, the OpMode structure, the toolchain. **The measured constants do
+> not.** Pod offsets, `xVelocity`/`yVelocity`, zero-power acceleration, predictive braking,
+> and `mass` are all properties of this specific chassis. Budget a full re-tune when the
+> competition robot exists: Offsets Tuner → velocity → zero-power → PIDs.
+
 | Device | Serial / Address | OS | Notes |
 |---|---|---|---|
 | REV Driver Hub | `B67DRMNXYT` | Driver Hub OS **1.2.0** (current) | `PX30_RDS`, Android 10 |
@@ -45,10 +53,11 @@ pod's left/right position are not part of the math, so the 6" spacing never appe
 **Robot network:** SSID `2222-RC` (5 GHz). Control Hub is the AP at **192.168.43.1**;
 Driver Hub associates at 192.168.43.13. Team is **24620**.
 
-> **Naming mismatch:** the active robot config is `2222-Config.xml` and the RC WiFi SSID is
-> `2222-RC` — both carry an old team number. Harmless for code (the filenames are just
-> strings), but the SSID should be the real team number for competition. Rename on the
-> Driver Station: config via Configure Robot, SSID via the Control Hub's network settings.
+> **Naming mismatch (low priority):** the config is `2222-Config.xml` and the SSID is
+> `2222-RC`, both carrying an old team number. **This is a TEST PLATFORM, not the
+> competition robot**, so there's no inspection concern. Rename to `24620-RC` whenever
+> convenient (Control Hub network settings); code doesn't care, since OpModes reference
+> device names, not the filename.
 
 The laptop's normal WiFi (`Ender`, 10.0.0.x) **cannot reach the robot**. To talk to the
 Control Hub, either plug in USB (preferred — keeps internet) or join `2222-RC`.

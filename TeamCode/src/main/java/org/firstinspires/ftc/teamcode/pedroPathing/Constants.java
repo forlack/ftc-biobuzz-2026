@@ -16,6 +16,12 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 /**
  * Pedro Pathing configuration for team 24620.
  *
+ * !! MEASURED ON THE TEST PLATFORM, NOT THE COMPETITION ROBOT.
+ * !! Every tuned value below -- pod offsets, xVelocity/yVelocity, zero-power acceleration,
+ * !! predictive braking, mass -- is a property of THIS chassis. When the competition robot
+ * !! is built, re-run the whole tuning sequence. The structure of this file carries over;
+ * !! the numbers do not.
+ *
  * Hardware comes from 2222-Config.xml: mecanum drive on FrontLeft/FrontRight/BackLeft/
  * BackRight, goBILDA Pinpoint on "odo".
  *
