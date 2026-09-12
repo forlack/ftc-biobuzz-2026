@@ -290,6 +290,36 @@ adb devices                              # confirm hub is on USB
 ./gradlew :TeamCode:installDebug
 ```
 
+### Deploying over Wi-Fi instead of USB
+
+`persist.adb.tcp.port = 5555` is already set on our Control Hub, so adb-over-TCP is on
+permanently and survives reboots — no `adb tcpip` step. The hub is its own AP at
+**192.168.43.1**.
+
+```fish
+adb connect 192.168.43.1:5555
+./gradlew --offline :TeamCode:installDebug
+# dashboard: http://192.168.43.1:8001   (no adb forward needed on this network)
+```
+
+**`--offline` is mandatory here.** `2222-RC` has no internet, and Gradle will otherwise stall
+reaching Maven Central. Verified working — the build only needs the network to *download*
+dependencies, and everything is already in `~/.gradle/caches`. Corollary: a new machine, or a
+dependency version bump, must sync once on real internet first or `--offline` fails with "no
+cached version". Android Studio's Run button does **not** pass `--offline`; toggle it in the
+Gradle tool window or sync hangs.
+
+**Multiple devices.** With both hubs on USB — and again if a Wi-Fi connection is added on top
+— Gradle refuses to pick one. Name it:
+
+```fish
+ANDROID_SERIAL=0ef75e560c41cbdf ./gradlew :TeamCode:installDebug   # Control Hub over USB
+ANDROID_SERIAL=192.168.43.1:5555 ./gradlew --offline :TeamCode:installDebug
+```
+
+This also matters for plain adb commands: `adb -s 0ef75e560c41cbdf logcat` etc., or you may
+be talking to the Driver Hub by mistake.
+
 ### Gotcha: signature mismatch (one-time)
 The factory RC app is FIRST-signed; your build is debug-signed. First deploy fails with
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. adb **refuses safely** — nothing is destroyed.
@@ -680,7 +710,7 @@ tunables, and the Panels virtual gamepad via `asCombinedFTCGamepad(gamepad1)` �
 to plain `gamepad1` when no browser gamepad is connected.
 
 As of the 2026-08-27 refactor the math lives in `lib/MecanumDrive.drive()` and the
-tunables (`SLOW_SPEED`, `INITIAL_MAX_SPEED`, `VEL_*`, …) are `@Configurable` statics on
+tunables (`SLOW_SPEED`, `INITIAL_SPEED`, `VEL_*`, …) are `@Configurable` statics on
 `MecanumDrive`, not on the OpMode. Panels finds them either way — its `ClassFinder` scans the
 whole classpath for `@Configurable`, it does not look only inside OpModes (verified against
 `configurables-1.0.5.aar`).

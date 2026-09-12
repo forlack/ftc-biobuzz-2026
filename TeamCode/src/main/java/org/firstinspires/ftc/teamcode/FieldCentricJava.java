@@ -75,11 +75,11 @@ public class FieldCentricJava extends LinearOpMode {
     /** The buttons that change how the robot drives, rather than driving it. */
     private void updateDriveSettings() {
         if (speedUp.pressed()) {
-            chassis.changeMaxSpeed(+1);
+            chassis.changeDefaultSpeed(+1);
             speedUpPresses++;
         }
         if (speedDown.pressed()) {
-            chassis.changeMaxSpeed(-1);
+            chassis.changeDefaultSpeed(-1);
         }
         if (velocityMode.pressed()) {
             chassis.toggleVelocityMode();
@@ -105,9 +105,9 @@ public class FieldCentricJava extends LinearOpMode {
         double forward = -pad.left_stick_y;
         double turn = pad.right_stick_x;
 
-        // Start from the driver's max speed, then let any mode override it. Adding turbo or
-        // a precision mode is one more line here -- MecanumDrive never changes.
-        double speed = chassis.getMaxSpeed();
+        // Start from the driver's default speed, then let any mode override it. Adding
+        // turbo or a precision mode is one more line here -- MecanumDrive never changes.
+        double speed = chassis.getDefaultSpeed();
         if (slowMode.down()) {
             speed = MecanumDrive.SLOW_SPEED;
         }

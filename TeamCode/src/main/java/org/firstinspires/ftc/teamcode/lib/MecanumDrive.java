@@ -22,13 +22,19 @@ import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 @Configurable
 public class MecanumDrive {
 
+    /**
+     * Stick values smaller than this count as zero. Worn sticks rarely rest at exactly 0,
+     * and without this the robot creeps and the motors whine while nobody is touching it.
+     */
+    public static double STICK_DEADZONE = 0.1;
+
     /** Speed while slow mode is held down. */
     public static double SLOW_SPEED = 0.25;
-    /** Max speed when the OpMode starts. The driver can change it while driving. */
-    public static double INITIAL_MAX_SPEED = 0.5;
-    /** How much one changeMaxSpeed() step moves it. */
+    /** The speed the robot drives at when the OpMode starts. The driver can change it. */
+    public static double INITIAL_SPEED = 0.5;
+    /** How much one changeDefaultSpeed() step moves it. */
     public static double SPEED_STEP = 0.05;
-    /** The driver can never set the max speed outside these. */
+    /** The driver can never set the default speed outside these. */
     public static double MIN_ALLOWED_SPEED = 0.10;
     public static double MAX_ALLOWED_SPEED = 1.00;
 
@@ -49,7 +55,7 @@ public class MecanumDrive {
     private final IMU imu;
     private final String factoryPidf;
 
-    private double maxSpeed = INITIAL_MAX_SPEED;
+    private double defaultSpeed = INITIAL_SPEED;
     private boolean velocityMode = START_IN_VELOCITY_MODE;
     private boolean brakeMode = START_IN_BRAKE_MODE;
 
@@ -86,9 +92,9 @@ public class MecanumDrive {
         factoryPidf = readFactoryPidf();
     }
 
-    /** Drives at the driver's current max speed. */
+    /** Drives at the driver's current default speed. */
     public void drive(double strafe, double forward, double turn) {
-        drive(strafe, forward, turn, maxSpeed);
+        drive(strafe, forward, turn, defaultSpeed);
     }
 
     /**
@@ -98,10 +104,15 @@ public class MecanumDrive {
      * @param forward drive forward (negative drives backward)
      * @param turn    spin clockwise (negative spins counter-clockwise)
      * @param speed   how much of full power to use, 0 to 1. Use this overload only to
-     *                override the driver's max speed -- slow mode, turbo, and so on.
+     *                override the default speed -- slow mode, turbo, and so on. Nothing
+     *                clamps it to the default, so turbo really can go faster.
      */
     public void drive(double strafe, double forward, double turn, double speed) {
         applyPidfTuning();
+
+        strafe = ignoreDrift(strafe);
+        forward = ignoreDrift(forward);
+        turn = ignoreDrift(turn);
 
         // One IMU read per loop -- it is a real sensor read, so don't ask for it twice.
         YawPitchRollAngles angles = imu.getRobotYawPitchRollAngles();
@@ -153,10 +164,10 @@ public class MecanumDrive {
         return lastHeadingRadians;
     }
 
-    /** Moves the max speed by whole steps, e.g. +1 to speed up, -1 to slow down. */
-    public void changeMaxSpeed(int steps) {
-        double moved = maxSpeed + steps * SPEED_STEP;
-        maxSpeed = Math.max(MIN_ALLOWED_SPEED, Math.min(MAX_ALLOWED_SPEED, moved));
+    /** Moves the default speed by whole steps, e.g. +1 to speed up, -1 to slow down. */
+    public void changeDefaultSpeed(int steps) {
+        double moved = defaultSpeed + steps * SPEED_STEP;
+        defaultSpeed = Math.max(MIN_ALLOWED_SPEED, Math.min(MAX_ALLOWED_SPEED, moved));
     }
 
     public void toggleVelocityMode() {
@@ -200,6 +211,11 @@ public class MecanumDrive {
         }
     }
 
+    /** Treats a stick that is nearly centred as centred. */
+    private static double ignoreDrift(double stickValue) {
+        return Math.abs(stickValue) < STICK_DEADZONE ? 0.0 : stickValue;
+    }
+
     private String readFactoryPidf() {
         try {
             return frontLeft.getPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER).toString();
@@ -214,9 +230,9 @@ public class MecanumDrive {
         return motors;
     }
 
-    /** The driver's current max speed, used by the three-argument drive(). */
-    public double getMaxSpeed() {
-        return maxSpeed;
+    /** The speed the three-argument drive() uses. */
+    public double getDefaultSpeed() {
+        return defaultSpeed;
     }
 
     public boolean isVelocityMode() {

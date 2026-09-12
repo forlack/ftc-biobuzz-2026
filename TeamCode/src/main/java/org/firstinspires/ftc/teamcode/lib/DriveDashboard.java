@@ -42,7 +42,7 @@ public class DriveDashboard {
     public void update() {
         panels.addData("mode", drive.isVelocityMode() ? "VELOCITY (encoder PID)" : "RAW POWER");
         panels.addData("zero power", drive.isBrakeMode() ? "BRAKE" : "FLOAT (coast)");
-        panels.addData("max speed", round(drive.getMaxSpeed()));
+        panels.addData("default speed", round(drive.getDefaultSpeed()));
         panels.addData("speed being used", round(drive.getLastSpeedUsed()));
 
         panels.addLine("");

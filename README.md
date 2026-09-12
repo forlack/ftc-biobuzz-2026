@@ -35,16 +35,40 @@ copy here:
    This is the step everyone misses; see [AGENTS.md](AGENTS.md) for why.
 4. Sync. Gradle, the FTC SDK and Pedro download automatically.
 
-Deploy with the Run button, or:
+### Deploy over USB
 
 ```bash
 cd FtcRobotController
-./gradlew :TeamCode:installDebug              # compile + push over USB
+./gradlew :TeamCode:installDebug              # compile + push
 adb forward tcp:8001 tcp:8001                 # Panels — forwards drop on every install
 adb forward tcp:8002 tcp:8002
 ```
 
-Then open <http://localhost:8001> for the dashboard.
+Dashboard at <http://localhost:8001>.
+
+### Deploy over the robot's Wi-Fi
+
+The Control Hub listens for adb on port 5555 permanently, so there is no setup step on the
+robot. Unplug USB first, then join the robot's network:
+
+```bash
+adb connect 192.168.43.1:5555
+./gradlew --offline :TeamCode:installDebug
+# Panels dashboard: http://192.168.43.1:8001   (no adb forward on this network)
+```
+
+`--offline` is required: the robot's network has no internet, and without it Gradle stalls
+trying to reach Maven Central. It works because dependencies are already cached, so **do your
+first sync on real internet** — on a new machine `--offline` will fail with "no cached
+version." Android Studio's Run button does not pass `--offline`; use the toggle in the Gradle
+tool window.
+
+With more than one device attached, Gradle refuses to guess. Either unplug the others or name
+the one you want:
+
+```bash
+ANDROID_SERIAL=192.168.43.1:5555 ./gradlew --offline :TeamCode:installDebug
+```
 
 ## What's here
 
