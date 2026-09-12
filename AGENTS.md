@@ -352,8 +352,8 @@ only the Android SDK's adb; delete any Homebrew one.
 adb has to claim the device. So a broken or blocked adb can work perfectly over Wi-Fi and see
 nothing over USB.
 
-**A charge-only USB cable looks exactly like a policy block.** Cost us most of an hour on the
-work MacBook. Check `System Report -> USB` (or `ioreg -p IOUSB -w 0`; `system_profiler
+**Check the OS's own USB tree before suspecting anything clever.** A charge-only cable is
+indistinguishable from a policy block. Check `System Report -> USB` (or `ioreg -p IOUSB -w 0`; `system_profiler
 SPUSBDataType` is unreliable on Apple Silicon) — if the device is not in the OS's own tree,
 suspect cable, dongle, or port before anything clever. On that Mac the hub eventually appeared
 with a different cable but adb still could not claim it, which is consistent with an
@@ -388,32 +388,61 @@ doing before handing the repo to students on several laptops.
 
 ---
 
-## Setting up on another machine (school laptop, Windows, etc.)
+## Setting up on another machine
 
-Much shorter than the Linux CLI setup — Android Studio bundles or fetches almost everything.
+Android Studio brings everything. **As of SDK 12.0 no separate JDK install is needed** — see
+the JDK note below, which used to be the main obstacle and no longer is.
 
-1. **Install Android Studio.** It brings its own JVM and can install the Android SDK.
-2. **Clone the team repo** (see Repo & remotes below). Open the **`FtcRobotController/`**
-   folder — the one containing `settings.gradle` — not its parent.
-3. **Set the Gradle JDK BEFORE the first sync** (see gotcha below).
-4. **Sync**. Studio downloads Gradle 8.9, the FTC SDK, and Pedro automatically.
-5. Deploy with the Run button, or `./gradlew :TeamCode:installDebug`.
+1. **Install Android Studio.** SDK 12.0 requires **Narwhal 3 Feature Drop or later**.
+2. **Clone the repo.** Open the **`FtcRobotController/`** folder — the one containing
+   `settings.gradle` — *not* its parent, and not the nested module of the same name.
+3. **Gradle JDK → Embedded JDK**, before the first sync.
+4. **Sync**, on real internet. Studio fetches Gradle 9.1, the FTC SDK, Pedro and Panels.
+5. **Then run an actual build**, still on internet:
+   `./gradlew :TeamCode:assembleDebug`. A sync is *not* enough — see the `--offline` note in
+   Deploy troubleshooting.
+6. **Copy `~/.android/debug.keystore`** from whichever machine is canonical, before the first
+   deploy. Skip this and you get `INSTALL_FAILED_UPDATE_INCOMPATIBLE` and an uninstall dance
+   every time you alternate machines.
+7. Deploy with the Run button or `./gradlew :TeamCode:installDebug`.
 
-### ⚠ The JDK gotcha will repeat on every new machine
+### macOS specifics
 
-Android Studio 2026.1 bundles **JBR 25**; Gradle 8.9 accepts at most **22**; AGP 8.7 requires
-at least **17**. So a fresh install fails on first sync with
-*"Gradle JVM version 25 ... select a JVM version that is at least 8 and at most 22."*
+Verified on a work MacBook 2026-09-12.
 
-Fix, before syncing:
-**Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK → 17** (21 also
-works — the valid window is 17–22, both are LTS).
+- **Gradle JDK: Embedded JDK.** No Homebrew JDK, no `brew install openjdk`.
+- **adb must come from the Android SDK, not Homebrew.** Homebrew's adb worked over Wi-Fi and
+  could not see the hub over USB — TCP adb is just a socket, USB adb has to claim the device.
+  Put the SDK's first on PATH and delete the Homebrew one:
+  ```bash
+  echo 'export PATH="$HOME/Library/Android/sdk/platform-tools:$PATH"' >> ~/.zshrc
+  brew uninstall android-platform-tools
+  ```
+  macOS does **not** put adb on PATH for you, and needs no USB driver (unlike Windows).
+- **`system_profiler SPUSBDataType` is unreliable on Apple Silicon** — often prints nothing
+  useful. Use `ioreg -p IOUSB -w 0`, or the GUI System Report → USB.
+- **A work-managed Mac may block adb from claiming USB devices** while still letting macOS
+  enumerate them: visible in System Report, invisible to `adb devices`, with a fresh server and
+  the correct binary. Consistent with an endpoint-management agent; unconfirmed on ours. Wi-Fi
+  deploy sidesteps it entirely, since no USB is involved. Prefer a personal machine.
+- **Personal GitHub on a work machine:** use a per-repo **deploy key** with write access rather
+  than signing in — generate the key on the Mac, add the public half from another device, and
+  no account credential ever lands on managed hardware.
 
-Also set **File → Project Structure → Project → SDK** to the same JDK, or the editor resolves
-nothing even after a successful sync (they are two separate settings).
+### The JDK gotcha — RESOLVED as of SDK 12.0
 
-> The `org.gradle.java.home` pin in `~/.gradle/gradle.properties` is **user-level and NOT in
-> the repo**, deliberately, so it can't break teammates on other machines. It does not travel.
+Historical, kept because it bit us for weeks and the old advice is still all over the internet.
+
+Under **Gradle 8.9** (SDK 11.x) the valid JDK window was **17–22**: AGP 8.7 needed ≥17, Gradle
+8.9 accepted ≤22. Android Studio 2026.1 bundles **JBR 25**, so a fresh install failed on first
+sync with *"select a JVM version that is at least 8 and at most 22."* That forced an explicit
+JDK 17 and is why `~/.gradle/gradle.properties` on the Linux box pins
+`org.gradle.java.home`.
+
+**SDK 12.0 moved to Gradle 9.1 / AGP 8.13.2, and JBR 25 builds cleanly** — verified
+2026-09-12 with `./gradlew -Dorg.gradle.java.home=/opt/android-studio/jbr`. So **Embedded JDK
+is now the right answer** on a new machine, and the Linux JDK-17 pin is harmless but no longer
+required.
 
 ### What doesn't travel (all gitignored, all auto-regenerated)
 
@@ -428,7 +457,7 @@ nothing even after a successful sync (they are two separate settings).
 | | Version | Why |
 |---|---|---|
 | **Your OpMode code** | Java **8** (`sourceCompatibility 1.8`) | what Android's runtime expects; unchanged from stock FTC |
-| **The build toolchain** | JDK **17–22** | AGP 8.7 needs ≥17, Gradle 8.9 needs ≤22 |
+| **The build toolchain** | JDK **17+** | AGP 8.13 needs ≥17; Gradle 9.1 is happy on JBR 25 |
 
 Nothing in TeamCode uses Java 17 language features. The JDK version is purely about what runs
 Gradle and AGP.
