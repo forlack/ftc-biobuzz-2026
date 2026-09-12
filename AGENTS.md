@@ -2,7 +2,7 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-08-03
+Last updated: 2026-08-27
 
 ---
 
@@ -41,9 +41,10 @@ The **Pinpoint** is the key asset for Pedro — it's a dedicated odometry comput
 should use its `PinpointLocalizer` rather than drive-encoder odometry.
 
 **Odometry pod mounting:** goBILDA **4-bar** pods, both on the robot's **back bar**, ~6"
-apart. Chassis is ~16×16", so the center of rotation is ~8" from the back edge. Offsets from
-the Offsets Tuner — `strafePodX = -7.0` (7" behind center, i.e. 1" forward of the back edge)
-and `forwardPodY = 3.2` (3.2" left of centerline) — are consistent with that geometry.
+apart. Chassis is ~16×16", so the center of rotation is ~8" from the back edge. Measured
+offsets are `strafePodX = 6.15` and `forwardPodY = 2.125` (Offsets Tuner, mean of 4 spins,
+2026-08-04). The earlier figures `-7.0` / `3.2` were taken before `strafeEncoderDirection`
+was corrected to REVERSED and are **invalid** — see `Constants.java`.
 
 Pedro models only **one offset per pod**: the perpendicular distance that determines how
 rotation contaminates that pod's reading. The forward pod's fore/aft position and the strafe
@@ -407,11 +408,111 @@ Next:
 
 ---
 
+## TeleOp framework (`lib/`)
+
+Built 2026-08-27 so students coming from Blocks can start on robot logic instead of
+plumbing. The split is deliberate: **everything in `lib/` is framework, everything outside
+it is theirs.**
+
+```
+teamcode/
+├── FieldCentricJava.java   (101)  the working teleop
+├── TemplateTeleOp.java      (74)  @Disabled starter to copy
+└── lib/
+    ├── Button.java          (55)  input helper
+    ├── MecanumDrive.java   (214)  motors, IMU, field-centric math, modes, PIDF push
+    └── DriveDashboard.java  (91)  every line of Panels
+```
+
+**The checkable criterion: a student-facing OpMode has ZERO `com.bylazar` imports.** All
+Panels — telemetry, the browser gamepad merge, the PIDF readout — sits behind
+`DriveDashboard`. If a bylazar import appears in an OpMode, something leaked; move it.
+
+### The loop model
+
+Every teleop is one non-blocking loop. Each subsystem gets a thin slice per pass, 50–200
+times a second:
+
+```java
+while (opModeIsActive()) {
+    readGamepad();
+    updateDriveSettings();
+    updateDriving();
+    dashboard.update();
+}
+```
+
+**Never block.** No `sleep()`, no `while (motor.isBusy())`. The RC watchdog stops the robot
+if the loop stops turning over, and gamepads only refresh between iterations. For a
+multi-step action use a state machine that advances one step per pass — `PedroAutonomous`
+is the worked example.
+
+To add a subsystem: write `updateXxx()`, have it publish its own telemetry via
+`dashboard.addData()`, add one call to the loop. Nothing else changes.
+
+### `Button`
+
+Wraps a gamepad button so a *level* becomes an *event*:
+
+| | meaning | use for |
+|---|---|---|
+| `down()` | held right now | hold-to-act (slow mode, heading reset) |
+| `pressed()` | just went down | toggles, one-shot actions |
+| `released()` | just came up | nothing yet |
+
+`pressed()` matters because at ~100 Hz a human press spans roughly 30 loops — `down()` would
+fire a toggle 30 times. `Button.Group.update()` reads every button once per loop, so all
+three queries are pure reads: call them in any order, any number of times, same answer.
+
+Two non-obvious things:
+
+- **The lambda is a deferred read, not a value.** `buttons.add(() -> pad.dpad_up)` stores
+  *instructions* to read `pad.dpad_up`, evaluated on each `update()`. Passing `pad.dpad_up`
+  directly would capture a dead `boolean` (and NPE, since `pad` is null at construction).
+  This only works because `pad` is a **field** — a captured local would have to be
+  effectively final.
+- **Declaration order is load-bearing.** `Button.Group buttons` must be declared *above* the
+  buttons, because Java initialises instance fields in source order and each `add()` writes
+  into that list. Below them, every button hits a null list at construction.
+
+### Naming
+
+Names are written for a student who just came off Blocks, not for brevity.
+
+- Say what it does in ordinary words: `changeSpeedLimit(+1)`, not `bumpSpeedCap(+1)`.
+- **No single-letter or math-shorthand parameters.** `drive(strafe, forward, turn, slow)`,
+  never `(x, y, rx)`. The kinematics still uses `fieldX`/`fieldY` internally, where the
+  reader is already looking at the math.
+- Prefer the word the team says out loud: *heading* over *yaw*, *speed limit* over *speed
+  cap*, *initial* over *starting*.
+- **Name the thing, not the verb that happened to it.** The stored PIDF numbers are
+  `motorP/I/D/F` — "what is in the motors" — because `appliedP`/`sentP` read as though
+  something was applied to the motors as power.
+- No `Button` suffix on Button fields; `slowMode.down()` already reads as a button.
+- Dashboard labels follow the same rule — "stick forward", "encoder FL", not "rotY".
+
+### Comment style
+
+Kept deliberately sparse — dense comment blocks are what made the pre-refactor teleop hard
+for a beginner to read.
+
+- One line of javadoc per class and per non-obvious method. A block only where a one-liner
+  genuinely cannot carry it.
+- Inline comments only for things that would **surprise** a reader: declaration order,
+  level-vs-edge, why the heading reset runs after the drive math.
+- Everything longer — derivations, history, why a sign is what it is — goes **here**, not in
+  the source.
+
+---
+
 ## OpModes in TeamCode
 
 | Class | DS name | Group | Purpose |
 |---|---|---|---|
 | `FieldCentricJava` | Field Centric (Java) | Drive | Java port of the Blocks teleop |
+| `TemplateTeleOp` | Template TeleOp | Template | `@Disabled` starter for students to copy |
+| `PedroDirectionTest` | Direction Test | Diagnostics | Robot- and motor-level direction checks |
+| `PedroAutonomous` | Pedro Pathing Autonomous | — | Out-and-back path, state machine |
 | `PanelsDemo` | Panels Demo | Diagnostics | Dashboard smoke test, no hardware |
 | `pedroPathing.Tuning` | Tuning | — | Official Pedro tuning suite (menu of routines) |
 
@@ -497,7 +598,13 @@ Affected lines (upstream master, 2026-08-04): **486**, **662** (javadoc), **691*
 
 Reported upstream twice — Quickstart **#12** (closed 2025-09-27) and **#22** (closed
 2025-12-27) — and **neither fix landed**. Quickstart has issues **disabled**, which likely
-explains the bulk closures. A PR was opened from this workspace on 2026-08-04.
+explains the bulk closures.
+
+**FIXED UPSTREAM.** A PR from this workspace was merged on 2026-08-05:
+<https://github.com/Pedro-Pathing/Quickstart/pull/84> — approved by BeepBot99, merge commit
+`d3aea9c`. Note the repo: **`Pedro-Pathing/Quickstart`**, not `Pedro-Pathing/PedroPathing`
+(where #84 is an unrelated PR by another author). The local `Tuning.java` still carries the
+old text until it is re-copied from upstream.
 
 **Impact is cosmetic** — lateral velocity and deceleration are symmetric, so tuning numbers
 are still valid. But it cost this team hours: the robot moved left as instructed-otherwise,
@@ -547,10 +654,15 @@ were preserved exactly, not "fixed":**
   without re-testing drive feel.
 - Powers use a flat 0.25 / 0.5 multiplier with **no normalization** (no divide-by-max).
 
-Added on top of the original: Panels telemetry (same 8 fields, mirrored to the DS),
-`SLOW_MULTIPLIER`/`NORMAL_MULTIPLIER` as live `@Configurable` statics, and the Panels
-virtual gamepad via `asCombinedFTCGamepad(gamepad1)` — which no-ops to plain `gamepad1`
-when no browser gamepad is connected.
+Added on top of the original: Panels telemetry (mirrored to the DS), live `@Configurable`
+tunables, and the Panels virtual gamepad via `asCombinedFTCGamepad(gamepad1)` — which no-ops
+to plain `gamepad1` when no browser gamepad is connected.
+
+As of the 2026-08-27 refactor the math lives in `lib/MecanumDrive.drive()` and the
+tunables (`SLOW_SPEED`, `INITIAL_MAX_SPEED`, `VEL_*`, …) are `@Configurable` statics on
+`MecanumDrive`, not on the OpMode. Panels finds them either way — its `ClassFinder` scans the
+whole classpath for `@Configurable`, it does not look only inside OpModes (verified against
+`configurables-1.0.5.aar`).
 
 > The Driver Station also lists `FieldCentricBest (Blocks to Java)` — an older OnBotJava
 > auto-conversion living in `/sdcard/FIRST/java`, unrelated to this port. And the original
