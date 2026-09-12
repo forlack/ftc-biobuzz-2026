@@ -2,7 +2,7 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-08-27
+Last updated: 2026-09-12
 
 ---
 
@@ -91,14 +91,35 @@ Control Hub, either plug in USB (preferred — keeps internet) or join `2222-RC`
 Both sides must match or the Driver Station nags about it (warning only, but it fails
 competition inspection).
 
-- FTC SDK / Robot Controller: **11.2**
-- Driver Station app: **11.2**
-- Pedro Pathing: **2.1.2**
+- FTC SDK / Robot Controller: **12.0** (BIOBUZZ, 2026-2027 season)
+- Driver Station app: **12.0** — must be updated to match, or the DS nags
+- Pedro Pathing: **2.1.2** — builds clean against 12.0, verified 2026-09-12
 - Panels dashboard: **fullpanels 1.0.12**
-- Gradle **8.9** (repo wrapper), AGP **8.7.0**, JDK **17**
+- Gradle **9.1.0** (repo wrapper), AGP **8.13.2**, JDK **17**
+- Android Studio **Narwhal 3 Feature Drop or later** is now required by FIRST
 
-> `v11.2.1` exists upstream but ships **no APK assets** — source-only patch. v11.2 is the
-> newest installable release. Don't chase the higher tag.
+### Upgraded 11.2 -> 12.0 on 2026-09-12 (release day)
+
+`git merge v12.0` conflicted on **README.md only**. Both gradle files auto-merged
+correctly — the SDK deps went to `12.0.0` and our three Pedro/Panels lines survived
+untouched, as did `compileSdk 34`. Stock 12.0 still ships `compileSdkVersion 30`, so that
+bump is still ours to carry.
+
+The toolchain jump is the real content of this release: Gradle 8.9 -> 9.1.0 and AGP 8.7.0
+-> 8.13.2, and the root `build.gradle` moved from `buildscript { classpath ... }` to a
+`plugins {}` block. JDK 17 still works. Gradle warns that deprecated features make the
+build incompatible with **Gradle 10** — that is upstream's problem to fix, not ours.
+
+**Breaking change we dodged:** AprilTag detections are now singleton-or-cluster, and legacy
+`for (AprilTagDetection d : detections)` loops no longer compile. Nothing in `TeamCode/`
+uses AprilTag, so we were unaffected — but the reference artifact's AprilTag boilerplate is
+now out of date, and any new vision code must check `instanceof AprilTagSingleDetection`
+first. See <https://ftc-docs.firstinspires.org/apriltag-clusters>.
+
+> **BIOBUZZ AprilTags MOVE**, so FIRST says they are not suitable for absolute field
+> localization. Odometry carries the localization load this season; tags are for aiming.
+
+> `v11.2.1` was a source-only tooling patch with no APK assets — superseded by 12.0.
 
 ---
 
@@ -123,7 +144,7 @@ cd ~/ftc/FtcRobotController
 
 ---
 
-## Repo modifications vs. stock v11.2
+## Repo modifications vs. stock SDK
 
 Two tracked files differ from upstream. Both are required by Pedro.
 

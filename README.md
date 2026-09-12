@@ -4,14 +4,16 @@ Robot code for FIRST Tech Challenge team 24620.
 
 This is a **fork of the official [FTC Robot Controller SDK](https://github.com/FIRST-Tech-Challenge/FtcRobotController)**.
 Everything outside `TeamCode/` is FIRST's code, unmodified except for two build files
-(see [AGENTS.md](AGENTS.md#repo-modifications-vs-stock-v112)).
+(see [AGENTS.md](AGENTS.md#repo-modifications-vs-stock-sdk)).
 
 | | |
 |---|---|
-| FTC SDK | 11.2 |
+| FTC SDK | 12.0 (BIOBUZZ, 2026-2027) |
+| Android Studio | Narwhal 3 Feature Drop or later |
 | Pedro Pathing | 2.1.2 |
+| Gradle / AGP | 9.1.0 / 8.13.2 |
 | Panels dashboard | 1.0.12 |
-| JDK | 17 (not 21+, not 26 — the build fails on those) |
+| JDK | 17 |
 
 For FIRST's own documentation and SDK release notes, go to the source rather than a stale
 copy here:

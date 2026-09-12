@@ -17,8 +17,6 @@
 
 import java.util.regex.Pattern
 
-apply plugin: 'com.android.application'
-
 android {
 
     // Bumped from 30 to 34: Pedro Pathing's androidx transitive deps require compileSdk >= 34.
