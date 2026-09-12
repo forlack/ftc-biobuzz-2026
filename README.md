@@ -70,6 +70,33 @@ the one you want:
 ANDROID_SERIAL=192.168.43.1:5555 ./gradlew --offline :TeamCode:installDebug
 ```
 
+### If the install is rejected
+
+```
+INSTALL_FAILED_UPDATE_INCOMPATIBLE
+```
+
+The **build** succeeded; the **push** was refused. Android will not replace an installed app
+with an APK signed by a different key, and every computer generates its own debug key at
+`~/.android/debug.keystore`. So this appears the first time you deploy from a new machine, or
+the first time you deploy from your own machine over someone else's build.
+
+```bash
+adb uninstall com.qualcomm.ftcrobotcontroller
+./gradlew :TeamCode:installDebug
+```
+
+Safe to do: robot configs, Blocks programs and OnBotJava sources live in `/sdcard/FIRST`,
+which is external storage and survives an app uninstall. Back it up first if you want to be
+certain:
+
+```bash
+adb pull /sdcard/FIRST ~/ftc/backups/$(date +%Y%m%d-%H%M%S)-controlhub
+```
+
+**To stop it happening again,** copy `~/.android/debug.keystore` from one machine to the
+others. Every machine then signs identically and the hub accepts builds from any of them.
+
 ## What's here
 
 All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.

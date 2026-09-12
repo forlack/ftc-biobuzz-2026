@@ -320,6 +320,45 @@ ANDROID_SERIAL=192.168.43.1:5555 ./gradlew --offline :TeamCode:installDebug
 This also matters for plain adb commands: `adb -s 0ef75e560c41cbdf logcat` etc., or you may
 be talking to the Driver Hub by mistake.
 
+### Deploy troubleshooting (all hit 2026-09-12)
+
+**adb over Wi-Fi wedges as `offline`.** `adb connect` then reports "already connected" and
+no-ops, so it never re-handshakes and stays offline forever. `adb disconnect` alone does not
+clear it — verified. Recovery, in order:
+
+```fish
+adb disconnect 192.168.43.1:5555
+adb kill-server && adb start-server
+adb connect 192.168.43.1:5555
+```
+
+If still offline, **power-cycle the Control Hub**. "Restart Robot" on the DS restarts only the
+app, not adbd. Cause here was switching transports without a clean disconnect, leaving adbd
+holding a dead session.
+
+**`--offline` needs a real BUILD first, not a Gradle sync.** A sync resolves enough to
+configure the project; it does not download everything `assembleDebug` needs. On a new machine
+run `./gradlew :TeamCode:assembleDebug` on real internet until BUILD SUCCESSFUL, *then*
+`--offline` works. Symptom otherwise: "Could not resolve all files for configuration".
+Competition rule: build successfully on internet before leaving, and after any dependency bump.
+
+**Two adb binaries is a trap.** adb is a client plus a server on port 5037, and **only the
+server touches USB**. Running a different adb binary does nothing if an old server is still
+alive — the new client just connects to the old server. Use `pkill -f adb` (not
+`adb kill-server`, which can leave a zombie), and check ownership with `lsof -i :5037`. Keep
+only the Android SDK's adb; delete any Homebrew one.
+
+**Wi-Fi adb working while USB fails is not a contradiction.** TCP adb is just a socket; USB
+adb has to claim the device. So a broken or blocked adb can work perfectly over Wi-Fi and see
+nothing over USB.
+
+**A charge-only USB cable looks exactly like a policy block.** Cost us most of an hour on the
+work MacBook. Check `System Report -> USB` (or `ioreg -p IOUSB -w 0`; `system_profiler
+SPUSBDataType` is unreliable on Apple Silicon) — if the device is not in the OS's own tree,
+suspect cable, dongle, or port before anything clever. On that Mac the hub eventually appeared
+with a different cable but adb still could not claim it, which is consistent with an
+endpoint-management agent allowing enumeration but blocking interface claim. Unconfirmed.
+
 ### Gotcha: signature mismatch (one-time)
 The factory RC app is FIRST-signed; your build is debug-signed. First deploy fails with
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. adb **refuses safely** — nothing is destroyed.
@@ -336,6 +375,16 @@ adb pull /sdcard/FIRST ~/ftc/backups/$(date +%Y%m%d-%H%M%S)-controlhub
 ```
 Note `adb uninstall -k` is **not supported** on this Android build — it errors out and tells
 you to use `adb shell cmd package uninstall -k`. Plain uninstall is fine given the above.
+
+**It recurs per machine, not just once.** The debug key lives at `~/.android/debug.keystore`
+and is generated per computer, so the same rejection appears the first time each new machine
+deploys — and again when you switch back, since the hub then holds the other machine's
+signature. Hit on 2026-09-12 after deploying from the Mac over Wi-Fi and then returning to
+the Linux box.
+
+Permanent fix: copy `~/.android/debug.keystore` from whichever machine is canonical to the
+others. All of them then sign identically and the hub takes builds from any of them. Worth
+doing before handing the repo to students on several laptops.
 
 ---
 
