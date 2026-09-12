@@ -38,7 +38,7 @@ public class Constants {
     // ------------------------------------------------------------------
     // Drivetrain
     // ------------------------------------------------------------------
-    // VERIFIED 2026-08-04 via the "Direction Test" OpMode: all four robot-level directions
+    // VERIFIED 2026-08-04 via the "Motors Test" OpMode: all four robot-level directions
     // and all four raw per-motor directions behave as expected, and the drive matches the
     // localizer (forward raises pose x, left raises pose y).
     //
@@ -104,7 +104,7 @@ public class Constants {
             // forward: VERIFIED. The Forward Velocity Tuner completed, which means x climbed
             // 72 -> 120. Backwards it would have run 72 -> 0 -> -120 and never stopped.
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
-            // strafe: REVERSED as of 2026-08-04. Measured with Pedro Direction Test -- driving
+            // strafe: REVERSED as of 2026-08-04. Measured with the Motors Test OpMode -- driving
             // LEFT made pose y DECREASE, but left is +Y. That inverted axis is also why the
             // Lateral Velocity Tuner never stopped: its stop condition is
             // abs(pose.y) > DISTANCE + 72 starting from y = 72, so with y running the wrong

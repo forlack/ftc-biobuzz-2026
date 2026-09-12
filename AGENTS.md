@@ -511,7 +511,7 @@ for a beginner to read.
 |---|---|---|---|
 | `FieldCentricJava` | Field Centric (Java) | Drive | Java port of the Blocks teleop |
 | `TemplateTeleOp` | Template TeleOp | Template | `@Disabled` starter for students to copy |
-| `PedroDirectionTest` | Direction Test | Diagnostics | Robot- and motor-level direction checks |
+| `MotorsTest` | Motors Test | Diagnostics | Robot- and motor-level direction checks |
 | `PedroAutonomous` | Pedro Pathing Autonomous | — | Out-and-back path, state machine |
 | `PanelsDemo` | Panels Demo | Diagnostics | Dashboard smoke test, no hardware |
 | `pedroPathing.Tuning` | Tuning | — | Official Pedro tuning suite (menu of routines) |

@@ -36,8 +36,8 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
  * is the FRONT as far as the config and Pedro are concerned (+X points toward it).
  */
 @Configurable
-@TeleOp(name = "Direction Test", group = "Diagnostics")
-public class PedroDirectionTest extends LinearOpMode {
+@TeleOp(name = "Motors Test", group = "Diagnostics")
+public class MotorsTest extends LinearOpMode {
 
     /** Live-editable from the Panels Configurables panel. */
     public static double POWER = 0.25;
@@ -81,7 +81,7 @@ public class PedroDirectionTest extends LinearOpMode {
         Follower follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(new Pose(72, 72, 0));
 
-        panels.addLine("Direction Test ready. Clear floor / stand. Press PLAY.");
+        panels.addLine("Motors Test ready. Clear floor / stand. Press PLAY.");
         panels.update(telemetry);
         waitForStart();
 
