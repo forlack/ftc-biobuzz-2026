@@ -48,6 +48,57 @@ Dashboard at <http://localhost:8001>.
 
 ### Deploy over the robot's Wi-Fi
 
+On macOS, run `./deploy` from the repository root. It builds on your
+normal Wi-Fi, joins the robot network, installs with Gradle offline, and attempts
+to restore the previous network after success, errors, timeout, or Ctrl+C.
+
+Wi-Fi names and passwords live in a private file **outside this repository**:
+`~/.config/ftc/deploy-wifi.json`. If a password is missing, the script asks for it
+with hidden input and saves it there. It never reads Keychain. Example structure:
+
+```json
+{
+  "robot_ssid": "YOUR_ROBOT_WIFI",
+  "robot_ip": "YOUR_ROBOT_IP",
+  "return_wifi": "YOUR_NORMAL_WIFI",
+  "passwords": {
+    "YOUR_ROBOT_WIFI": "YOUR_ROBOT_PASSWORD",
+    "YOUR_NORMAL_WIFI": "YOUR_NORMAL_PASSWORD"
+  }
+}
+```
+
+The script creates the file with mode 600. Passwords are plaintext in that local
+file, readable only by your user (and administrators). Do not copy it into the
+repository. `networksetup` takes passwords as process arguments, so they can
+briefly be visible to local process inspection.
+
+```bash
+./deploy --check  # preflight only; no build or network changes
+./deploy
+```
+
+The robot and main networks are remembered automatically. Use `-r` to select the
+robot network and `-h` to select the home/main network; either choice becomes the
+new default. Names already in the private file match without regard to case,
+spaces, or punctuation.
+
+```bash
+./deploy -r "ROBOT WIFI" -h "HOME WIFI"
+./deploy -h "HOME WIFI"  # uses the remembered robot
+./deploy                  # uses both remembered networks
+```
+
+Use `--help` for help (`-h` belongs to home Wi-Fi). `--robot-ip` and `--config`
+provide other overrides. Router-address
+checks provide limited verification when macOS redacts SSIDs. If restoration
+fails, reconnect manually; force-killing the script or shutting down the Mac
+cannot run cleanup.
+
+Run `python3 -B -m unittest discover -s tests -v` for simulated cleanup tests.
+
+For a manual deployment:
+
 The Control Hub listens for adb on port 5555 permanently, so there is no setup step on the
 robot. Unplug USB first, then join the robot's network:
 

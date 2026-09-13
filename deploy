@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""Build FTC, deploy over robot Wi-Fi, and restore the previous network on macOS."""
+import argparse
+import getpass
+import json
+import os
+from pathlib import Path
+import signal
+import stat
+import subprocess
+import sys
+import time
+
+ROOT = Path(__file__).resolve().parent
+NETWORKSETUP = '/usr/sbin/networksetup'
+IPCONFIG = '/usr/sbin/ipconfig'
+
+
+def run(args, *, timeout=30, capture=True, env=None):
+    return subprocess.run(args, check=True, text=True, timeout=timeout,
+                          capture_output=capture, env=env)
+
+
+def current_ssid(interface):
+    output = run([NETWORKSETUP, '-getairportnetwork', interface]).stdout.strip()
+    prefix = 'Current Wi-Fi Network: '
+    if output.startswith(prefix):
+        name = output[len(prefix):]
+        if name and name != '<redacted>':
+            return name
+    return None
+
+
+def router(interface):
+    try:
+        return run([IPCONFIG, 'getoption', interface, 'router']).stdout.strip()
+    except subprocess.CalledProcessError:
+        return ''
+
+
+def load_config(path):
+    if not path.is_file():
+        return {'passwords': {}}
+    if stat.S_IMODE(path.stat().st_mode) & 0o077:
+        raise RuntimeError(f'Wi-Fi configuration must be private: chmod 600 {path}')
+    try:
+        config = json.loads(path.read_text())
+    except (ValueError, OSError):
+        raise RuntimeError('Cannot read private Wi-Fi configuration.') from None
+    if not isinstance(config, dict):
+        raise RuntimeError('Private Wi-Fi configuration must contain a JSON object.')
+    if 'passwords' not in config:
+        config['passwords'] = {}
+    if not isinstance(config['passwords'], dict):
+        raise RuntimeError('Private Wi-Fi configuration passwords must be a JSON object.')
+    return config
+
+
+def save_config(path, config):
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    temporary = path.with_name(f'.{path.name}.tmp')
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(descriptor, 'w') as file:
+            json.dump(config, file, indent=2)
+            file.write('\n')
+        os.replace(temporary, path)
+        path.chmod(0o600)
+    except BaseException:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def password_for(config, path, ssid):
+    passwords = config['passwords']
+    if ssid in passwords and isinstance(passwords[ssid], str):
+        return passwords[ssid]
+    if not sys.stdin.isatty():
+        raise RuntimeError(
+            f'No password saved for {ssid!r}. Run the script in Terminal to enter it.')
+    password = getpass.getpass(f'Wi-Fi password for {ssid} (saved only in {path}): ')
+    passwords[ssid] = password
+    save_config(path, config)
+    print(f'Saved the password for {ssid} in the private Wi-Fi file.')
+    return password
+
+
+def wifi_name(value, config):
+    """Match convenient spelling against Wi-Fi names already known locally."""
+    if value is None:
+        return None
+    simplified = ''.join(character for character in value.casefold()
+                         if character.isalnum())
+    known = list(config['passwords'])
+    known.extend(config.get(key) for key in ('robot_ssid', 'return_wifi'))
+    matches = {
+        name for name in known
+        if isinstance(name, str)
+        and ''.join(character for character in name.casefold()
+                    if character.isalnum()) == simplified
+    }
+    return matches.pop() if len(matches) == 1 else value
+
+
+def join(interface, ssid, expected_router=None, password=None):
+    # Supply credentials explicitly; remembering an SSID alone did not work on this Mac.
+    command = [NETWORKSETUP, '-setairportnetwork', interface, ssid]
+    if password is not None:
+        command.append(password)
+    try:
+        result = run(command, timeout=45)
+    except (subprocess.SubprocessError, OSError):
+        # Subprocess exceptions include argv, which contains the Wi-Fi password.
+        raise RuntimeError(f'Wi-Fi command failed or timed out joining {ssid!r}.') from None
+    if result.stdout.strip() or result.stderr.strip():
+        message = result.stdout.strip() + ' ' + result.stderr.strip()
+        if password:
+            message = message.replace(password, '[redacted]')
+        raise RuntimeError(f'Joining {ssid!r}: {message}')
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        actual = current_ssid(interface)
+        gateway = router(interface)
+        if actual == ssid and gateway:
+            return
+        if actual is None and expected_router and gateway == expected_router:
+            print('macOS hides the Wi-Fi name; connection checked using its router address.')
+            return
+        time.sleep(1)
+    raise RuntimeError(f'Could not verify connection to {ssid!r}.')
+
+
+def deploy(args, interface, previous, previous_router, adb, env, passwords):
+    target = f'{args.robot_ip}:5555'
+    restore = previous != args.ssid
+    error = None
+    try:
+        print(f'Joining {args.ssid}…', flush=True)
+        join(interface, args.ssid, args.robot_ip, passwords[args.ssid])
+        try:
+            run([adb, 'disconnect', target])
+        except subprocess.CalledProcessError:
+            pass  # No existing transport is normal on the first deployment.
+        for attempt in range(10):
+            try:
+                run([adb, 'connect', target], timeout=10)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                time.sleep(1)
+                continue
+            state = subprocess.run([adb, '-s', target, 'get-state'], text=True,
+                                   capture_output=True, timeout=10)
+            if state.returncode == 0 and state.stdout.strip() == 'device':
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError('Control Hub ADB is not ready. Check hub power and Wi-Fi.')
+        # Explicit serial avoids accidentally installing onto a USB-connected Driver Hub.
+        deploy_env = dict(env, ANDROID_SERIAL=target)
+        run([str(ROOT / 'gradlew'), '--offline', ':TeamCode:installDebug', '--console=plain'],
+            timeout=300, capture=False, env=deploy_env)
+    except BaseException as exc:
+        error = exc
+    finally:
+        # A second Ctrl+C must not cancel the attempt to restore Wi-Fi.
+        old_handlers = {sig: signal.signal(sig, signal.SIG_IGN)
+                        for sig in (signal.SIGINT, signal.SIGTERM)}
+        try:
+            try:
+                run([adb, 'disconnect', target], timeout=10)
+            except (subprocess.SubprocessError, OSError):
+                pass
+            if restore:
+                print(f'Returning to {previous}…', flush=True)
+                try:
+                    join(interface, previous, previous_router, passwords[previous])
+                except Exception as exc:
+                    print(f'Wi-Fi restore failed: {exc}\nSelect {previous!r} in the Wi-Fi menu.',
+                          file=sys.stderr)
+                    if error is None:
+                        error = exc
+        finally:
+            for sig, handler in old_handlers.items():
+                signal.signal(sig, handler)
+    if error is not None:
+        raise error
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, add_help=False)
+    parser.add_argument('--help', action='help', help='show this help message and exit')
+    parser.add_argument('--config', type=Path, default=Path.home() / '.config/ftc/deploy-wifi.json',
+                        help='private configuration file outside the repository')
+    parser.add_argument('-r', '--robot-wifi', '--ssid', dest='ssid',
+                        help='robot Wi-Fi to use and remember')
+    parser.add_argument('--robot-ip', help='override the configured robot IP')
+    parser.add_argument('-h', '--home-wifi', '--return-wifi', dest='return_wifi',
+                        help='home/main Wi-Fi to restore and remember')
+    parser.add_argument('--interface', help='Wi-Fi interface (normally en0; autodetected)')
+    parser.add_argument('--check', action='store_true', help='check setup without building or changing networks')
+    args = parser.parse_args()
+    if sys.platform != 'darwin':
+        parser.error('This script uses macOS networksetup.')
+    config_path = args.config.expanduser()
+    config = load_config(config_path)
+    args.ssid = wifi_name(args.ssid, config) or config.get('robot_ssid')
+    args.return_wifi = wifi_name(args.return_wifi, config)
+    args.robot_ip = args.robot_ip or config.get('robot_ip')
+    if not args.ssid or not args.robot_ip:
+        parser.error('Set robot_ssid and robot_ip in the private configuration.')
+    interface = args.interface
+    if not interface:
+        ports = run([NETWORKSETUP, '-listallhardwareports']).stdout
+        for block in ports.split('\n\n'):
+            if 'Hardware Port: Wi-Fi\n' in block:
+                interface = next(line.split(': ', 1)[1] for line in block.splitlines()
+                                 if line.startswith('Device: '))
+                break
+    if not interface:
+        parser.error('No Wi-Fi interface found.')
+    detected = current_ssid(interface)
+    previous = args.return_wifi or detected or config.get('return_wifi')
+    if not previous and sys.stdin.isatty():
+        previous = input('Main Wi-Fi to return to: ').strip()
+    if not previous:
+        parser.error('Specify --return-wifi "Your current Wi-Fi"; no network was changed.')
+    if previous == args.ssid:
+        parser.error('Start on your normal Wi-Fi so dependencies can download before deployment.')
+    previous_router = router(interface)
+    if not previous_router:
+        parser.error('Connect to your normal Wi-Fi first; no router was found.')
+    env = dict(os.environ)
+    sdk = Path(env.get('ANDROID_HOME', str(Path.home() / 'Library/Android/sdk')))
+    adb = str(sdk / 'platform-tools/adb')
+    if not Path(adb).is_file():
+        parser.error(f'ADB not found at {adb}')
+    env.setdefault('JAVA_HOME', '/Applications/Android Studio.app/Contents/jbr/Contents/Home')
+    for name in (previous, args.ssid):
+        password_for(config, config_path, name)
+    config['robot_ssid'] = args.ssid
+    config['robot_ip'] = args.robot_ip
+    config['return_wifi'] = previous
+    save_config(config_path, config)
+    if args.check:
+        print(f'Setup ready: {previous} → {args.ssid} → {previous}. No networks changed.')
+        return
+    os.chdir(ROOT)
+    print('Building before switching Wi-Fi…', flush=True)
+    run([str(ROOT / 'gradlew'), ':TeamCode:assembleDebug', '--console=plain'],
+        timeout=600, capture=False, env=env)
+    deploy(args, interface, previous, previous_router, adb, env, config['passwords'])
+    print('Deployment complete.')
+
+
+if __name__ == '__main__':
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt()
+    signal.signal(signal.SIGTERM, interrupted)
+    try:
+        main()
+    except KeyboardInterrupt:
+        print('Deployment interrupted.', file=sys.stderr)
+        sys.exit(130)
+    except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+        print(f'Deployment failed: {exc}', file=sys.stderr)
+        sys.exit(1)

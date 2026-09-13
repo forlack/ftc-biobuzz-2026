@@ -72,17 +72,18 @@ from error in the measured offset. At `d = 0` there is nothing to cancel.
 This is a refinement, not a correctness issue — the offsets exist so imperfect mounting works.
 It matters most in autos with lots of rotation, where the error accumulates.
 
-**Robot network:** SSID `2222-RC` (5 GHz). Control Hub is the AP at **192.168.43.1**;
-Driver Hub associates at 192.168.43.13. Team is **24620**.
+**Robot network:** The SSID is kept in the private deploy configuration outside Git.
+The Control Hub is the AP at **192.168.43.1**; Driver Hub associates at
+192.168.43.13. Team is **24620**.
 
-> **Naming mismatch (low priority):** the config is `2222-Config.xml` and the SSID is
-> `2222-RC`, both carrying an old team number. **This is a TEST PLATFORM, not the
+> **Naming mismatch (low priority):** the config and robot SSID both carry an old
+> team number. **This is a TEST PLATFORM, not the
 > competition robot**, so there's no inspection concern. Rename to `24620-RC` whenever
 > convenient (Control Hub network settings); code doesn't care, since OpModes reference
 > device names, not the filename.
 
-The laptop's normal WiFi (`Ender`, 10.0.0.x) **cannot reach the robot**. To talk to the
-Control Hub, either plug in USB (preferred — keeps internet) or join `2222-RC`.
+The laptop's normal WiFi (10.0.0.x) **cannot reach the robot**. To talk to the
+Control Hub, either plug in USB (preferred — keeps internet) or join its Wi-Fi.
 
 ---
 
@@ -285,6 +286,29 @@ Verified live on the hub via the WebSocket:
 
 ## Deploying to the Control Hub
 
+### macOS Wi-Fi deploy helper (2026-09-12)
+
+Run `./deploy` from the repository root. Private Wi-Fi configuration lives
+outside Git in `~/.config/ftc/deploy-wifi.json`, mode 600. Never copy credentials or
+personal network names into tracked files. The helper does not access Keychain.
+`--check` validates setup without switching. When macOS hides the SSID, the
+configured return network is used. Missing passwords are requested with hidden
+input and saved to that file. `-r` selects and remembers the robot Wi-Fi; `-h`
+selects and remembers the home/main Wi-Fi. With neither flag, both remembered
+networks are used. Known names match case-insensitively with spaces and punctuation
+ignored. `--help` shows usage because `-h` is reserved for home Wi-Fi.
+
+Live testing confirmed that supplying passwords explicitly fixed networksetup's
+-3900 join failures. An ADB disconnect failure when no transport existed is now
+nonfatal. The complete build, Wi-Fi switch, offline install, and return cycle
+passed using credentials in memory; the private-file configuration is a later
+change. Tests simulate cleanup after success, failure, timeout, and interruption.
+
+USB on this personal Mac works through a dock's USB-A connection to the Control
+Hub's USB-C port; the user confirmed an Android Studio deployment. Direct USB-C
+failed to enumerate. Its cause is unconfirmed. The SDK's ADB 37.0.1 server is now
+in use.
+
 ```fish
 adb devices                              # confirm hub is on USB
 ./gradlew :TeamCode:installDebug
@@ -302,7 +326,7 @@ adb connect 192.168.43.1:5555
 # dashboard: http://192.168.43.1:8001   (no adb forward needed on this network)
 ```
 
-**`--offline` is mandatory here.** `2222-RC` has no internet, and Gradle will otherwise stall
+**`--offline` is mandatory here.** The robot network has no internet, and Gradle will otherwise stall
 reaching Maven Central. Verified working — the build only needs the network to *download*
 dependencies, and everything is already in `~/.gradle/caches`. Corollary: a new machine, or a
 dependency version bump, must sync once on real internet first or `--offline` fails with "no
