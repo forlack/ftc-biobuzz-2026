@@ -50,7 +50,8 @@ Dashboard at <http://localhost:8001>.
 
 On macOS, run `./deploy` from the repository root. It builds on your
 normal Wi-Fi, joins the robot network, installs with Gradle offline, and attempts
-to restore the previous network after success, errors, timeout, or Ctrl+C.
+to restore the previous network after success, errors, timeout, or Ctrl+C. If adb stops
+responding it restarts the adb server and retries, which clears a wedged Wi-Fi transport.
 
 Wi-Fi names and passwords live in a private file **outside this repository**:
 `~/.config/ftc/deploy-wifi.json`. If a password is missing, the script asks for it
@@ -79,17 +80,17 @@ briefly be visible to local process inspection.
 ```
 
 The robot and main networks are remembered automatically. Use `-r` to select the
-robot network and `-h` to select the home/main network; either choice becomes the
-new default. Names already in the private file match without regard to case,
+robot network and `--home-wifi` to select the home/main network; either choice becomes
+the new default. Names already in the private file match without regard to case,
 spaces, or punctuation.
 
 ```bash
-./deploy -r "ROBOT WIFI" -h "HOME WIFI"
-./deploy -h "HOME WIFI"  # uses the remembered robot
-./deploy                  # uses both remembered networks
+./deploy -r "ROBOT WIFI" --home-wifi "HOME WIFI"
+./deploy --home-wifi "HOME WIFI"  # uses the remembered robot
+./deploy                          # uses both remembered networks
 ```
 
-Use `--help` for help (`-h` belongs to home Wi-Fi). `--robot-ip` and `--config`
+`-h`/`--help` shows help. `--robot-ip` and `--config`
 provide other overrides. Router-address
 checks provide limited verification when macOS redacts SSIDs. If restoration
 fails, reconnect manually; force-killing the script or shutting down the Mac

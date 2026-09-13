@@ -145,6 +145,15 @@ def deploy(args, interface, previous, previous_router, adb, env, passwords):
         except subprocess.CalledProcessError:
             pass  # No existing transport is normal on the first deployment.
         for attempt in range(10):
+            if attempt == 3:
+                # A wedged transport makes `adb connect` answer "already connected" forever
+                # while get-state stays "offline". Only killing the server clears it --
+                # `adb disconnect` alone does not. Verified 2026-09-12.
+                print('ADB is not responding; restarting the ADB server…', flush=True)
+                try:
+                    run([adb, 'kill-server'], timeout=10)
+                except (subprocess.SubprocessError, OSError):
+                    pass
             try:
                 run([adb, 'connect', target], timeout=10)
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
@@ -189,14 +198,13 @@ def deploy(args, interface, previous, previous_router, adb, env, passwords):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, add_help=False)
-    parser.add_argument('--help', action='help', help='show this help message and exit')
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, default=Path.home() / '.config/ftc/deploy-wifi.json',
                         help='private configuration file outside the repository')
     parser.add_argument('-r', '--robot-wifi', '--ssid', dest='ssid',
                         help='robot Wi-Fi to use and remember')
     parser.add_argument('--robot-ip', help='override the configured robot IP')
-    parser.add_argument('-h', '--home-wifi', '--return-wifi', dest='return_wifi',
+    parser.add_argument('--home-wifi', '--return-wifi', dest='return_wifi',
                         help='home/main Wi-Fi to restore and remember')
     parser.add_argument('--interface', help='Wi-Fi interface (normally en0; autodetected)')
     parser.add_argument('--check', action='store_true', help='check setup without building or changing networks')
