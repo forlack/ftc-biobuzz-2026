@@ -80,16 +80,17 @@ briefly be visible to local process inspection.
 ```
 
 The robot and main networks are remembered automatically. Use `-r` to select the
-robot network and `--home-wifi` to select the home/main network; either choice becomes
+robot network and `-c` for the current network to come back to; either choice becomes
 the new default. Names already in the private file match without regard to case,
 spaces, or punctuation.
 
 ```bash
-./deploy -r "ROBOT WIFI" --home-wifi "HOME WIFI"
-./deploy --home-wifi "HOME WIFI"  # uses the remembered robot
-./deploy                          # uses both remembered networks
+./deploy -r "ROBOT WIFI" -c "HOME WIFI"
+./deploy -c Ender    # come back to Ender, use the remembered robot
+./deploy             # uses both remembered networks
 ```
 
+`-c` is also spelled `--current-wifi`, `--home-wifi` or `--return-wifi`.
 `-h`/`--help` shows help. `--robot-ip` and `--config`
 provide other overrides. Router-address
 checks provide limited verification when macOS redacts SSIDs. If restoration
