@@ -95,6 +95,16 @@ checks provide limited verification when macOS redacts SSIDs. If restoration
 fails, reconnect manually; force-killing the script or shutting down the Mac
 cannot run cleanup.
 
+**School and other enterprise networks.** `networksetup` can only join a network with a
+password. If the network you return to uses WPA2-Enterprise — a username and password, or a
+certificate, which is normal at schools — the restore step cannot rejoin it and will fail. It
+fails safely, telling you to pick the network from the Wi-Fi menu, and the code is already
+deployed by that point. Do one `deploy` run on that network early, when it does not matter,
+rather than finding out before a demo.
+
+Where USB is available, prefer it: `./gradlew :TeamCode:installDebug` keeps your internet and
+switches no networks. This script is for when USB is not an option.
+
 Run `python3 -B -m unittest discover -s tests -v` for simulated cleanup tests.
 
 For a manual deployment:
