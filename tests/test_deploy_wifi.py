@@ -20,6 +20,8 @@ class RestoreTests(unittest.TestCase):
     def exercise(self, failure=None, join_failure=False, restore_failure=False):
         args = SimpleNamespace(ssid='Robot Wi-Fi', robot_ip='192.168.43.1')
         def run(command, **kwargs):
+            if command[-1] == 'get-state':
+                return SimpleNamespace(stdout='device\n', stderr='')
             if ':TeamCode:installDebug' in command:
                 self.assertEqual(kwargs['env']['ANDROID_SERIAL'], '192.168.43.1:5555')
                 self.assertIn('--offline', command)
@@ -27,7 +29,6 @@ class RestoreTests(unittest.TestCase):
                     raise failure
             return SimpleNamespace(stdout='', stderr='')
         with patch.object(module, 'run', side_effect=run), \
-             patch.object(module.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='device\n')), \
              patch.object(module, 'join') as join:
             if join_failure:
                 join.side_effect = [RuntimeError('join failed'), None]
@@ -102,6 +103,45 @@ class RestoreTests(unittest.TestCase):
             with self.assertRaises(RuntimeError) as caught:
                 module.join('en0', 'Robot', password=secret)
             self.assertNotIn(secret, str(caught.exception))
+
+    def test_get_state_timeout_reaches_adb_restart(self):
+        calls = []
+        state_attempts = 0
+
+        def run(command, **kwargs):
+            nonlocal state_attempts
+            calls.append(command)
+            if command[-1] == 'get-state':
+                state_attempts += 1
+                if state_attempts <= 3:
+                    raise subprocess.TimeoutExpired(command, 10)
+                return SimpleNamespace(stdout='device\n', stderr='')
+            return SimpleNamespace(stdout='', stderr='')
+
+        with patch.object(module, 'run', side_effect=run), \
+             patch.object(module.time, 'sleep'):
+            module.connect_adb('/sdk/adb', '192.168.43.1:5555')
+        self.assertIn(['/sdk/adb', 'kill-server'], calls)
+
+    def test_connect_timeout_reaches_adb_restart(self):
+        calls = []
+        connect_attempts = 0
+
+        def run(command, **kwargs):
+            nonlocal connect_attempts
+            calls.append(command)
+            if command[1] == 'connect':
+                connect_attempts += 1
+                if connect_attempts <= 3:
+                    raise subprocess.TimeoutExpired(command, 10)
+            if command[-1] == 'get-state':
+                return SimpleNamespace(stdout='device\n', stderr='')
+            return SimpleNamespace(stdout='', stderr='')
+
+        with patch.object(module, 'run', side_effect=run), \
+             patch.object(module.time, 'sleep'):
+            module.connect_adb('/sdk/adb', '192.168.43.1:5555')
+        self.assertIn(['/sdk/adb', 'kill-server'], calls)
 
     def test_success_restores(self):
         self.exercise()

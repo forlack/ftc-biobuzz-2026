@@ -133,6 +133,29 @@ def join(interface, ssid, expected_router=None, password=None):
     raise RuntimeError(f'Could not verify connection to {ssid!r}.')
 
 
+def connect_adb(adb, target):
+    for attempt in range(10):
+        if attempt == 3:
+            # A wedged transport makes `adb connect` answer "already connected" forever
+            # while get-state stays "offline". Only killing the server clears it --
+            # `adb disconnect` alone does not. Verified 2026-09-12.
+            print('ADB is not responding; restarting the ADB server…', flush=True)
+            try:
+                run([adb, 'kill-server'], timeout=10)
+            except (subprocess.SubprocessError, OSError):
+                pass
+        try:
+            run([adb, 'connect', target], timeout=10)
+            state = run([adb, '-s', target, 'get-state'], timeout=10)
+        except (subprocess.SubprocessError, OSError):
+            time.sleep(1)
+            continue
+        if state.stdout.strip() == 'device':
+            return
+        time.sleep(1)
+    raise RuntimeError('Control Hub ADB is not ready. Check hub power and Wi-Fi.')
+
+
 def deploy(args, interface, previous, previous_router, adb, env, passwords):
     target = f'{args.robot_ip}:5555'
     restore = previous != args.ssid
@@ -144,28 +167,7 @@ def deploy(args, interface, previous, previous_router, adb, env, passwords):
             run([adb, 'disconnect', target])
         except subprocess.CalledProcessError:
             pass  # No existing transport is normal on the first deployment.
-        for attempt in range(10):
-            if attempt == 3:
-                # A wedged transport makes `adb connect` answer "already connected" forever
-                # while get-state stays "offline". Only killing the server clears it --
-                # `adb disconnect` alone does not. Verified 2026-09-12.
-                print('ADB is not responding; restarting the ADB server…', flush=True)
-                try:
-                    run([adb, 'kill-server'], timeout=10)
-                except (subprocess.SubprocessError, OSError):
-                    pass
-            try:
-                run([adb, 'connect', target], timeout=10)
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-                time.sleep(1)
-                continue
-            state = subprocess.run([adb, '-s', target, 'get-state'], text=True,
-                                   capture_output=True, timeout=10)
-            if state.returncode == 0 and state.stdout.strip() == 'device':
-                break
-            time.sleep(1)
-        else:
-            raise RuntimeError('Control Hub ADB is not ready. Check hub power and Wi-Fi.')
+        connect_adb(adb, target)
         # Explicit serial avoids accidentally installing onto a USB-connected Driver Hub.
         deploy_env = dict(env, ANDROID_SERIAL=target)
         run([str(ROOT / 'gradlew'), '--offline', ':TeamCode:installDebug', '--console=plain'],
