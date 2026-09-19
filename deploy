@@ -81,7 +81,8 @@ def password_for(config, path, ssid):
     if not sys.stdin.isatty():
         raise RuntimeError(
             f'No password saved for {ssid!r}. Run the script in Terminal to enter it.')
-    password = getpass.getpass(f'Wi-Fi password for {ssid} (saved only in {path}): ')
+    password = getpass.getpass(
+        f'Wi-Fi password for {ssid} (press Return if open; saved only in {path}): ')
     passwords[ssid] = password
     save_config(path, config)
     print(f'Saved the password for {ssid} in the private Wi-Fi file.')
@@ -108,7 +109,7 @@ def wifi_name(value, config):
 def join(interface, ssid, expected_router=None, password=None):
     # Supply credentials explicitly; remembering an SSID alone did not work on this Mac.
     command = [NETWORKSETUP, '-setairportnetwork', interface, ssid]
-    if password is not None:
+    if password:
         command.append(password)
     try:
         result = run(command, timeout=45)

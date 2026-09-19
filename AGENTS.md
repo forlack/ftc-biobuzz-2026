@@ -293,10 +293,11 @@ outside Git in `~/.config/ftc/deploy-wifi.json`, mode 600. Never copy credential
 personal network names into tracked files. The helper does not access Keychain.
 `--check` validates setup without switching. When macOS hides the SSID, the
 configured return network is used. Missing passwords are requested with hidden
-input and saved to that file. `-r` selects and remembers the robot Wi-Fi; `-h`
-selects and remembers the home/main Wi-Fi. With neither flag, both remembered
+input and saved to that file; an empty password marks an open network. `-r`
+selects and remembers the robot Wi-Fi; `-c` selects and remembers the network to
+come back to. With neither flag, both remembered
 networks are used. Known names match case-insensitively with spaces and punctuation
-ignored. `--help` shows usage because `-h` is reserved for home Wi-Fi.
+ignored. `-h`/`--help` shows usage.
 
 Live testing confirmed that supplying passwords explicitly fixed networksetup's
 -3900 join failures. An ADB disconnect failure when no transport existed is now

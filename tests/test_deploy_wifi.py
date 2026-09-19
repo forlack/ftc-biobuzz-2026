@@ -75,6 +75,16 @@ class RestoreTests(unittest.TestCase):
                 'test-only')
             prompt.assert_not_called()
 
+    def test_open_network_omits_password_argument(self):
+        result = SimpleNamespace(stdout='', stderr='')
+        with patch.object(module, 'run', return_value=result) as command, \
+             patch.object(module, 'current_ssid', return_value='Open Wi-Fi'), \
+             patch.object(module, 'router', return_value='10.0.0.1'):
+            module.join('en0', 'Open Wi-Fi', '10.0.0.1', '')
+        command.assert_called_once_with(
+            [module.NETWORKSETUP, '-setairportnetwork', 'en0', 'Open Wi-Fi'],
+            timeout=45)
+
     def test_wifi_name_ignores_case_and_punctuation(self):
         config = {
             'robot_ssid': 'Robot-24620-RC',

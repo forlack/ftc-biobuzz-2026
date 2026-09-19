@@ -55,7 +55,8 @@ responding it restarts the adb server and retries, which clears a wedged Wi-Fi t
 
 Wi-Fi names and passwords live in a private file **outside this repository**:
 `~/.config/ftc/deploy-wifi.json`. If a password is missing, the script asks for it
-with hidden input and saves it there. It never reads Keychain. Example structure:
+with hidden input and saves it there; press Return for an open network. It never
+reads Keychain. Example structure:
 
 ```json
 {
@@ -97,12 +98,12 @@ checks provide limited verification when macOS redacts SSIDs. If restoration
 fails, reconnect manually; force-killing the script or shutting down the Mac
 cannot run cleanup.
 
-**School and other enterprise networks.** `networksetup` can only join a network with a
-password. If the network you return to uses WPA2-Enterprise — a username and password, or a
-certificate, which is normal at schools — the restore step cannot rejoin it and will fail. It
-fails safely, telling you to pick the network from the Wi-Fi menu, and the code is already
-deployed by that point. Do one `deploy` run on that network early, when it does not matter,
-rather than finding out before a demo.
+**School networks.** Open networks work: enter an empty password when prompted. A captive
+portal may still require browser sign-in after reconnecting if its cached authorization has
+expired. WPA2-Enterprise networks — a username and password or certificate — are not
+supported by this script's restore step. It fails safely, telling you to pick the network
+from the Wi-Fi menu, and the code is already deployed by that point. Do one `deploy` run on
+that network early, when it does not matter, rather than finding out before a demo.
 
 Where USB is available, prefer it: `./gradlew :TeamCode:installDebug` keeps your internet and
 switches no networks. This script is for when USB is not an option.
