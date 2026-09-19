@@ -2,7 +2,7 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-09-12
+Last updated: 2026-09-19
 
 ---
 
@@ -95,7 +95,7 @@ competition inspection).
 - FTC SDK / Robot Controller: **12.0** (BIOBUZZ, 2026-2027 season)
 - Driver Station app: **12.0** — must be updated to match, or the DS nags
 - Pedro Pathing: **2.1.2** — builds clean against 12.0, verified 2026-09-12
-- Panels dashboard: **fullpanels 1.0.12**
+- Panels dashboard: **fullpanels 1.0.13** (Field 1.0.7; BIOBUZZ field images)
 - Gradle **9.1.0** (repo wrapper), AGP **8.13.2**, JDK **17**
 - Android Studio **Narwhal 3 Feature Drop or later** is now required by FIRST
 
@@ -155,7 +155,7 @@ maven { url = "https://mymaven.bylazar.com/releases" }   // Panels only
 
 implementation 'com.pedropathing:ftc:2.1.2'        // Maven Central; pulls in :core
 implementation 'com.pedropathing:telemetry:1.0.0'  // Maven Central
-implementation 'com.bylazar:fullpanels:1.0.12'     // bylazar maven
+implementation 'com.bylazar:fullpanels:1.0.13'     // bylazar maven
 ```
 
 **`build.common.gradle`** — `compileSdkVersion 30` → `compileSdk 34`.

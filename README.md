@@ -12,7 +12,7 @@ Everything outside `TeamCode/` is FIRST's code, unmodified except for two build 
 | Android Studio | Narwhal 3 Feature Drop or later |
 | Pedro Pathing | 2.1.2 |
 | Gradle / AGP | 9.1.0 / 8.13.2 |
-| Panels dashboard | 1.0.12 |
+| Panels dashboard | 1.0.13 |
 | JDK | 17 |
 
 For FIRST's own documentation and SDK release notes, go to the source rather than a stale
