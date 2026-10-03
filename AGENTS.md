@@ -2,7 +2,7 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-09-12
+Last updated: 2026-10-03
 
 ---
 
@@ -71,6 +71,46 @@ from error in the measured offset. At `d = 0` there is nothing to cancel.
 
 This is a refinement, not a correctness issue — the offsets exist so imperfect mounting works.
 It matters most in autos with lots of rotation, where the error accumulates.
+
+### Dead-wheel odometry math (reference — the Pinpoint does this in firmware)
+
+Worth understanding because it is *why* the offsets exist. **This is the classic 3-pod
+derivation, which our Pinpoint does NOT use for heading** — it has its own IMU.
+
+Two parallel pods, `gap` apart, with +X forward, +Y left and counter-clockwise positive:
+
+```
+dTheta   = (dR - dL) / gap               # R travels further => turning LEFT (CCW, positive)
+dForward = (dL + dR) / 2                 # symmetric pods; cancels rotation
+dStrafe  = dPerpPod - dTheta * d_perp    # remove the perpendicular pod's rotation share
+```
+
+`d_perp` is the perpendicular pod's fore/aft offset — exactly `strafePodX`. **That
+subtraction is what the offsets are for.** Get its sign wrong and the robot spirals.
+
+Mind the sign convention: a point on the **left** moves *backward* when rotating CCW, so the
+left pod reads **less**. Hence `(dR - dL)`, not the reverse.
+
+Then rotate the robot-frame delta into field coordinates. Using the mid-step heading is the
+cheap approximation:
+
+```
+theta_mid = theta + dTheta/2
+dx_field  = dForward*cos(theta_mid) - dStrafe*sin(theta_mid)
+dy_field  = dForward*sin(theta_mid) + dStrafe*cos(theta_mid)
+```
+
+The robot actually traces an arc, not a chord. The exact integration (the "pose exponential"
+that Pedro and Road Runner use) is:
+
+```
+dx_arc = ( dForward*sin(dTheta) + dStrafe*(cos(dTheta) - 1) ) / dTheta
+dy_arc = ( dForward*(1 - cos(dTheta)) + dStrafe*sin(dTheta) ) / dTheta
+# then rotate by the PREVIOUS heading; guard dTheta ~ 0 to avoid dividing by zero
+```
+
+The two agree to many decimals at small `dTheta`; the difference shows up in fast tight
+turns, where the chord cuts the corner and the error accumulates across a whole auto.
 
 **Robot network:** The SSID is kept in the private deploy configuration outside Git.
 The Control Hub is the AP at **192.168.43.1**; Driver Hub associates at
@@ -207,6 +247,14 @@ Debug order when the dashboard looks dead:
 2. Did you press **PLAY**, not just INIT?
 3. Is port **8002** forwarded? Without it the page renders but never updates.
 4. Gamepad values need a controller bound on the DS (**Start + A**).
+
+### Why "Enable/Disable Panels" has no Android icon on the DS
+
+Cosmetic upstream omission, not a problem with our setup. The DS picks an OpMode's icon from
+`OpModeMeta.Source` (`ANDROID_STUDIO`, `BLOCKLY`, `ONBOTJAVA`, `BUILTIN`). Panels builds its
+entry with `setName`/`setFlavor`/`setGroup` and never calls `setSource`, and the `Builder`
+constructor leaves `source = null` — so there is no icon to draw. Our OpModes get
+`ANDROID_STUDIO` automatically from the `@TeleOp` annotation scanner.
 
 ### The gamepad plugin is a virtual controller (browser → robot)
 
@@ -538,123 +586,33 @@ for Java. `.vscode/` is NOT in `.gitignore` (only `.idea/` is), so it shows in `
 ## Status
 
 Done:
-- [x] Driver Station 11.0 → 11.2 on Driver Hub
-- [x] JDK 17 + Android SDK installed; toolchain verified end-to-end
-- [x] FtcRobotController v11.2 cloned, branch `main`
-- [x] Pedro Pathing 2.1.2 wired in, imports compile-verified
-- [x] Panels installed; server + WebSocket (HTTP 101) verified live on the hub
-- [x] Robot Controller 11.1 → 11.2; version mismatch cleared; configs preserved
-- [x] `PanelsDemo` TeleOp registered on the hub (log: `registered {PanelsDemo} as {Panels Demo}`)
-- [x] Panels dashboard confirmed working live by the user via `Panels Demo`
-- [x] Blocks `Field Centric (Best)` ported to Java as `FieldCentricJava`, deployed and
-      registered on the hub (log: `registered {FieldCentricJava} as {Field Centric (Java)}`)
+- [x] Toolchain from scratch; builds with zero environment variables
+- [x] SDK 11.2 → **12.0** (BIOBUZZ, 2026-2027), merged on release day 2026-09-12
+- [x] Panels dashboard working live on the hub
+- [x] Blocks `Field Centric (Best)` ported to Java, and since refactored into `lib/`
+- [x] Pedro + Pinpoint integrated; `Constants.java` authored and measured
+- [x] Localization, velocity, zero-power and predictive-braking tuning — see Pedro section
+- [x] Upstream Pedro telemetry bug found and fixed: Quickstart PR #84, merged 2026-08-05
+- [x] Teleop framework for students (`lib/` + `TemplateTeleOp`), **hardware-verified
+      2026-09-12**: sticks and all six controls behave as before the refactor
+- [x] Stick deadzone, after a worn controller made the robot creep and the motors whine
+- [x] Hub cleaned of OnBotJava and the autonomous Blocks program (see below)
+- [x] macOS set up as the main dev machine, with a `./deploy` Wi-Fi helper (see README)
 
 Next:
-- [ ] Run **Panels Demo** (group *Diagnostics*) from the DS and confirm the field view animates
-      — first attempt ran the Blocks OpMode `Field Centric (Best)` instead, which cannot
-      drive Panels (see above)
-- [ ] **Test-drive `Field Centric (Java)`** — wheels off the ground first, verify each
-      direction matches the Blocks version before trusting it on the field
-- [ ] Delete `TeamCode/.../PanelsDemo.java` once satisfied — it's a smoke test, not real code
-- [ ] Author Pedro `Constants.java` from the real `2222-Config.xml` hardware names
-- [ ] Pedro tuning: forward/lateral multipliers → heading → drive PIDs
+- [ ] **Manual PID tuning** — the only tuning step never done. Tuning → Manual →
+      Translational → Heading → Drive (→ Centripetal). PIDs are on library defaults with the
+      secondary PIDs enabled, which is a sane starting point, not a tuned one.
+- [ ] **Decide on Pedro 3.0.0** (see its section below) — this supersedes the PID item if we
+      take it, since AutoTune replaces the tuning OpMode entirely.
+- [ ] Delete `PanelsDemo.java` when it stops being useful — it is a smoke test.
+- [ ] Re-copy `pedroPathing/Tuning.java` from upstream Quickstart **if staying on 2.1.2** —
+      our copy predates PR #84 and still mislabels the lateral tuners.
+- [ ] Optional: rename the robot SSID and config file to the real team number; delete the
+      16 MB of stale `/sdcard/FIRST/java/srcBackups/` zips.
 
----
-
-## TeleOp framework (`lib/`)
-
-Built 2026-08-27 so students coming from Blocks can start on robot logic instead of
-plumbing. The split is deliberate: **everything in `lib/` is framework, everything outside
-it is theirs.**
-
-```
-teamcode/
-├── FieldCentricJava.java   (101)  the working teleop
-├── TemplateTeleOp.java      (74)  @Disabled starter to copy
-└── lib/
-    ├── Button.java          (55)  input helper
-    ├── MecanumDrive.java   (214)  motors, IMU, field-centric math, modes, PIDF push
-    └── DriveDashboard.java  (91)  every line of Panels
-```
-
-**The checkable criterion: a student-facing OpMode has ZERO `com.bylazar` imports.** All
-Panels — telemetry, the browser gamepad merge, the PIDF readout — sits behind
-`DriveDashboard`. If a bylazar import appears in an OpMode, something leaked; move it.
-
-### The loop model
-
-Every teleop is one non-blocking loop. Each subsystem gets a thin slice per pass, 50–200
-times a second:
-
-```java
-while (opModeIsActive()) {
-    readGamepad();
-    updateDriveSettings();
-    updateDriving();
-    dashboard.update();
-}
-```
-
-**Never block.** No `sleep()`, no `while (motor.isBusy())`. The RC watchdog stops the robot
-if the loop stops turning over, and gamepads only refresh between iterations. For a
-multi-step action use a state machine that advances one step per pass — `PedroAutonomous`
-is the worked example.
-
-To add a subsystem: write `updateXxx()`, have it publish its own telemetry via
-`dashboard.addData()`, add one call to the loop. Nothing else changes.
-
-### `Button`
-
-Wraps a gamepad button so a *level* becomes an *event*:
-
-| | meaning | use for |
-|---|---|---|
-| `down()` | held right now | hold-to-act (slow mode, heading reset) |
-| `pressed()` | just went down | toggles, one-shot actions |
-| `released()` | just came up | nothing yet |
-
-`pressed()` matters because at ~100 Hz a human press spans roughly 30 loops — `down()` would
-fire a toggle 30 times. `Button.Group.update()` reads every button once per loop, so all
-three queries are pure reads: call them in any order, any number of times, same answer.
-
-Two non-obvious things:
-
-- **The lambda is a deferred read, not a value.** `buttons.add(() -> pad.dpad_up)` stores
-  *instructions* to read `pad.dpad_up`, evaluated on each `update()`. Passing `pad.dpad_up`
-  directly would capture a dead `boolean` (and NPE, since `pad` is null at construction).
-  This only works because `pad` is a **field** — a captured local would have to be
-  effectively final.
-- **Declaration order is load-bearing.** `Button.Group buttons` must be declared *above* the
-  buttons, because Java initialises instance fields in source order and each `add()` writes
-  into that list. Below them, every button hits a null list at construction.
-
-### Naming
-
-Names are written for a student who just came off Blocks, not for brevity.
-
-- Say what it does in ordinary words: `changeSpeedLimit(+1)`, not `bumpSpeedCap(+1)`.
-- **No single-letter or math-shorthand parameters.** `drive(strafe, forward, turn, slow)`,
-  never `(x, y, rx)`. The kinematics still uses `fieldX`/`fieldY` internally, where the
-  reader is already looking at the math.
-- Prefer the word the team says out loud: *heading* over *yaw*, *speed limit* over *speed
-  cap*, *initial* over *starting*.
-- **Name the thing, not the verb that happened to it.** The stored PIDF numbers are
-  `motorP/I/D/F` — "what is in the motors" — because `appliedP`/`sentP` read as though
-  something was applied to the motors as power.
-- No `Button` suffix on Button fields; `slowMode.down()` already reads as a button.
-- Dashboard labels follow the same rule — "stick forward", "encoder FL", not "rotY".
-
-### Comment style
-
-Kept deliberately sparse — dense comment blocks are what made the pre-refactor teleop hard
-for a beginner to read.
-
-- One line of javadoc per class and per non-obvious method. A block only where a one-liner
-  genuinely cannot carry it.
-- Inline comments only for things that would **surprise** a reader: declaration order,
-  level-vs-edge, why the heading reset runs after the drive math.
-- Everything longer — derivations, history, why a sign is what it is — goes **here**, not in
-  the source.
+On the competition robot, re-run the whole tuning sequence and mount the pods per the
+guidance above. Every measured number in `Constants.java` belongs to the test chassis.
 
 ---
 
@@ -764,6 +722,46 @@ are still valid. But it cost this team hours: the robot moved left as instructed
 and we wrongly suspected motor directions and localizer config. **Trust the robot, not the
 telemetry text, on lateral direction.**
 
+### Pedro 3.0.0 — released 2026-09-10, NOT taken
+
+We build against **2.1.2**. v3.0.0 is a major release and changes things we have already
+done, so it was deliberately deferred rather than skipped:
+
+- **Foresight** replaces Predictive Braking — our measured `kLinear 0.0574 / kQuad 0.00376`
+  are Predictive Braking constants and would stop applying.
+- **New Path API**, "much less verbose" — breaking changes to `PedroAutonomous`.
+- **Pose Factory** — a new way to build poses, so `Constants.java` likely shifts.
+- **AutoTune** — a robot-hosted tuning webpage that replaces the `Tuning.java` OpMode.
+
+Reasoning for waiting: it was two days old, and taking it the same day as the SDK 12.0 jump
+would have made any failure impossible to attribute. The argument *for* taking it is real
+though — we are between robots, every constant gets re-measured on the competition chassis
+anyway, and AutoTune could make that re-tune much cheaper. **Evaluate on a branch, not in
+place.** If we take it, re-copying the old `Tuning.java` is wasted work.
+
+### Pinpoint `setOffsets` argument order
+
+Counter-intuitive and easy to get backwards. From Pedro's own `PinpointLocalizer.java:60`:
+
+```java
+setOffsets(constants.forwardPodY, constants.strafePodX, constants.distanceUnit);
+// → odo.setOffsets(xOffset, yOffset, unit);
+```
+
+So the driver's **first** argument is `forwardPodY` and the **second** is `strafePodX`:
+
+```java
+pinpoint.setOffsets(2.125, 6.15, DistanceUnit.INCH);   // forwardPodY, strafePodX
+```
+
+goBILDA names each argument after the pod's *measuring* axis, not the axis the offset runs
+along — so the **forward** pod's offset goes in the **x** slot. Encoder directions take the
+obvious order: `setEncoderDirections(forward, strafe)` = `(FORWARD, REVERSED)` for us.
+
+Offsets only correct rotational contamination, so a robot pushed in straight lines reads
+correctly even with them at zero; errors appear only when it rotates. Good demo: zero the
+offsets, spin in place, watch x/y wander.
+
 ### Pinpoint has no ticks-to-inches multipliers
 
 `ThreeWheelConstants`, `TwoWheelConstants`, and `DriveEncoderConstants` all expose
@@ -821,6 +819,44 @@ whole classpath for `@Configurable`, it does not look only inside OpModes (verif
 > auto-conversion living in `/sdcard/FIRST/java`, unrelated to this port. And the original
 > Blocks `Field Centric (Best)` is still there as a fallback. Three similar names; pick
 > **Field Centric (Java)**.
+
+---
+
+## Hub contents (cleaned 2026-09-12)
+
+`/sdcard/FIRST` was pruned so the Driver Station lists only our Android Studio OpModes.
+**Full backup first:** `~/ftc/backups/20260912-144553-controlhub-FIRST/` (150 files, 17 MB,
+including `2222-Config.xml`, blocks, and the OnBotJava sources).
+
+Deleted: all 7 OnBotJava sources in `/sdcard/FIRST/java/src`, all 16 build artifacts in
+`/sdcard/FIRST/java/build` (the jar/dex there is what actually registers those OpModes, so
+deleting sources alone is not enough), and the one **autonomous** Blocks program,
+*Example Auto-Odo with Explanations in English*.
+
+Kept: the four Blocks **teleops** — *Field Centric (Best)* (the original our Java port came
+from), *Pinpoint*, *Robot Centric (Better)*, *Robot Centric (Simplified)*. Also kept
+`/sdcard/FIRST/java/srcBackups/` (16 MB of old build zips — dead weight, safe to delete).
+
+Registration is re-scanned on RC app restart; `am force-stop` then relaunch is enough, and
+the log line to grep for is `OpmodeRegistration: registered {Class} as {DS name}`.
+
+---
+
+## Rejected: Gradle configuration cache
+
+Gradle suggests it on every build. **Tested 2026-09-12 and not adopted.** It works — no
+incompatibility errors — but the gain is irrelevant here:
+
+| Build | Time |
+|---|---|
+| incremental, no config cache | 881 ms |
+| incremental, cache reused | 401 ms |
+
+It only speeds up the *configuration* phase. Our costs are elsewhere: a clean build is ~90 s
+(compile + dex) and `installDebug` ~27 s (pushing the APK). Enabling it persistently also
+means editing `gradle.properties`, an upstream file, adding a merge conflict for half a
+second — and it is still `[Incubating]`, failing in confusing serialization errors that a
+student has no way to interpret. Use `./gradlew --configuration-cache` ad hoc if ever needed.
 
 ---
 
