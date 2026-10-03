@@ -135,7 +135,7 @@ competition inspection).
 - FTC SDK / Robot Controller: **12.0** (BIOBUZZ, 2026-2027 season)
 - Driver Station app: **12.0** — must be updated to match, or the DS nags
 - Pedro Pathing: **2.1.2** — builds clean against 12.0, verified 2026-09-12
-- Panels dashboard: **fullpanels 1.0.12**
+- Panels dashboard: **fullpanels 1.0.13** (Field 1.0.7; BIOBUZZ field images)
 - Gradle **9.1.0** (repo wrapper), AGP **8.13.2**, JDK **17**
 - Android Studio **Narwhal 3 Feature Drop or later** is now required by FIRST
 
@@ -195,7 +195,7 @@ maven { url = "https://mymaven.bylazar.com/releases" }   // Panels only
 
 implementation 'com.pedropathing:ftc:2.1.2'        // Maven Central; pulls in :core
 implementation 'com.pedropathing:telemetry:1.0.0'  // Maven Central
-implementation 'com.bylazar:fullpanels:1.0.12'     // bylazar maven
+implementation 'com.bylazar:fullpanels:1.0.13'     // bylazar maven
 ```
 
 **`build.common.gradle`** — `compileSdkVersion 30` → `compileSdk 34`.
@@ -341,10 +341,11 @@ outside Git in `~/.config/ftc/deploy-wifi.json`, mode 600. Never copy credential
 personal network names into tracked files. The helper does not access Keychain.
 `--check` validates setup without switching. When macOS hides the SSID, the
 configured return network is used. Missing passwords are requested with hidden
-input and saved to that file. `-r` selects and remembers the robot Wi-Fi; `-h`
-selects and remembers the home/main Wi-Fi. With neither flag, both remembered
+input and saved to that file; an empty password marks an open network. `-r`
+selects and remembers the robot Wi-Fi; `-c` selects and remembers the network to
+come back to. With neither flag, both remembered
 networks are used. Known names match case-insensitively with spaces and punctuation
-ignored. `--help` shows usage because `-h` is reserved for home Wi-Fi.
+ignored. `-h`/`--help` shows usage.
 
 Live testing confirmed that supplying passwords explicitly fixed networksetup's
 -3900 join failures. An ADB disconnect failure when no transport existed is now
