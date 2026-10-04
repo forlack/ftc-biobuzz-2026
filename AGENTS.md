@@ -753,8 +753,13 @@ Ran all four procedures on the test chassis. Mecanum and Foresight output was us
 Symptoms of the inverted strafe axis: the Tests **hold test drifted when pushed** (it
 corrected in the direction of the push), the **pod test stalled and failed**, and the line
 test overshot. First run, the student spun the robot clockwise when it asked for
-counter-clockwise — but a re-run reportedly still showed FORWARD −6.5, so **do not trust
-AutoTune's strafe pod direction without checking**. Run **Localization Check** (Diagnostics):
+counter-clockwise — but re-runs still showed FORWARD. **Root cause found and fixed
+2026-10-03:** the stock tuner reads its answer *after Stop*, when the Pinpoint has already
+reset `y` to 0, so `y < 0` is always false and every pod reports FORWARD regardless of the
+push. Instrumented log: y = −14.96" during a 15" left push, then `FINAL y=0.0`. Our
+`PinpointTuner.java` keeps the last pre-Stop reading; verified on hardware, it now returns
+REVERSED / +6.62 on its own. Reported upstream (Quickstart PR, see below). Still worth the
+Localization Check Run **Localization Check** (Diagnostics):
 pod end away from you, push LEFT, and `y` must go UP.
 
 Flipping the encoder direction flips the offset's sign, so keep the measured magnitude and

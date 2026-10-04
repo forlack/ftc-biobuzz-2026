@@ -143,11 +143,18 @@ class PinpointForwardDirection extends TuningOpMode<Boolean> {
         localizer.setPose(Pose.zero());
         localizer.update();
 
+        // Keep the last reading taken BEFORE Stop. Once Stop is pressed the Pinpoint reports
+        // reset data (x = 0), so reading the pose afterwards always gives x < 0 == false
+        // and the pod is reported FORWARD no matter which way the robot was pushed.
+        double x = 0;
         while (!isStopRequested()) {
             localizer.update();
+            if (!isStopRequested()) {
+                x = localizer.pose().x();
+            }
         }
 
-        return localizer.pose().x() < 0;
+        return x < 0;
     }
 }
 
@@ -187,11 +194,18 @@ class PinpointStrafeDirection extends TuningOpMode<Boolean> {
         waitForStart();
         localizer.setPose(Pose.zero());
         localizer.update();
+        // Keep the last reading taken BEFORE Stop. Once Stop is pressed the Pinpoint reports
+        // reset data (y = 0), so reading the pose afterwards always gives y < 0 == false
+        // and the pod is reported FORWARD no matter which way the robot was pushed.
+        double y = 0;
         while (!isStopRequested()) {
             localizer.update();
+            if (!isStopRequested()) {
+                y = localizer.pose().y();
+            }
         }
 
-        return localizer.pose().y() < 0;
+        return y < 0;
     }
 }
 

@@ -44,18 +44,14 @@ public class Constants {
         c.backRightDirection.set(DcMotorSimple.Direction.FORWARD);
     });
 
-    // 2. Pinpoint Localizer
-    // !! yPodDirection and the SIGN of yPodOffset are hand-corrected. AutoTune output
-    // FORWARD / -6.579, but REVERSED was proven on this unchanged robot in August (Direction
-    // Test: driving left made y DECREASE under FORWARD). Under FORWARD the strafe axis reads
-    // backwards: the hold test drifted when pushed and the pod test failed. Flipping the
-    // direction flips the offset's sign, so the measured magnitude 6.579 is kept.
-    // Likely cause: front/back confusion in AutoTune's "push" step. FRONT = POD END.
+    // 2. Pinpoint Localizer -- from the FIXED Pinpoint tuner (see PinpointTuner.java). The
+    // stock 3.0.1 tuner always reported FORWARD; it read its answer after Stop, when the
+    // Pinpoint has reset y to 0.
     public static PinpointConfig localizerConfig = new PinpointConfig(c -> {
         c.name.set("odo");
         c.podType.set(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        c.xPodOffset.set(1.7173301516555428);
-        c.yPodOffset.set(6.579001719557395);
+        c.xPodOffset.set(2.519128604198065);
+        c.yPodOffset.set(6.620623370793861);
         c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
         c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.REVERSED);
         c.globalDistanceUnit.set(DistanceUnit.INCH);
