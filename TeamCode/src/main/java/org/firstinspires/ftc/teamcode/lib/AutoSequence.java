@@ -1,7 +1,9 @@
 package org.firstinspires.ftc.teamcode.lib;
 
 import com.pedropathing.follower.Follower;
+import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
+import com.pedropathing.utils.Angle;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import java.util.ArrayList;
@@ -26,6 +28,9 @@ import java.util.function.BooleanSupplier;
  * </pre>
  */
 public class AutoSequence {
+
+    /** How close the heading must be before aimAt()/turnTo() counts as finished, in degrees. */
+    public static double AIM_TOLERANCE_DEGREES = 2.0;
 
     private final Follower follower;
     private final List<Step> steps = new ArrayList<>();
@@ -54,6 +59,25 @@ public class AutoSequence {
     /** Sit still for a while. Use sparingly -- a waitUntil on a sensor is usually better. */
     public AutoSequence waitSeconds(double seconds) {
         steps.add(new WaitStep(seconds));
+        return this;
+    }
+
+    /**
+     * Stand still and turn to face a point on the field, then move on.
+     *
+     * For aiming while driving, put it on the path instead -- no step needed:
+     * {@code Paths.line(a, b).facingPoint(GOAL)}
+     *
+     * @param target where to point at; only its x and y are used
+     */
+    public AutoSequence aimAt(Pose target) {
+        steps.add(new AimStep(target));
+        return this;
+    }
+
+    /** Stand still and turn to an absolute field heading, in radians. */
+    public AutoSequence turnTo(double headingRadians) {
+        steps.add(new AimStep(headingRadians));
         return this;
     }
 
@@ -175,6 +199,40 @@ public class AutoSequence {
 
         public String name() {
             return "follow path";
+        }
+    }
+
+    /** Holds position while turning. Target heading is resolved when the step starts. */
+    private class AimStep implements Step {
+        private final Pose target;          // null when a fixed heading was given
+        private final double fixedHeading;
+        private double desired;
+
+        AimStep(Pose target) {
+            this.target = target;
+            this.fixedHeading = 0;
+        }
+
+        AimStep(double headingRadians) {
+            this.target = null;
+            this.fixedHeading = headingRadians;
+        }
+
+        public void start() {
+            Pose here = follower.pose();
+            desired = target == null
+                    ? fixedHeading
+                    : Math.atan2(target.y() - here.y(), target.x() - here.x());
+            follower.hold(new Pose(here.x(), here.y(), desired));
+        }
+
+        public boolean isDone() {
+            double off = Math.abs(Angle.error(follower.pose().heading(), desired));
+            return off < Math.toRadians(AIM_TOLERANCE_DEGREES);
+        }
+
+        public String name() {
+            return target == null ? "turn to heading" : "aim at point";
         }
     }
 
