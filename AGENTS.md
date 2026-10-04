@@ -740,6 +740,35 @@ though — we are between robots, every constant gets re-measured on the competi
 anyway, and AutoTune could make that re-tune much cheaper. **Evaluate on a branch, not in
 place.** If we take it, re-copying the old `Tuning.java` is wasted work.
 
+### Pedro 3 AutoTune — what we learned (2026-10-03, branch `pedro-3`)
+
+Ran all four procedures on the test chassis. Mecanum and Foresight output was used as-is.
+**The Pinpoint strafe pod came out wrong and had to be hand-corrected:**
+
+| | AutoTune said | Correct, proven on hardware |
+|---|---|---|
+| `yPodDirection` | FORWARD | **REVERSED** |
+| `yPodOffset` | −6.58 | **+6.58** |
+
+Symptoms of the inverted strafe axis: the Tests **hold test drifted when pushed** (it
+corrected in the direction of the push), the **pod test stalled and failed**, and the line
+test overshot. First run, the student spun the robot clockwise when it asked for
+counter-clockwise — but a re-run reportedly still showed FORWARD −6.5, so **do not trust
+AutoTune's strafe pod direction without checking**. Run **Localization Check** (Diagnostics):
+pod end away from you, push LEFT, and `y` must go UP.
+
+Flipping the encoder direction flips the offset's sign, so keep the measured magnitude and
+negate it.
+
+Other 3.x gotchas hit:
+- **Natural deceleration is POSITIVE in 3.x** (tuner: 35.6 / 56.2). The 2.x zero-power
+  accelerations were negative; carrying one over made Tests throw a config error.
+- **There is no Tuning OpMode on the Driver Station.** AutoTune is the web page at
+  `http://localhost:10158` (USB, after `adb forward tcp:10158` and `tcp:12649`) or
+  `http://192.168.43.1:10158` on robot Wi-Fi. It launches its own OpModes.
+- The web servers take ~30 s after app start to bind, and adb forwards drop on every
+  install — re-add them.
+
 ### Pinpoint `setOffsets` argument order
 
 Counter-intuitive and easy to get backwards. From Pedro's own `PinpointLocalizer.java:60`:
