@@ -4,13 +4,13 @@ import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
-import com.pedropathing.geometry.Pose;
+import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
-import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+import org.firstinspires.ftc.teamcode.pedro.Constants;
 
 /**
  * Menu-driven drivetrain direction diagnostic. Combines the robot-level tests (through the
@@ -24,12 +24,12 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
  *   A (2)  HOLD       run the selected test
  *   B (3)  tap        reset pose to (72, 72, 0)
  *
- * ROBOT tests drive through Follower.setTeleOpDrive(), using the motor directions from
- * pedroPathing/Constants.java -- so they verify exactly what path following will do.
+ * ROBOT tests drive through Follower.manual(), using the motor directions from
+ * pedro/Constants.java -- so they verify exactly what path following will do.
  *
  * MOTOR tests set every motor to Direction.FORWARD and drive one at a time, ignoring all
  * config, to report hardware ground truth. Because hardwareMap returns shared motor
- * instances, directions are re-applied every loop from Constants.driveConstants when a ROBOT
+ * instances, directions are re-applied every loop from Constants.drivetrainConfig when a ROBOT
  * test is selected -- otherwise a motor test would leave the follower mis-configured.
  *
  * "Pod end" = the end of the robot where the odometry pods are mounted. On this robot that
@@ -78,18 +78,17 @@ public class MotorsTest extends LinearOpMode {
         DcMotor backRight = hardwareMap.get(DcMotor.class, "BackRight");
         DcMotor[] motors = {frontLeft, frontRight, backLeft, backRight};
 
-        Follower follower = Constants.createFollower(hardwareMap);
-        follower.setStartingPose(new Pose(72, 72, 0));
+        Follower follower = Constants.create(hardwareMap);
+        follower.setPose(new Pose(72, 72, 0));
 
         panels.addLine("Motors Test ready. Clear floor / stand. Press PLAY.");
         panels.update(telemetry);
         waitForStart();
 
-        follower.startTeleopDrive(false);
 
         int selected = 0;
         boolean lastUp = false, lastDown = false, lastRun = false;
-        Pose startPose = follower.getPose();
+        Pose startPose = follower.pose();
 
         while (opModeIsActive()) {
             if (gamepad1.dpad_up && !lastUp) {
@@ -105,7 +104,7 @@ public class MotorsTest extends LinearOpMode {
             boolean motorTest = selected >= FIRST_MOTOR_TEST;
 
             if (running && !lastRun) {
-                startPose = follower.getPose();
+                startPose = follower.pose();
             }
             lastRun = running;
 
@@ -121,10 +120,10 @@ public class MotorsTest extends LinearOpMode {
                 }
             } else {
                 // Restore Pedro's directions so the follower behaves as configured.
-                frontLeft.setDirection(Constants.driveConstants.leftFrontMotorDirection);
-                backLeft.setDirection(Constants.driveConstants.leftRearMotorDirection);
-                frontRight.setDirection(Constants.driveConstants.rightFrontMotorDirection);
-                backRight.setDirection(Constants.driveConstants.rightRearMotorDirection);
+                frontLeft.setDirection(Constants.drivetrainConfig.frontLeftDirection.get());
+                backLeft.setDirection(Constants.drivetrainConfig.backLeftDirection.get());
+                frontRight.setDirection(Constants.drivetrainConfig.frontRightDirection.get());
+                backRight.setDirection(Constants.drivetrainConfig.backRightDirection.get());
 
                 double forward = 0.0;
                 double lateral = 0.0;
@@ -136,16 +135,16 @@ public class MotorsTest extends LinearOpMode {
                         default: lateral = -POWER; break;
                     }
                 }
-                follower.setTeleOpDrive(forward, lateral, 0.0, true);
+                follower.manual(forward, lateral, 0.0);
                 follower.update();
             }
 
             if (gamepad1.b) {
-                follower.setStartingPose(new Pose(72, 72, 0));
-                startPose = follower.getPose();
+                follower.setPose(new Pose(72, 72, 0));
+                startPose = follower.pose();
             }
 
-            Pose pose = follower.getPose();
+            Pose pose = follower.pose();
 
             panels.addLine(">>> " + TEST_NAMES[selected]);
             panels.addLine("EXPECT: " + EXPECTED[selected]);
@@ -153,11 +152,11 @@ public class MotorsTest extends LinearOpMode {
             panels.addData("running", running ? "YES (holding A)" : "no - hold A (btn 2)");
             panels.addData("power", POWER);
             panels.addLine("");
-            panels.addData("pose x", round(pose.getX()));
-            panels.addData("pose y", round(pose.getY()));
-            panels.addData("heading deg", round(Math.toDegrees(pose.getHeading())));
-            panels.addData("dx since press", round(pose.getX() - startPose.getX()));
-            panels.addData("dy since press", round(pose.getY() - startPose.getY()));
+            panels.addData("pose x", round(pose.x()));
+            panels.addData("pose y", round(pose.y()));
+            panels.addData("heading deg", round(Math.toDegrees(pose.heading())));
+            panels.addData("dx since press", round(pose.x() - startPose.x()));
+            panels.addData("dy since press", round(pose.y() - startPose.y()));
             if (motorTest) {
                 panels.addLine("(motor test: pose not driven by follower)");
             }
