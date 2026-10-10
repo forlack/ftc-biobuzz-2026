@@ -20,7 +20,8 @@ import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
  * Controls:
  *   left stick        drive (field-centric)
  *   right stick X     turn
- *   right trigger     hold for slow mode
+ *   left trigger      hold for slow mode (0.25)
+ *   right trigger     hold for turbo (1.0)
  *   B                 toggle intake
  *   right bumper      hold pollen gate open
  *   left bumper       hold nectar gate open
@@ -34,7 +35,8 @@ import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 public class FieldCentricJava extends LinearOpMode {
 
     // Target speeds -- editable live in Panels.
-    public static double INTAKE_RPM = 300;
+    public static double INTAKE_RPM = 600;
+    public static double INTAKE_P = 30;
     public static double POLLEN_FLYWHEEL_RPM = 3850;
     public static double NECTAR_FLYWHEEL_RPM = 4050;
 
@@ -42,7 +44,6 @@ public class FieldCentricJava extends LinearOpMode {
     private MecanumDrive chassis;
     private DriveDashboard dashboard;
     private Gamepad pad;
-    private int speedUpPresses;
 
     // Intake.
     private VelocityMotor intake;
@@ -65,7 +66,8 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button speedDown    = buttons.add(() -> pad.dpad_down);
     private final Button velocityMode = buttons.add(() -> pad.y);
     private final Button brakeMode    = buttons.add(() -> pad.x);
-    private final Button slowMode     = buttons.add(() -> pad.right_trigger_pressed);
+    private final Button slowMode     = buttons.add(() -> pad.left_trigger > 0.5);
+    private final Button turboMode    = buttons.add(() -> pad.right_trigger > 0.5);
     private final Button resetFront   = buttons.add(() -> pad.a);
 
     // Mechanism controls.
@@ -81,6 +83,7 @@ public class FieldCentricJava extends LinearOpMode {
         // Hardware names must match the active robot config exactly.
         // Intake.
         intake = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD, 145.1);
+        intake.setPIDF(INTAKE_P, intake.I, intake.D, intake.F);
 
         // Pollen shooter and feed.
         shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
@@ -125,7 +128,6 @@ public class FieldCentricJava extends LinearOpMode {
     private void updateDriveSettings() {
         if (speedUp.pressed()) {
             chassis.changeDefaultSpeed(+1);
-            speedUpPresses++;
         }
         if (speedDown.pressed()) {
             chassis.changeDefaultSpeed(-1);
@@ -137,9 +139,6 @@ public class FieldCentricJava extends LinearOpMode {
             chassis.toggleBrakeMode();
         }
 
-        // ---- EXAMPLE: putting your own numbers on the dashboard ----
-        dashboard.addData("speed up held", speedUp.down());
-        dashboard.addData("speed up presses", speedUpPresses);
     }
 
     private void updateDriving() {
@@ -153,6 +152,8 @@ public class FieldCentricJava extends LinearOpMode {
         double speed = chassis.getDefaultSpeed();
         if (slowMode.down()) {
             speed = MecanumDrive.SLOW_SPEED;
+        } else if (turboMode.down()) {
+            speed = MecanumDrive.TURBO_SPEED;
         }
 
         chassis.drive(strafe, forward, turn, speed);
@@ -164,12 +165,16 @@ public class FieldCentricJava extends LinearOpMode {
     }
 
     private void updateIntake() {
+        if (INTAKE_P != intake.P) {
+            intake.setPIDF(INTAKE_P, intake.I, intake.D, intake.F);
+        }
         if (toggleIntake.pressed()) {
             toggleIntake.toggle();
         }
         intake.setTargetRPM(toggleIntake.active ? INTAKE_RPM : 0);
         dashboard.addData("intake target RPM", intake.getTargetRPM());
         dashboard.addData("intake RPM", intake.getRPM());
+        dashboard.addData("intake P", intake.P);
     }
 
     private void updateServos() {

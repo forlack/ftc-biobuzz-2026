@@ -30,8 +30,9 @@ public class MecanumDrive {
 
     /** Speed while slow mode is held down. */
     public static double SLOW_SPEED = 0.25;
+    public static double TURBO_SPEED = 1.0;
     /** The speed the robot drives at when the OpMode starts. The driver can change it. */
-    public static double INITIAL_SPEED = 0.5;
+    public static double INITIAL_SPEED = 0.75;
     /** How much one changeDefaultSpeed() step moves it. */
     public static double SPEED_STEP = 0.05;
     /** The driver can never set the default speed outside these. */
