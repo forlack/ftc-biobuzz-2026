@@ -190,118 +190,224 @@ loop for you. You don't write the PID yourself; you tune its four numbers:
 You've seen this before: `MecanumDrive` uses the same hub PIDF for the wheels (`VEL_P`,
 `VEL_I`, `VEL_D`, `VEL_F`). Look at `applyPidfTuning()` there.
 
-## Steps
+## Why a class this time
 
-Everything goes straight into `FieldCentricJava.java`, the same way you added the intake.
+We have **two flywheels**. Without a class, every constant, every setup line, and every
+helper method gets written twice, and once more for autonomous. Change `TICKS_PER_REV` and
+you have to remember to change it everywhere.
 
-**1. Robot config.** Add the motor on the Driver Station (Configure Robot), named
-`flywheel`. **Plug in the encoder cable**, or velocity control can't work.
-
-**2. Constants and the motor field**, up with your other fields:
+A **class** is a blueprint. You write the flywheel code **once**, in `Flywheel.java`, then
+make as many flywheels from it as you need:
 
 ```java
-private static final double TICKS_PER_REV = 28;     // goBILDA 6000 RPM 1:1 -- check yours
-private static final double SHOOT_RPM = 4000;       // start lower, tune later
-private static final double RPM_TOLERANCE = 100;    // how close counts as "ready"
-
-// Velocity PIDF. Tune F first (see step 8).
-private static final double FLY_P = 0;
-private static final double FLY_I = 0;
-private static final double FLY_D = 0;
-private static final double FLY_F = 0;
-
-private DcMotorEx flywheel;
-private double flywheelTargetRPM = 0;
+leftFlywheel  = new Flywheel(hardwareMap, "leftFlywheel",  DcMotorSimple.Direction.FORWARD);
+rightFlywheel = new Flywheel(hardwareMap, "rightFlywheel", DcMotorSimple.Direction.REVERSE);
 ```
 
-**3. Set it up in `runOpMode()`**, before `waitForStart()`:
+Each `new Flywheel(...)` is a separate **object** with its own motor and its own target
+speed, all built from the same code. You already use objects like this: `chassis` is a
+`MecanumDrive` object, and `intake` is a `DcMotorEx` object.
+
+## `static` vs. not `static`
+
+Before writing it, decide which values are **shared** and which belong to **each** flywheel:
+
+| | Keyword | Example | Means |
+|---|---|---|---|
+| Shared by all flywheels | `static` | `TICKS_PER_REV`, PIDF | one copy, used by every flywheel |
+| Each flywheel's own | *(none)* | `motor`, `targetRPM` | every object gets its own copy |
+
+If `targetRPM` were `static`, setting the left flywheel's speed would also change the
+right's, because there'd be only one variable. That's the most common class bug, so watch
+for it.
+
+## Part 1: Write `lib/Flywheel.java`
+
+Create a new file in the `lib` folder, next to `Button.java` and `MecanumDrive.java`. Build
+it up one piece at a time.
+
+**1a. Package, imports, and the class:**
 
 ```java
-flywheel = hardwareMap.get(DcMotorEx.class, "flywheel");
-flywheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-flywheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-flywheel.setVelocityPIDFCoefficients(FLY_P, FLY_I, FLY_D, FLY_F);
+package org.firstinspires.ftc.teamcode.lib;
+
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.HardwareMap;
+
+/** A flywheel that holds a set RPM using the hub's velocity PID. */
+public class Flywheel {
+
+}
 ```
 
-**Always FLOAT on a flywheel, never BRAKE.** A heavy spinning wheel slammed to a stop is
-hard on the motor and gearbox. Let it coast down.
+The `package` line must match the folder. That's how the teleop finds the class later.
 
-**4. Three small helper methods**, at the bottom of the class:
+**1b. The shared constants**, inside the class:
 
 ```java
-/** RPM -> the ticks per second that setVelocity() wants. */
-private double rpmToTicksPerSecond(double rpm) {
-    return rpm * TICKS_PER_REV / 60.0;
+// Shared by every flywheel.
+public static double TICKS_PER_REV = 28;     // goBILDA 6000 RPM 1:1 -- check yours
+public static double RPM_TOLERANCE = 100;    // how close counts as "ready"
+public static double P = 0, I = 0, D = 0, F = 0;   // velocity PIDF, tune F first
+```
+
+**1c. Each flywheel's own state:**
+
+```java
+// Each flywheel has its own.
+private final DcMotorEx motor;
+private double targetRPM = 0;
+```
+
+`private` means only `Flywheel` itself can touch them. The teleop has to go through the
+methods below, the same rule as `Button`'s `active`.
+
+**1d. The constructor.** This runs once per `new Flywheel(...)`, and sets that one motor up:
+
+```java
+public Flywheel(HardwareMap hardwareMap, String name, DcMotorSimple.Direction direction) {
+    motor = hardwareMap.get(DcMotorEx.class, name);
+    motor.setDirection(direction);
+    motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+    motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);  // never BRAKE a flywheel
+    motor.setVelocityPIDFCoefficients(P, I, D, F);
+}
+```
+
+Why pass in `name` and `direction`? Those are the only things that differ between the two
+flywheels. Everything else is identical, which is why it can be written once.
+
+Two flywheels on a shooter usually spin **opposite** ways to throw the ball between them, so
+one will likely be `REVERSE`.
+
+**1e. The methods**, what the teleop is allowed to ask a flywheel to do:
+
+```java
+/** Spin to this speed. 0 = off. */
+public void setTargetRPM(double rpm) {
+    targetRPM = rpm;
+    motor.setVelocity(rpm * TICKS_PER_REV / 60.0);
 }
 
-/** How fast the flywheel is actually spinning. */
-private double flywheelRPM() {
-    return flywheel.getVelocity() * 60.0 / TICKS_PER_REV;
+public void stop() {
+    setTargetRPM(0);
+}
+
+/** How fast it is actually spinning. */
+public double getRPM() {
+    return motor.getVelocity() * 60.0 / TICKS_PER_REV;
+}
+
+public double getTargetRPM() {
+    return targetRPM;
 }
 
 /** Close enough to the target to shoot? */
-private boolean flywheelAtSpeed() {
-    return flywheelTargetRPM > 0
-            && Math.abs(flywheelRPM() - flywheelTargetRPM) < RPM_TOLERANCE;
+public boolean atSpeed() {
+    return targetRPM > 0 && Math.abs(getRPM() - targetRPM) < RPM_TOLERANCE;
 }
 ```
 
-`flywheelAtSpeed()` is the "ready to shoot" signal. It's the most important of the three.
+Build now (`./gradlew :TeamCode:assembleDebug`). Nothing uses the class yet, but this
+catches typos early.
 
-**5. A button.** Use a toggle (from the section above), on gamepad 2 since that driver runs
-the mechanisms:
+## Part 2: Use it in the teleop
+
+**2a. Robot config.** Add both motors on the Driver Station, named `leftFlywheel` and
+`rightFlywheel`, with their **encoder cables plugged in**.
+
+**2b. Import it**, at the top of `FieldCentricJava.java` with the other `lib` imports:
+
+```java
+import org.firstinspires.ftc.teamcode.lib.Flywheel;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+```
+
+**2c. Fields:**
+
+```java
+private static final double SHOOT_RPM = 4000;    // start lower, tune later
+private Flywheel leftFlywheel;
+private Flywheel rightFlywheel;
+```
+
+**2d. Make the two objects** in `runOpMode()`, before `waitForStart()`:
+
+```java
+leftFlywheel  = new Flywheel(hardwareMap, "leftFlywheel",  DcMotorSimple.Direction.FORWARD);
+rightFlywheel = new Flywheel(hardwareMap, "rightFlywheel", DcMotorSimple.Direction.REVERSE);
+```
+
+**2e. A toggle button** on gamepad 2. This needs the toggle-button lesson done first:
 
 ```java
 private final Button flywheelToggle = buttons.addToggle(() -> pad2.y);
 ```
 
-This needs the toggle-button lesson done first, because `addToggle` and `isOn()` come from
-there.
-
-**6. `updateFlywheel()`**, plus one call to it in the loop next to `updateIntake()`:
+**2f. `updateFlywheels()`**, plus one call to it in the loop:
 
 ```java
-private void updateFlywheel() {
-    flywheelTargetRPM = flywheelToggle.isOn() ? SHOOT_RPM : 0;
-    flywheel.setVelocity(rpmToTicksPerSecond(flywheelTargetRPM));
+private void updateFlywheels() {
+    double rpm = flywheelToggle.isOn() ? SHOOT_RPM : 0;
+    leftFlywheel.setTargetRPM(rpm);
+    rightFlywheel.setTargetRPM(rpm);
 
-    dashboard.addData("flywheel target", flywheelTargetRPM);
-    dashboard.addData("flywheel rpm", Math.round(flywheelRPM()));
-    dashboard.addData("flywheel ready", flywheelAtSpeed());
+    boolean ready = leftFlywheel.atSpeed() && rightFlywheel.atSpeed();
+
+    dashboard.addData("left rpm",  Math.round(leftFlywheel.getRPM()));
+    dashboard.addData("right rpm", Math.round(rightFlywheel.getRPM()));
+    dashboard.addData("flywheels ready", ready);
 }
 ```
 
-**7. Check it before tuning.** Deploy with all four PIDF numbers at 0 and turn the flywheel
-on. It probably won't reach speed yet, which is fine. Check that `flywheel rpm` *changes*
-when it spins. If it stays at 0, the encoder isn't plugged in.
+Look how short that is. All the details live in `Flywheel`, so the teleop only says
+*what* it wants. Ready to shoot means **both** wheels are at speed, hence the `&&`.
 
-**8. Tune it**, one number at a time, redeploying between changes:
-1. Raise **F** until the RPM settles near the target on its own. Starting guess:
-   `F = 32767 / maxTicksPerSecond`, where `maxTicksPerSecond` is the motor's top RPM run
-   through `rpmToTicksPerSecond()`.
-2. Raise **P** until the wheel recovers quickly after a shot without wobbling.
-3. Only add **I** if it settles a little below target and stays there.
+## Part 3: Check, then tune
 
-Redeploying for every change is slow. Once it basically works, live tuning in Panels is a
-good upgrade: put `@Configurable` on the class and make the numbers `public static` instead
-of `private static final`.
+**3a. Check before tuning.** Deploy with PIDF all at 0 and turn the flywheels on. They
+probably won't reach speed yet, which is fine. Check that **both** `left rpm` and `right rpm`
+*change* when spinning. One stuck at 0 means its encoder isn't plugged in.
 
-**Bonus:** watch how far `flywheel rpm` drops when a ball goes through, and how long it takes
-to get back to "ready." Those two numbers tell you how fast you can fire repeat shots.
+Also check they spin the directions you want. If one is backwards, flip `FORWARD`/`REVERSE`
+in 2d. That's the only line to change.
 
-## What about autonomous?
+**3b. Tune**, one number at a time, redeploying between changes. Since the PIDF constants
+live in `Flywheel`, tuning them once tunes **both** wheels:
+1. Raise **F** until RPM settles near the target on its own. Starting guess:
+   `F = 32767 / maxTicksPerSecond`.
+2. Raise **P** until the wheels recover quickly after a shot without wobbling.
+3. Only add **I** if they settle a little below target and stay there.
 
-Autonomous is a separate OpMode, so it can't see these helper methods. For now, copy the
-constants, setup, and helpers into the auto as well. Then wait for speed before feeding:
+**Upgrade later:** live tuning in Panels. Put `@Configurable` on `Flywheel` (it's in `lib/`,
+so the Panels import stays out of the teleop, like `MecanumDrive`). You'd also need the
+flywheel to re-send PIDF when a value changes, the way `MecanumDrive.applyPidfTuning()` does.
+
+**Bonus:** watch how far RPM drops when a ball goes through, and how long it takes to be
+"ready" again. Those two numbers tell you how fast you can fire repeat shots.
+
+## Part 4: Autonomous gets it for free
+
+No copying. Import `Flywheel` in the auto, make the two objects the same way in `init()`,
+and use them in the sequence:
 
 ```java
-.run(() -> { flywheelTargetRPM = SHOOT_RPM;
-             flywheel.setVelocity(rpmToTicksPerSecond(SHOOT_RPM)); })
-.waitUntil(this::flywheelAtSpeed)           // never shoot before it's ready
+.run(() -> {
+    leftFlywheel.setTargetRPM(SHOOT_RPM);
+    rightFlywheel.setTargetRPM(SHOOT_RPM);
+})
+.waitUntil(() -> leftFlywheel.atSpeed() && rightFlywheel.atSpeed())   // never shoot early
 .run(() -> feeder.setPower(1))
 ```
 
-Notice you've now written the same code twice. If you change `TICKS_PER_REV`, you have to
-remember to change it in both places. **That duplication is exactly the problem a subsystem
-class solves**, like `MecanumDrive` does for the drivetrain. A good next lesson once the
-flywheel works.
+That's the payoff of the class: fix a bug or retune in `Flywheel.java`, and the teleop,
+the auto, and both wheels all get it at once.
+
+## Stretch: different PIDF per wheel
+
+If the two wheels behave differently (different wear, belt tension, motor), one shared PIDF
+might not suit both. You'd move `P`, `I`, `D`, and `F` from `static` to per-object fields
+and pass them into the constructor. A good test of whether the static vs. instance idea
+clicked.
