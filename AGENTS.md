@@ -34,10 +34,14 @@ All on the Control Hub's single Lynx module (address 173):
 | Odometry | `odo` | I2C bus 1, port 0 | goBILDA **Pinpoint** |
 | IMU | `imu` | I2C bus 0, port 0 | Control Hub BHI260AP |
 | Motor | `intake` | Expansion Hub 2, motor port 0 | added 2026-10-09 |
-| CR servo | `triggerPollen` | servo port 0 | continuous rotation, added 2026-10-09 |
+| CR servo | `triggerPollen` | Control Hub, servo port 1 | continuous rotation, added 2026-10-09 |
 
 An **Expansion Hub** ("Expansion Hub 2", RS-485 address 2) now hangs off the Control Hub —
 the Control Hub's four motor ports are all taken by the drivetrain, so mechanisms go there.
+
+**The config XML is versioned** at `robot-config/2222-Config.xml` (pulled 2026-10-09). Push
+it to a hub with `adb push ... /sdcard/FIRST/`, then Activate on the DS. Re-pull and commit
+after every DS config change, or the repo copy goes stale. See README.
 
 Drivetrain is **mecanum**. IMU orientation: logo **UP**, USB **FORWARD**.
 Motor directions: `FrontRight`/`BackRight` FORWARD, `FrontLeft`/`BackLeft` REVERSE. All BRAKE.

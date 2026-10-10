@@ -162,6 +162,30 @@ adb pull /sdcard/FIRST ~/ftc/backups/$(date +%Y%m%d-%H%M%S)-controlhub
 ```
 
 
+### The robot config is in the repo
+
+The robot config — which device is on which port, under which name — normally lives only on
+the hub. A copy is kept in `robot-config/2222-Config.xml` so it travels with the code.
+
+**Load it onto a hub** (a new hub, or one that lost its config):
+
+```bash
+adb -s <serial> push robot-config/2222-Config.xml /sdcard/FIRST/
+```
+
+Then on the Driver Station: **⋮ → Configure Robot → `2222-Config` → Activate.** Copying the
+file does not make it active.
+
+The file records **wiring**. If the other robot's devices are on different ports, the names
+load fine but point at the wrong hardware — run **Motors Test** before driving.
+
+**After changing the config on the Driver Station,** save it back so GitHub stays current:
+
+```bash
+adb pull /sdcard/FIRST/2222-Config.xml robot-config/
+git add robot-config && git commit -m "Update robot config" && git push
+```
+
 ## What's here
 
 All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
