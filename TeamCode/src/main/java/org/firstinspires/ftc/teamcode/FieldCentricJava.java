@@ -2,7 +2,10 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
+import com.qualcomm.robotcore.hardware.CRServo;
 
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
@@ -40,15 +43,25 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button speedDown    = buttons.add(() -> pad.dpad_down);
     private final Button velocityMode = buttons.add(() -> pad.y);
     private final Button brakeMode    = buttons.add(() -> pad.x);
-    private final Button slowMode     = buttons.add(() -> pad.right_bumper);
+    private final Button slowMode     = buttons.add(() -> pad.right_trigger_pressed);
     private final Button resetFront   = buttons.add(() -> pad.a);
+    private  final Button toggleIntake = buttons.add(() -> pad.left_bumper);
+    private  final Button pollenGate = buttons.add(() -> pad.right_bumper);
 
     /** Only used by the telemetry example below. */
     private int speedUpPresses;
 
+    private DcMotorEx intake;
+    private CRServo triggerPollen;
+
     @Override
     public void runOpMode() {
         chassis = new MecanumDrive(hardwareMap);
+        // The name must match the robot config on the Driver Station exactly, including case.
+        triggerPollen = hardwareMap.get(CRServo.class, "triggerPollen");
+        intake = hardwareMap.get(DcMotorEx.class, "intake");
+        intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+
         dashboard = new DriveDashboard(chassis, telemetry);
         dashboard.showReady("Field Centric (Java)");
 
@@ -62,6 +75,8 @@ public class FieldCentricJava extends LinearOpMode {
             readGamepad();
             updateDriveSettings();
             updateDriving();
+            updateIntake();
+            updateServos();
             dashboard.update();
         }
     }
@@ -118,5 +133,15 @@ public class FieldCentricJava extends LinearOpMode {
         if (resetFront.down()) {
             chassis.resetHeading();
         }
+    }
+
+    private void updateIntake(){
+        if(toggleIntake.pressed()){
+            toggleIntake.toggle();
+        }
+        intake.setPower(toggleIntake.active ? 0.2 : 0);
+    }
+    private void updateServos(){
+        triggerPollen.setPower(pollenGate.down() ? 1 : 0);
     }
 }
