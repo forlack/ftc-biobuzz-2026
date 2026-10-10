@@ -172,9 +172,11 @@ public class FieldCentricJava extends LinearOpMode {
             toggleIntake.toggle();
         }
         intake.setTargetRPM(toggleIntake.active ? INTAKE_RPM : 0);
-        dashboard.addData("intake target RPM", intake.getTargetRPM());
-        dashboard.addData("intake RPM", intake.getRPM());
-        dashboard.addData("intake P", intake.P);
+        dashboard.addLine("--- INTAKE ---");
+        dashboard.addData("Intake", toggleIntake.active ? "ON" : "OFF");
+        dashboard.addData("Intake RPM (actual / target)",
+                Math.round(intake.getRPM()) + " / " + Math.round(intake.getTargetRPM()));
+        dashboard.addData("Intake P", intake.P);
     }
 
     private void updateServos() {
@@ -187,9 +189,11 @@ public class FieldCentricJava extends LinearOpMode {
     private void updateShooter() {
         shooterPollen.setTargetRPM(POLLEN_FLYWHEEL_RPM);
         shooterNectar.setTargetRPM(NECTAR_FLYWHEEL_RPM);
-        dashboard.addData("pollen target RPM", shooterPollen.getTargetRPM());
-        dashboard.addData("pollen flywheel RPM", shooterPollen.getRPM());
-        dashboard.addData("nectar target RPM", shooterNectar.getTargetRPM());
-        dashboard.addData("nectar flywheel RPM", shooterNectar.getRPM());
+        dashboard.addLine("");
+        dashboard.addLine("--- SHOOTERS ---");
+        dashboard.addData("Pollen RPM (actual / target)",
+                Math.round(shooterPollen.getRPM()) + " / " + Math.round(shooterPollen.getTargetRPM()));
+        dashboard.addData("Nectar RPM (actual / target)",
+                Math.round(shooterNectar.getRPM()) + " / " + Math.round(shooterNectar.getTargetRPM()));
     }
 }

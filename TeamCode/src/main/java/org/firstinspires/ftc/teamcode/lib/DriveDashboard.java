@@ -38,13 +38,14 @@ public class DriveDashboard {
 
     /** Call once per loop, last. */
     public void update() {
-        panels.addData("mode", drive.isVelocityMode() ? "VELOCITY (encoder PID)" : "RAW POWER");
-        panels.addData("zero power", drive.isBrakeMode() ? "BRAKE" : "FLOAT (coast)");
-        panels.addData("default speed", round(drive.getDefaultSpeed()));
-        panels.addData("speed being used", round(drive.getLastSpeedUsed()));
-
         panels.addLine("");
-        panels.addData("heading (degrees)", round(drive.getLastHeadingDegrees()));
+        panels.addLine("--- DRIVE ---");
+        panels.addData("Speed (active / default)",
+                Math.round(drive.getLastSpeedUsed() * 100) + "% / "
+                        + Math.round(drive.getDefaultSpeed() * 100) + "%");
+        panels.addData("Drive mode", drive.isVelocityMode() ? "VELOCITY" : "RAW POWER");
+        panels.addData("Stopping", drive.isBrakeMode() ? "BRAKE" : "COAST");
+        panels.addData("Heading", Math.round(drive.getLastHeadingDegrees()) + " deg");
 
         panels.update(driverStation);
     }
@@ -58,7 +59,4 @@ public class DriveDashboard {
         panels.addData(label, value);
     }
 
-    private static double round(double value) {
-        return Math.round(value * 100.0) / 100.0;
-    }
 }
