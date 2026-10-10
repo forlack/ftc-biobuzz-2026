@@ -39,14 +39,14 @@ public class FieldCentricJava extends LinearOpMode {
 
     // ---- THE BUTTON MAP -- the only place a control is tied to a real button.
     // Each arrow is read fresh every loop, so it always sees the current `pad`.
-    private final Button speedUp      = buttons.add(() -> pad.dpad_up);
-    private final Button speedDown    = buttons.add(() -> pad.dpad_down);
-    private final Button velocityMode = buttons.add(() -> pad.y);
-    private final Button brakeMode    = buttons.add(() -> pad.x);
-    private final Button slowMode     = buttons.add(() -> pad.right_trigger_pressed);
-    private final Button resetFront   = buttons.add(() -> pad.a);
-    private  final Button toggleIntake = buttons.add(() -> pad.left_bumper);
-    private  final Button pollenGate = buttons.add(() -> pad.right_bumper);
+    private final Button speedUp        = buttons.add(() -> pad.dpad_up);
+    private final Button speedDown      = buttons.add(() -> pad.dpad_down);
+    private final Button velocityMode   = buttons.add(() -> pad.y);
+    private final Button brakeMode      = buttons.add(() -> pad.x);
+    private final Button slowMode       = buttons.add(() -> pad.right_trigger_pressed);
+    private final Button resetFront     = buttons.add(() -> pad.a);
+    private  final Button toggleIntake  = buttons.add(() -> pad.left_bumper);
+    private  final Button pollenGate    = buttons.add(() -> pad.right_bumper);
 
     /** Only used by the telemetry example below. */
     private int speedUpPresses;
