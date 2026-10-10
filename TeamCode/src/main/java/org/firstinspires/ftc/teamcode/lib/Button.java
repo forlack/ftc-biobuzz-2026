@@ -9,9 +9,11 @@ public class Button {
 
     private final BooleanSupplier source;
     private boolean now, before;
+    public boolean active;
 
     public Button(BooleanSupplier source) {
         this.source = source;
+        this.active = false;
     }
 
     /** Reads the gamepad. Call once per loop, before anything asks about this button. */
@@ -28,6 +30,9 @@ public class Button {
     /** Was the button just pushed down? True for one loop per press -- use this for toggles. */
     public boolean pressed() {
         return now && !before;
+    }
+    public void toggle(){
+        this.active = !this.active;
     }
 
     /** Was the button just let go? */
