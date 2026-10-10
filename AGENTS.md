@@ -599,7 +599,7 @@ Done:
       AutoTune ran, Tests pass, Localization Check reads correctly, the out-and-back test path
       returns to its start
 - [x] Found and fixed a real AutoTune bug (Pinpoint pods always reported FORWARD); our copy is
-      fixed and **upstream PR #115** is open
+      fixed and **upstream PR #115 merged 2026-10-08**
 - [x] Teleop framework (`lib/`) hardware-verified; stick deadzone added
 - [x] Autonomous framework `lib/AutoSequence` with follow / run / wait / `at()` markers /
       `aimAt()` / `turnTo()`
@@ -611,8 +611,8 @@ Next:
       (opt-in `addToggle`, private state, `isOn()`), then **two flywheels** via a
       `lib/Flywheel` class with velocity PIDF
 - [ ] Test the intake and pollen servo on the robot
-- [ ] Watch PR #115; when it merges, re-copy upstream `PinpointTuner.java` (ours already has
-      the fix, so this is only to stay in sync)
+- [ ] Optional: re-copy upstream `PinpointTuner.java` now that PR #115 is merged (ours
+      already has the same fix, so this only keeps us in sync)
 - [ ] Delete `PanelsDemo.java` when it stops being useful
 - [ ] Optional: rename the robot SSID and config file to the real team number; delete the
       16 MB of stale `/sdcard/FIRST/java/srcBackups/` zips
@@ -765,7 +765,7 @@ counter-clockwise — but re-runs still showed FORWARD. **Root cause found and f
 reset `y` to 0, so `y < 0` is always false and every pod reports FORWARD regardless of the
 push. Instrumented log: y = −14.96" during a 15" left push, then `FINAL y=0.0`. Our
 `PinpointTuner.java` keeps the last pre-Stop reading; verified on hardware, it now returns
-REVERSED / +6.62 on its own. Reported upstream as **Quickstart PR #115**, <https://github.com/Pedro-Pathing/Quickstart/pull/115> (opened 2026-10-03; approved by a non-maintainer 2026-10-04, not yet merged). Still worth the
+REVERSED / +6.62 on its own. Reported upstream as **Quickstart PR #115**, <https://github.com/Pedro-Pathing/Quickstart/pull/115> (opened 2026-10-03; **merged 2026-10-08** by maintainer BaronClaps). Still worth the
 Localization Check Run **Localization Check** (Diagnostics):
 pod end away from you, push LEFT, and `y` must go UP.
 
