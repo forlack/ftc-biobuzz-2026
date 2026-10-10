@@ -138,12 +138,6 @@ public class FieldCentricJava extends LinearOpMode {
         }
 
         // ---- EXAMPLE: putting your own numbers on the dashboard ----
-        // Add lines like these anywhere BEFORE dashboard.update() runs -- it sends
-        // everything and then empties the list, so anything added after is too late.
-        //
-        // Show down(), not pressed(). pressed() is true for one loop out of the ~30 a press
-        // lasts, so the screen would almost always catch it as false and look broken. Hold
-        // D-pad Up and watch: "held" stays true the whole time, "presses" goes up by one.
         dashboard.addData("speed up held", speedUp.down());
         dashboard.addData("speed up presses", speedUpPresses);
     }
