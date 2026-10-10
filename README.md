@@ -141,9 +141,12 @@ INSTALL_FAILED_UPDATE_INCOMPATIBLE
 ```
 
 The **build** succeeded; the **push** was refused. Android will not replace an installed app
-with an APK signed by a different key, and every computer generates its own debug key at
-`~/.android/debug.keystore`. So this appears the first time you deploy from a new machine, or
-the first time you deploy from your own machine over someone else's build.
+with an APK signed by a different key.
+
+**Switching between your own computers does NOT cause this.** FIRST's build signs with
+`libs/ftc.debug.keystore`, which is committed in this repo, so every clone signs with the same
+key. You see this error only when the hub has an app signed some *other* way — the
+factory-installed Robot Controller, or a build from a different team's repo.
 
 ```bash
 adb uninstall com.qualcomm.ftcrobotcontroller
@@ -158,8 +161,6 @@ certain:
 adb pull /sdcard/FIRST ~/ftc/backups/$(date +%Y%m%d-%H%M%S)-controlhub
 ```
 
-**To stop it happening again,** copy `~/.android/debug.keystore` from one machine to the
-others. Every machine then signs identically and the hub accepts builds from any of them.
 
 ## What's here
 

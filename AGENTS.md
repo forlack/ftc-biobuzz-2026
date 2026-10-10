@@ -454,15 +454,13 @@ adb pull /sdcard/FIRST ~/ftc/backups/$(date +%Y%m%d-%H%M%S)-controlhub
 Note `adb uninstall -k` is **not supported** on this Android build — it errors out and tells
 you to use `adb shell cmd package uninstall -k`. Plain uninstall is fine given the above.
 
-**It recurs per machine, not just once.** The debug key lives at `~/.android/debug.keystore`
-and is generated per computer, so the same rejection appears the first time each new machine
-deploys — and again when you switch back, since the hub then holds the other machine's
-signature. Hit on 2026-09-12 after deploying from the Mac over Wi-Fi and then returning to
-the Linux box.
-
-Permanent fix: copy `~/.android/debug.keystore` from whichever machine is canonical to the
-others. All of them then sign identically and the hub takes builds from any of them. Worth
-doing before handing the repo to students on several laptops.
+**It does NOT recur per machine.** Corrected 2026-10-09 — earlier versions of this file
+said each computer's `~/.android/debug.keystore` would cause a rejection when switching
+machines. Wrong: `build.common.gradle` signs both debug and release builds with
+`libs/ftc.debug.keystore`, **which is committed in the repo**, so every clone signs
+identically. Evidence: on 2026-10-03 the Linux box installed over the Mac's build with no
+rejection. The August mismatch was real only because the hub held the *factory* FIRST-signed
+app. Switching between the Linux box, the Mac and any laptop needs no key copying.
 
 ---
 
@@ -479,10 +477,7 @@ the JDK note below, which used to be the main obstacle and no longer is.
 5. **Then run an actual build**, still on internet:
    `./gradlew :TeamCode:assembleDebug`. A sync is *not* enough — see the `--offline` note in
    Deploy troubleshooting.
-6. **Copy `~/.android/debug.keystore`** from whichever machine is canonical, before the first
-   deploy. Skip this and you get `INSTALL_FAILED_UPDATE_INCOMPATIBLE` and an uninstall dance
-   every time you alternate machines.
-7. Deploy with the Run button or `./gradlew :TeamCode:installDebug`.
+6. Deploy with the Run button or `./gradlew :TeamCode:installDebug`.
 
 ### macOS specifics
 
