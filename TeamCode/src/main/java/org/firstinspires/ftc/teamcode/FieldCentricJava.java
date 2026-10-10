@@ -1,17 +1,16 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
-import com.qualcomm.robotcore.hardware.CRServo;
 
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
 import org.firstinspires.ftc.teamcode.lib.MecanumDrive;
-import com.bylazar.configurables.annotations.Configurable;
+import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 
 /**
  * Field-centric teleop. Java version of the Blocks OpMode "Field Centric (Best)".
@@ -34,60 +33,68 @@ import com.bylazar.configurables.annotations.Configurable;
 @TeleOp(name = "Field Centric (Java)", group = "Drive")
 public class FieldCentricJava extends LinearOpMode {
 
-    public static double INTAKE_POWER = 0.75;
-    public static double POLLEN_FLYWHEEL_POWER = 0.7;
-    public static double NECTAR_FLYWHEEL_POWER = 0.8;
+    // Target speeds -- editable live in Panels.
+    public static double INTAKE_RPM = 300;
+    public static double POLLEN_FLYWHEEL_RPM = 3850;
+    public static double NECTAR_FLYWHEEL_RPM = 4050;
 
+    // Drive and dashboard.
     private MecanumDrive chassis;
     private DriveDashboard dashboard;
-
-    /** What the gamepad looks like this time through the loop. */
     private Gamepad pad;
-
-    // Has to be declared ABOVE the buttons -- they add themselves to it as they are created.
-    private final Button.Group buttons = new Button.Group();
-
-    // ---- THE BUTTON MAP -- the only place a control is tied to a real button.
-    // Each arrow is read fresh every loop, so it always sees the current `pad`.
-    private final Button speedUp        = buttons.add(() -> pad.dpad_up);
-    private final Button speedDown      = buttons.add(() -> pad.dpad_down);
-    private final Button velocityMode   = buttons.add(() -> pad.y);
-    private final Button brakeMode      = buttons.add(() -> pad.x);
-    private final Button slowMode       = buttons.add(() -> pad.right_trigger_pressed);
-    private final Button resetFront     = buttons.add(() -> pad.a);
-    private  final Button toggleIntake  = buttons.add(() -> pad.b);
-    private  final Button pollenGate    = buttons.add(() -> pad.right_bumper);
-    private  final Button nectarGate    = buttons.add(() -> pad.left_bumper);
-
-    /** Only used by the telemetry example below. */
     private int speedUpPresses;
 
-    private DcMotorEx shooterNectar;
-    private DcMotorEx intake;
-    private DcMotorEx shooterPollen;
+    // Intake.
+    private VelocityMotor intake;
+
+    // Pollen shooter and feed.
+    private VelocityMotor shooterPollen;
     private CRServo triggerPollen;
     private CRServo transportPollen;
+
+    // Nectar shooter and feed.
+    private VelocityMotor shooterNectar;
     private CRServo triggerNectar;
     private CRServo transportNectar;
 
+    // Must be ABOVE the buttons -- they register themselves during construction.
+    private final Button.Group buttons = new Button.Group();
+
+    // Drive controls. Each lambda reads the current pad when buttons.update() runs.
+    private final Button speedUp      = buttons.add(() -> pad.dpad_up);
+    private final Button speedDown    = buttons.add(() -> pad.dpad_down);
+    private final Button velocityMode = buttons.add(() -> pad.y);
+    private final Button brakeMode    = buttons.add(() -> pad.x);
+    private final Button slowMode     = buttons.add(() -> pad.right_trigger_pressed);
+    private final Button resetFront   = buttons.add(() -> pad.a);
+
+    // Mechanism controls.
+    private final Button toggleIntake = buttons.add(() -> pad.b);
+    private final Button pollenGate   = buttons.add(() -> pad.right_bumper);
+    private final Button nectarGate   = buttons.add(() -> pad.left_bumper);
 
     @Override
     public void runOpMode() {
+        // Drive.
         chassis = new MecanumDrive(hardwareMap);
-        // The name must match the robot config on the Driver Station exactly, including case.
+
+        // Hardware names must match the active robot config exactly.
+        // Intake.
+        intake = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD);
+
+        // Pollen shooter and feed.
+        shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
         triggerPollen = hardwareMap.get(CRServo.class, "triggerPollen");
         triggerPollen.setDirection(DcMotorSimple.Direction.REVERSE);
         transportPollen = hardwareMap.get(CRServo.class, "transportPollen");
         transportPollen.setDirection(DcMotorSimple.Direction.REVERSE);
-        intake = hardwareMap.get(DcMotorEx.class, "intake");
-        intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-        shooterPollen = hardwareMap.get(DcMotorEx.class, "shooterPollen");
-        shooterPollen.setDirection(DcMotorSimple.Direction.REVERSE);
-        shooterPollen.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+
+        // Nectar shooter and feed.
+        shooterNectar = new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD);
         triggerNectar = hardwareMap.get(CRServo.class, "triggerNectar");
         transportNectar = hardwareMap.get(CRServo.class, "transportNectar");
-        shooterNectar = hardwareMap.get(DcMotorEx.class, "shooterNectar");
-        shooterNectar.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+
+        // Dashboard.
         dashboard = new DriveDashboard(chassis, telemetry);
         dashboard.showReady("Field Centric (Java)");
 
@@ -162,23 +169,28 @@ public class FieldCentricJava extends LinearOpMode {
         }
     }
 
-    private void updateIntake(){
-        if(toggleIntake.pressed()){
+    private void updateIntake() {
+        if (toggleIntake.pressed()) {
             toggleIntake.toggle();
         }
-        intake.setPower(toggleIntake.active ? INTAKE_POWER : 0);
-        dashboard.addData("intake power", intake.getPower());
+        intake.setTargetRPM(toggleIntake.active ? INTAKE_RPM : 0);
+        dashboard.addData("intake target RPM", intake.getTargetRPM());
+        dashboard.addData("intake RPM", intake.getRPM());
     }
-    private void updateServos(){
+
+    private void updateServos() {
         transportPollen.setPower(1);
-        triggerNectar.setPower(nectarGate.down() ? 1  : 0);
+        triggerNectar.setPower(nectarGate.down() ? 1 : 0);
         triggerPollen.setPower(pollenGate.down() ? 1 : 0);
         transportNectar.setPower(1);
     }
-    private void updateShooter(){
-        shooterPollen.setPower(POLLEN_FLYWHEEL_POWER);
-        shooterNectar.setPower(NECTAR_FLYWHEEL_POWER);
-        dashboard.addData("pollen flywheel power", shooterPollen.getPower());
-        dashboard.addData("nectar flywheel power", shooterNectar.getPower());
+
+    private void updateShooter() {
+        shooterPollen.setTargetRPM(POLLEN_FLYWHEEL_RPM);
+        shooterNectar.setTargetRPM(NECTAR_FLYWHEEL_RPM);
+        dashboard.addData("pollen target RPM", shooterPollen.getTargetRPM());
+        dashboard.addData("pollen flywheel RPM", shooterPollen.getRPM());
+        dashboard.addData("nectar target RPM", shooterNectar.getTargetRPM());
+        dashboard.addData("nectar flywheel RPM", shooterNectar.getRPM());
     }
 }

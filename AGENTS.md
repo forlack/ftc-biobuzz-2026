@@ -899,12 +899,16 @@ auto = new AutoSequence(follower)
 
 ## Student lessons
 
-### Live mechanism power tuning (2026-10-10)
+### Live mechanism RPM tuning (2026-10-10)
 
-`FieldCentricJava.java` exposes Panels Configurables for `INTAKE_POWER` (0.75),
-`POLLEN_FLYWHEEL_POWER` (0.7), and `NECTAR_FLYWHEEL_POWER` (0.8). FieldCentricJava
-reads them every loop and reports applied motor powers through DriveDashboard. Intake
-still requires its toggle; flywheels run continuously after PLAY. Use powers from -1 to 1.
+`FieldCentricJava.java` exposes Panels Configurables for `INTAKE_RPM` (300),
+`POLLEN_FLYWHEEL_RPM` (3850), and `NECTAR_FLYWHEEL_RPM` (4050). FieldCentricJava
+reads them every loop and reports target and measured RPM through DriveDashboard. Intake
+still requires its toggle; flywheels run continuously after PLAY. All three motors use
+lib/VelocityMotor with RUN_USING_ENCODER and setVelocity. RPM conversion assumes
+28 ticks/revolution; confirm the actual motors. Current PIDF is P=200, I=D=F=0, applied
+in the constructor, and needs hardware tuning. setPIDF(p, i, d, f) applies new coefficients
+immediately. PIDF fields are not live Panels settings.
 Live edits reset on RC app restart; save chosen defaults in FieldCentricJava.java. Motors Test and Panels Demo are not
 listed in Configurables. This OpMode uses a Configurable annotation directly by user preference.
 
