@@ -2,7 +2,7 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-03
+Last updated: 2026-10-09
 
 ---
 
@@ -33,6 +33,11 @@ All on the Control Hub's single Lynx module (address 173):
 | Motor | `FrontLeft` | 3 | goBILDA 5202 |
 | Odometry | `odo` | I2C bus 1, port 0 | goBILDA **Pinpoint** |
 | IMU | `imu` | I2C bus 0, port 0 | Control Hub BHI260AP |
+| Motor | `intake` | Expansion Hub 2, motor port 0 | added 2026-10-09 |
+| CR servo | `triggerPollen` | servo port 0 | continuous rotation, added 2026-10-09 |
+
+An **Expansion Hub** ("Expansion Hub 2", RS-485 address 2) now hangs off the Control Hub —
+the Control Hub's four motor ports are all taken by the drivetrain, so mechanisms go there.
 
 Drivetrain is **mecanum**. IMU orientation: logo **UP**, USB **FORWARD**.
 Motor directions: `FrontRight`/`BackRight` FORWARD, `FrontLeft`/`BackLeft` REVERSE. All BRAKE.
@@ -588,32 +593,32 @@ for Java. `.vscode/` is NOT in `.gitignore` (only `.idea/` is), so it shows in `
 
 Done:
 - [x] Toolchain from scratch; builds with zero environment variables
-- [x] SDK 11.2 → **12.0** (BIOBUZZ, 2026-2027), merged on release day 2026-09-12
-- [x] Panels dashboard working live on the hub
-- [x] Blocks `Field Centric (Best)` ported to Java, and since refactored into `lib/`
-- [x] Pedro + Pinpoint integrated; `Constants.java` authored and measured
-- [x] Localization, velocity, zero-power and predictive-braking tuning — see Pedro section
-- [x] Upstream Pedro telemetry bug found and fixed: Quickstart PR #84, merged 2026-08-05
-- [x] Teleop framework for students (`lib/` + `TemplateTeleOp`), **hardware-verified
-      2026-09-12**: sticks and all six controls behave as before the refactor
-- [x] Stick deadzone, after a worn controller made the robot creep and the motors whine
-- [x] Hub cleaned of OnBotJava and the autonomous Blocks program (see below)
-- [x] macOS set up as the main dev machine, with a `./deploy` Wi-Fi helper (see README)
+- [x] SDK 12.0 (BIOBUZZ, 2026-2027), merged on release day 2026-09-12
+- [x] Panels 1.0.17 (BIOBUZZ field images)
+- [x] **Pedro Pathing 3.0.1**, merged 2026-10-03 and verified on the test chassis:
+      AutoTune ran, Tests pass, Localization Check reads correctly, the out-and-back test path
+      returns to its start
+- [x] Found and fixed a real AutoTune bug (Pinpoint pods always reported FORWARD); our copy is
+      fixed and **upstream PR #115** is open
+- [x] Teleop framework (`lib/`) hardware-verified; stick deadzone added
+- [x] Autonomous framework `lib/AutoSequence` with follow / run / wait / `at()` markers /
+      `aimAt()` / `turnTo()`
+- [x] First mechanisms written by the student: `intake` motor (toggle) and `triggerPollen`
+      CR servo (hold), plus `toggle()`/`active` added to `Button`
 
 Next:
-- [ ] **Manual PID tuning** — the only tuning step never done. Tuning → Manual →
-      Translational → Heading → Drive (→ Centripetal). PIDs are on library defaults with the
-      secondary PIDs enabled, which is a sane starting point, not a tuned one.
-- [ ] **Decide on Pedro 3.0.0** (see its section below) — this supersedes the PID item if we
-      take it, since AutoTune replaces the tuning OpMode entirely.
-- [ ] Delete `PanelsDemo.java` when it stops being useful — it is a smoke test.
-- [ ] Re-copy `pedroPathing/Tuning.java` from upstream Quickstart **if staying on 2.1.2** —
-      our copy predates PR #84 and still mislabels the lateral tuners.
+- [ ] Student lessons in `TeamCode/.../NEXT_STEPS.md`, in order: **toggle buttons**
+      (opt-in `addToggle`, private state, `isOn()`), then **two flywheels** via a
+      `lib/Flywheel` class with velocity PIDF
+- [ ] Test the intake and pollen servo on the robot
+- [ ] Watch PR #115; when it merges, re-copy upstream `PinpointTuner.java` (ours already has
+      the fix, so this is only to stay in sync)
+- [ ] Delete `PanelsDemo.java` when it stops being useful
 - [ ] Optional: rename the robot SSID and config file to the real team number; delete the
-      16 MB of stale `/sdcard/FIRST/java/srcBackups/` zips.
+      16 MB of stale `/sdcard/FIRST/java/srcBackups/` zips
 
-On the competition robot, re-run the whole tuning sequence and mount the pods per the
-guidance above. Every measured number in `Constants.java` belongs to the test chassis.
+On the competition robot: run AutoTune again (Mecanum → Pinpoint → Foresight → Tests) and
+paste the output. Every number in `pedro/Constants.java` belongs to the test chassis.
 
 ---
 
@@ -723,7 +728,9 @@ are still valid. But it cost this team hours: the robot moved left as instructed
 and we wrongly suspected motor directions and localizer config. **Trust the robot, not the
 telemetry text, on lateral direction.**
 
-### Pedro 3.0.0 — released 2026-09-10, NOT taken
+### Pedro 3.0.0 — released 2026-09-10; ADOPTED 3.0.1 on 2026-10-03
+
+Historical reasoning below, kept for context. We took **3.0.1** after it had a patch release.
 
 We build against **2.1.2**. v3.0.0 is a major release and changes things we have already
 done, so it was deliberately deferred rather than skipped:
@@ -758,7 +765,7 @@ counter-clockwise — but re-runs still showed FORWARD. **Root cause found and f
 reset `y` to 0, so `y < 0` is always false and every pod reports FORWARD regardless of the
 push. Instrumented log: y = −14.96" during a 15" left push, then `FINAL y=0.0`. Our
 `PinpointTuner.java` keeps the last pre-Stop reading; verified on hardware, it now returns
-REVERSED / +6.62 on its own. Reported upstream (Quickstart PR, see below). Still worth the
+REVERSED / +6.62 on its own. Reported upstream as **Quickstart PR #115**, <https://github.com/Pedro-Pathing/Quickstart/pull/115> (opened 2026-10-03; approved by a non-maintainer 2026-10-04, not yet merged). Still worth the
 Localization Check Run **Localization Check** (Diagnostics):
 pod end away from you, push LEFT, and `y` must go UP.
 
@@ -856,6 +863,54 @@ whole classpath for `@Configurable`, it does not look only inside OpModes (verif
 > **Field Centric (Java)**.
 
 ---
+
+## Autonomous framework (`lib/AutoSequence`)
+
+Built 2026-10-03 for Pedro 3. Same rule as teleop: **never block** — `update()` once per loop
+advances when the current step finishes.
+
+```java
+auto = new AutoSequence(follower)
+        .follow(toShootSpot)                       // drive a Path
+        .at(0.7, () -> arm.setPower(1))            // fire part way along that path
+        .aimAt(GOAL)                               // stand still, turn to face a point
+        .run(() -> shooter.setVelocity(SHOOT))     // one-shot action
+        .waitUntil(() -> shooterAtSpeed())         // gate on a condition
+        .waitSeconds(0.4)
+        .follow(home);
+```
+
+- `at(fraction, action)` uses `follower.completion()`. A marker the path never reaches **still
+  fires at step end** — skipping it silently would strand a mechanism.
+- `aimAt(pose)` / `turnTo(radians)` hold position via `follower.hold()` until heading error
+  < `AIM_TOLERANCE_DEGREES` (2°). For aiming *while* driving use
+  `Paths.line(a, b).facingPoint(GOAL)` instead — no step needed.
+- BIOBUZZ shape: intake runs the whole match (set in `start()`), so the real steps are drive,
+  aim, shoot. `TemplateAutonomous.java` is the starter.
+
+## Student lessons
+
+`TeamCode/src/main/java/org/firstinspires/ftc/teamcode/NEXT_STEPS.md` holds the next
+lessons for the student, written to be worked through *before* reading the answers. When
+helping with them, **guide rather than write the code** — the parent asked for that
+explicitly ("tell me what to do next so I can learn").
+
+## Known issue: AutoTune's web server can crash the RC app at boot
+
+Seen 2026-10-09: `FATAL EXCEPTION ... java.net.SocketException: Socket is closed` at
+`NanoHTTPD$ServerRunnable.run` during hub boot, which force-finished
+`FtcRobotControllerActivity`. It recovered, but if that happens at a match the robot is dead
+until the app restarts. If it repeats, load the `tuning` dependency only when tuning (or move
+the `@Tuner` methods out of the competition build).
+
+## Process rule: build what you commit, before pushing
+
+On 2026-10-09 a commit was pushed that did not compile: the student had changed
+`FieldCentricJava` to use a new `Button.toggle()` that was still uncommitted, and the
+pre-push build check ran in a chain that pushed even when it failed. Fixed within a minute,
+but `main` was broken. **Build the exact tree being committed, and push only if that build
+passes** (`./gradlew ... | grep -q SUCCESSFUL && git push`). The student edits files between
+reviews, so re-check `git status` right before committing.
 
 ## Hub contents (cleaned 2026-09-12)
 
