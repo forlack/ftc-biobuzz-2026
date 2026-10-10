@@ -70,16 +70,16 @@ public class MecanumDrive {
     private double lastHeadingDegrees, lastHeadingRadians;
 
     public MecanumDrive(HardwareMap hardwareMap) {
-        frontLeft = hardwareMap.get(DcMotorEx.class, "FrontLeft");
-        frontRight = hardwareMap.get(DcMotorEx.class, "FrontRight");
-        backLeft = hardwareMap.get(DcMotorEx.class, "BackLeft");
-        backRight = hardwareMap.get(DcMotorEx.class, "BackRight");
+        frontLeft = hardwareMap.get(DcMotorEx.class, "frontLeft");
+        frontRight = hardwareMap.get(DcMotorEx.class, "frontRight");
+        backLeft = hardwareMap.get(DcMotorEx.class, "backLeft");
+        backRight = hardwareMap.get(DcMotorEx.class, "backRight");
         motors = new DcMotorEx[]{frontLeft, frontRight, backLeft, backRight};
 
         imu = hardwareMap.get(IMU.class, "imu");
         imu.initialize(new IMU.Parameters(new RevHubOrientationOnRobot(
-                RevHubOrientationOnRobot.LogoFacingDirection.UP,
-                RevHubOrientationOnRobot.UsbFacingDirection.FORWARD)));
+                RevHubOrientationOnRobot.LogoFacingDirection.DOWN,
+                RevHubOrientationOnRobot.UsbFacingDirection.LEFT)));
 
         frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
         backRight.setDirection(DcMotorSimple.Direction.FORWARD);

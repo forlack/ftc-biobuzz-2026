@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
@@ -35,11 +34,10 @@ import org.firstinspires.ftc.teamcode.pedro.Constants;
  * "Pod end" = the end of the robot where the odometry pods are mounted. On this robot that
  * is the FRONT as far as the config and Pedro are concerned (+X points toward it).
  */
-@Configurable
 @TeleOp(name = "Motors Test", group = "Diagnostics")
 public class MotorsTest extends LinearOpMode {
 
-    /** Live-editable from the Panels Configurables panel. */
+    /** Power used by the motor diagnostics. */
     public static double POWER = 0.25;
 
     private static final int FIRST_MOTOR_TEST = 4;
@@ -72,10 +70,10 @@ public class MotorsTest extends LinearOpMode {
     public void runOpMode() {
         TelemetryManager panels = PanelsTelemetry.INSTANCE.getTelemetry();
 
-        DcMotor frontLeft = hardwareMap.get(DcMotor.class, "FrontLeft");
-        DcMotor backLeft = hardwareMap.get(DcMotor.class, "BackLeft");
-        DcMotor frontRight = hardwareMap.get(DcMotor.class, "FrontRight");
-        DcMotor backRight = hardwareMap.get(DcMotor.class, "BackRight");
+        DcMotor frontLeft = hardwareMap.get(DcMotor.class, "frontLeft");
+        DcMotor backLeft = hardwareMap.get(DcMotor.class, "backLeft");
+        DcMotor frontRight = hardwareMap.get(DcMotor.class, "frontRight");
+        DcMotor backRight = hardwareMap.get(DcMotor.class, "backRight");
         DcMotor[] motors = {frontLeft, frontRight, backLeft, backRight};
 
         Follower follower = Constants.create(hardwareMap);

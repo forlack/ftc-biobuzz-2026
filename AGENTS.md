@@ -2,7 +2,7 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-09
+Last updated: 2026-10-10
 
 ---
 
@@ -23,28 +23,38 @@ Last updated: 2026-10-09
 
 ### Robot configuration (`2222-Config.xml`)
 
-All on the Control Hub's single Lynx module (address 173):
+Hardware names are case-sensitive. Updated from the XML on 2026-10-10:
 
-| Device | Name | Port | Type |
-|---|---|---|---|
-| Motor | `BackRight` | 0 | goBILDA 5202 |
-| Motor | `FrontRight` | 1 | goBILDA 5202 |
-| Motor | `BackLeft` | 2 | goBILDA 5202 |
-| Motor | `FrontLeft` | 3 | goBILDA 5202 |
-| Odometry | `odo` | I2C bus 1, port 0 | goBILDA **Pinpoint** |
-| IMU | `imu` | I2C bus 0, port 0 | Control Hub BHI260AP |
-| Motor | `intake` | Expansion Hub 2, motor port 0 | added 2026-10-09 |
-| CR servo | `triggerPollen` | Control Hub, servo port 1 | continuous rotation, added 2026-10-09 |
+| Device | Name | Hub | Port | Type |
+|---|---|---|---|---|
+| Motor | `frontLeft` | Control Hub (173) | 0 | goBILDA 5202 |
+| Motor | `backLeft` | Control Hub (173) | 1 | goBILDA 5202 |
+| Motor | `intake` | Control Hub (173) | 2 | goBILDA 5202 |
+| Motor | `shooterNectar` | Control Hub (173) | 3 | goBILDA 5202 |
+| CR servo | `transportNectar` | Control Hub (173) | 0 | continuous rotation |
+| CR servo | `triggerNectar` | Control Hub (173) | 1 | continuous rotation |
+| Motor | `frontRight` | Expansion Hub 2 (2) | 0 | goBILDA 5202 |
+| Motor | `backRight` | Expansion Hub 2 (2) | 1 | goBILDA 5202 |
+| Motor | `shooterPollen` | Expansion Hub 2 (2) | 2 | goBILDA 5202 |
+| CR servo | `transportPollen` | Expansion Hub 2 (2) | 0 | continuous rotation |
+| CR servo | `triggerPollen` | Expansion Hub 2 (2) | 1 | continuous rotation |
+| Odometry | `odo` | Control Hub (173) | I2C bus 1, port 0 | goBILDA Pinpoint |
+| IMU | `imu` | Control Hub (173) | I2C bus 0, port 0 | Control Hub BHI260AP |
 
-An **Expansion Hub** ("Expansion Hub 2", RS-485 address 2) now hangs off the Control Hub —
-the Control Hub's four motor ports are all taken by the drivetrain, so mechanisms go there.
+The drivetrain is split across both hubs. Motor names changed from `FrontLeft`,
+`BackLeft`, `FrontRight`, `BackRight` to `frontLeft`, `backLeft`, `frontRight`,
+`backRight`; TeleOp, Pedro and Motors Test use the new names. Existing intake and
+pollen-trigger code keeps the same names despite the port changes. TeleOp now controls
+both shooters, both transport servos and both triggers. Intake toggles on B; bumpers
+hold the matching gates open. Shooters and transports run continuously after PLAY.
+The pollen shooter, transport and trigger use REVERSE direction with positive power.
 
 **The config XML is versioned** at `robot-config/2222-Config.xml` (pulled 2026-10-09). Push
 it to a hub with `adb push ... /sdcard/FIRST/`, then Activate on the DS. Re-pull and commit
 after every DS config change, or the repo copy goes stale. See README.
 
-Drivetrain is **mecanum**. IMU orientation: logo **UP**, USB **FORWARD**.
-Motor directions: `FrontRight`/`BackRight` FORWARD, `FrontLeft`/`BackLeft` REVERSE. All BRAKE.
+Drivetrain is **mecanum**. TeleOp IMU orientation: logo **DOWN**, USB **LEFT** (updated 2026-10-10).
+Motor directions: `frontRight`/`backRight` FORWARD, `frontLeft`/`backLeft` REVERSE. All BRAKE.
 
 The **Pinpoint** is the key asset for Pedro — it's a dedicated odometry computer, so Pedro
 should use its `PinpointLocalizer` rather than drive-encoder odometry.
@@ -889,6 +899,15 @@ auto = new AutoSequence(follower)
 
 ## Student lessons
 
+### Live mechanism power tuning (2026-10-10)
+
+`FieldCentricJava.java` exposes Panels Configurables for `INTAKE_POWER` (0.75),
+`POLLEN_FLYWHEEL_POWER` (0.7), and `NECTAR_FLYWHEEL_POWER` (0.8). FieldCentricJava
+reads them every loop and reports applied motor powers through DriveDashboard. Intake
+still requires its toggle; flywheels run continuously after PLAY. Use powers from -1 to 1.
+Live edits reset on RC app restart; save chosen defaults in FieldCentricJava.java. Motors Test and Panels Demo are not
+listed in Configurables. This OpMode uses a Configurable annotation directly by user preference.
+
 `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/NEXT_STEPS.md` holds the next
 lessons for the student, written to be worked through *before* reading the answers. When
 helping with them, **guide rather than write the code** — the parent asked for that
@@ -952,5 +971,5 @@ student has no way to interpret. Use `./gradlew --configuration-cache` ad hoc if
 ## Scratch files
 
 `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/PanelsDemo.java` — hardware-free
-smoke test. Orbits a circle on the field view, streams telemetry, exposes `radius`,
-`orbitRadius`, `speed` as live-editable `@Configurable` statics. Safe to delete.
+smoke test. Orbits a circle on the field view and streams telemetry. Its radius,
+orbit radius and speed are source defaults, not exposed in Configurables. Safe to delete.

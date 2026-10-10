@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.field.FieldManager;
 import com.bylazar.field.FieldPresets;
 import com.bylazar.field.PanelsField;
@@ -15,10 +14,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  *
  * Connect to the robot's WiFi, then open http://192.168.43.1:8001 in a browser.
  *
- * The fields below are annotated @Configurable, so they show up in the Panels
- * "Configurables" tab and can be edited live while the OpMode runs.
  */
-@Configurable
 @TeleOp(name = "Panels Demo", group = "Diagnostics")
 public class PanelsDemo extends LinearOpMode {
 
