@@ -80,7 +80,7 @@ public class FieldCentricJava extends LinearOpMode {
 
         // Hardware names must match the active robot config exactly.
         // Intake.
-        intake = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD);
+        intake = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD, 145.1);
 
         // Pollen shooter and feed.
         shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
