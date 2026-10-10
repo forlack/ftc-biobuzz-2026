@@ -192,62 +192,116 @@ You've seen this before: `MecanumDrive` uses the same hub PIDF for the wheels (`
 
 ## Steps
 
-**1. Robot config.** Add the motor on the Driver Station (Configure Robot), named
-`flywheel`. **Plug in the encoder cable**, or velocity control can't work. Check: in a test,
-`getVelocity()` must change when the wheel spins.
+Everything goes straight into `FieldCentricJava.java`, the same way you added the intake.
 
-**2. Make it a subsystem in `lib/`.** Create `lib/Flywheel.java`, the same idea as
-`MecanumDrive`: the class handles the *mechanics*, and the OpMode decides *when*. Give it:
+**1. Robot config.** Add the motor on the Driver Station (Configure Robot), named
+`flywheel`. **Plug in the encoder cable**, or velocity control can't work.
+
+**2. Constants and the motor field**, up with your other fields:
 
 ```java
-public Flywheel(HardwareMap hardwareMap)   // get the motor, set mode and zero-power behavior
-public void setTargetRPM(double rpm)       // 0 = off
-public double getRPM()                     // actual speed, for the dashboard
-public boolean atSpeed()                   // close enough to target to shoot?
+private static final double TICKS_PER_REV = 28;     // goBILDA 6000 RPM 1:1 -- check yours
+private static final double SHOOT_RPM = 4000;       // start lower, tune later
+private static final double RPM_TOLERANCE = 100;    // how close counts as "ready"
+
+// Velocity PIDF. Tune F first (see step 8).
+private static final double FLY_P = 0;
+private static final double FLY_I = 0;
+private static final double FLY_D = 0;
+private static final double FLY_F = 0;
+
+private DcMotorEx flywheel;
+private double flywheelTargetRPM = 0;
 ```
 
-**3. Setup inside the constructor:**
+**3. Set it up in `runOpMode()`**, before `waitForStart()`:
 
 ```java
+flywheel = hardwareMap.get(DcMotorEx.class, "flywheel");
 flywheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 flywheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+flywheel.setVelocityPIDFCoefficients(FLY_P, FLY_I, FLY_D, FLY_F);
 ```
 
 **Always FLOAT on a flywheel, never BRAKE.** A heavy spinning wheel slammed to a stop is
 hard on the motor and gearbox. Let it coast down.
 
-**4. Make the numbers live-tunable.** Put `@Configurable` on `Flywheel` with public static
-fields: `TARGET_RPM`, `P`, `I`, `D`, `F`, `TICKS_PER_REV`, and `RPM_TOLERANCE`. Since it's
-in `lib/`, the Panels import stays out of your OpMode, just like `MecanumDrive`.
+**4. Three small helper methods**, at the bottom of the class:
 
-**5. Push PIDF only when it changes.** Copy the idea from `MecanumDrive.applyPidfTuning()`:
-remember the last values you sent, and only call `setVelocityPIDFCoefficients(P, I, D, F)`
-when one changes. Sending it every loop wastes hub bandwidth.
+```java
+/** RPM -> the ticks per second that setVelocity() wants. */
+private double rpmToTicksPerSecond(double rpm) {
+    return rpm * TICKS_PER_REV / 60.0;
+}
 
-**6. `atSpeed()`:** true when `Math.abs(getRPM() - target) < RPM_TOLERANCE`. This is the
-"ready to shoot" signal, and it's the most important method in the class.
+/** How fast the flywheel is actually spinning. */
+private double flywheelRPM() {
+    return flywheel.getVelocity() * 60.0 / TICKS_PER_REV;
+}
 
-**7. Wire it into the teleop.** Use a **toggle** button (from the section above!) for
-spin-up and spin-down. Put RPM, target, and `atSpeed()` on the dashboard.
+/** Close enough to the target to shoot? */
+private boolean flywheelAtSpeed() {
+    return flywheelTargetRPM > 0
+            && Math.abs(flywheelRPM() - flywheelTargetRPM) < RPM_TOLERANCE;
+}
+```
 
-**8. Tune it.** In Panels, set P, I, and D to 0, then:
-1. Set a target RPM. Raise **F** until the actual RPM settles near the target on its own.
-   Starting guess: `F = 32767 / maxTicksPerSecond`.
+`flywheelAtSpeed()` is the "ready to shoot" signal. It's the most important of the three.
+
+**5. A button.** Use a toggle (from the section above), on gamepad 2 since that driver runs
+the mechanisms:
+
+```java
+private final Button flywheelToggle = buttons.addToggle(() -> pad2.y);
+```
+
+This needs the toggle-button lesson done first, because `addToggle` and `isOn()` come from
+there.
+
+**6. `updateFlywheel()`**, plus one call to it in the loop next to `updateIntake()`:
+
+```java
+private void updateFlywheel() {
+    flywheelTargetRPM = flywheelToggle.isOn() ? SHOOT_RPM : 0;
+    flywheel.setVelocity(rpmToTicksPerSecond(flywheelTargetRPM));
+
+    dashboard.addData("flywheel target", flywheelTargetRPM);
+    dashboard.addData("flywheel rpm", Math.round(flywheelRPM()));
+    dashboard.addData("flywheel ready", flywheelAtSpeed());
+}
+```
+
+**7. Check it before tuning.** Deploy with all four PIDF numbers at 0 and turn the flywheel
+on. It probably won't reach speed yet, which is fine. Check that `flywheel rpm` *changes*
+when it spins. If it stays at 0, the encoder isn't plugged in.
+
+**8. Tune it**, one number at a time, redeploying between changes:
+1. Raise **F** until the RPM settles near the target on its own. Starting guess:
+   `F = 32767 / maxTicksPerSecond`, where `maxTicksPerSecond` is the motor's top RPM run
+   through `rpmToTicksPerSecond()`.
 2. Raise **P** until the wheel recovers quickly after a shot without wobbling.
 3. Only add **I** if it settles a little below target and stays there.
 
-Panels has a **graph** widget. Plotting target vs. actual RPM makes tuning much easier than
-reading numbers.
+Redeploying for every change is slow. Once it basically works, live tuning in Panels is a
+good upgrade: put `@Configurable` on the class and make the numbers `public static` instead
+of `private static final`.
 
-**9. Bake the tuned numbers into the code.** Panels values reset when the robot restarts.
+**Bonus:** watch how far `flywheel rpm` drops when a ball goes through, and how long it takes
+to get back to "ready." Those two numbers tell you how fast you can fire repeat shots.
 
-**10. Use it in autonomous.** This is why `atSpeed()` matters:
+## What about autonomous?
+
+Autonomous is a separate OpMode, so it can't see these helper methods. For now, copy the
+constants, setup, and helpers into the auto as well. Then wait for speed before feeding:
 
 ```java
-.run(() -> flywheel.setTargetRPM(SHOOT_RPM))
-.waitUntil(flywheel::atSpeed)               // never shoot before it's ready
+.run(() -> { flywheelTargetRPM = SHOOT_RPM;
+             flywheel.setVelocity(rpmToTicksPerSecond(SHOOT_RPM)); })
+.waitUntil(this::flywheelAtSpeed)           // never shoot before it's ready
 .run(() -> feeder.setPower(1))
 ```
 
-**Bonus:** track how far RPM drops when a ball goes through, and how long recovery takes.
-Those two numbers tell you how fast you can fire repeat shots.
+Notice you've now written the same code twice. If you change `TICKS_PER_REV`, you have to
+remember to change it in both places. **That duplication is exactly the problem a subsystem
+class solves**, like `MecanumDrive` does for the drivetrain. A good next lesson once the
+flywheel works.
