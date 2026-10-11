@@ -37,6 +37,7 @@ public class FieldCentricJava extends LinearOpMode {
     // Target speeds -- editable live in Panels.
     public static double INTAKE_RPM = 600;
     public static double INTAKE_P = 30;
+    public static double INTAKE_F = 15;
     public static double POLLEN_FLYWHEEL_RPM = 3850;
     public static double NECTAR_FLYWHEEL_RPM = 4050;
 
@@ -83,7 +84,7 @@ public class FieldCentricJava extends LinearOpMode {
         // Hardware names must match the active robot config exactly.
         // Intake.
         intake = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD, 145.1);
-        intake.setPIDF(INTAKE_P, intake.getI(), intake.getD(), intake.getF());
+        intake.setPIDF(INTAKE_P, intake.getI(), intake.getD(), INTAKE_F);
 
         // Pollen shooter and feed.
         shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
@@ -165,8 +166,8 @@ public class FieldCentricJava extends LinearOpMode {
     }
 
     private void updateIntake() {
-        if (INTAKE_P != intake.getP()) {
-            intake.setPIDF(INTAKE_P, intake.getI(), intake.getD(), intake.getF());
+        if (INTAKE_P != intake.getP() || INTAKE_F != intake.getF()) {
+            intake.setPIDF(INTAKE_P, intake.getI(), intake.getD(), INTAKE_F);
         }
         if (toggleIntake.pressed()) {
             toggleIntake.toggle();
