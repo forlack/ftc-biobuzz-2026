@@ -23,6 +23,7 @@ import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
  *   left trigger      hold for slow mode (0.25)
  *   right trigger     hold for turbo (1.0)
  *   D-pad Up          toggle intake
+ *   D-pad Down        hold to run the intake backwards (clear a jam)
  *   right bumper      hold pollen gate open
  *   left bumper       hold nectar gate open
  *   A (btn 2)         make the way you are facing the new "forward"
@@ -70,6 +71,7 @@ public class FieldCentricJava extends LinearOpMode {
 
     // Mechanism controls.
     private final Button toggleIntake = buttons.add(() -> pad.dpad_up);
+    private final Button reverseIntake = buttons.add(() -> pad.dpad_down);
     private final Button pollenGate   = buttons.add(() -> pad.right_bumper);
     private final Button nectarGate   = buttons.add(() -> pad.left_bumper);
 
@@ -163,9 +165,17 @@ public class FieldCentricJava extends LinearOpMode {
         if (toggleIntake.pressed()) {
             toggleIntake.toggle();
         }
-        intake.setTargetRPM(toggleIntake.active ? INTAKE_RPM : 0);
+        // Holding reverse wins over the toggle, and only lasts while held. The toggle is left
+        // alone, so letting go returns the intake to whatever it was doing before.
+        double rpm = 0;
+        if (reverseIntake.down()) {
+            rpm = -INTAKE_RPM;
+        } else if (toggleIntake.active) {
+            rpm = INTAKE_RPM;
+        }
+        intake.setTargetRPM(rpm);
         dashboard.addLine("--- INTAKE ---");
-        dashboard.addData("Intake", toggleIntake.active ? "ON" : "OFF");
+        dashboard.addData("Intake", reverseIntake.down() ? "REVERSE" : (toggleIntake.active ? "ON" : "OFF"));
         dashboard.addData("Intake RPM (actual / target)",
                 Math.round(intake.getRPM()) + " / " + Math.round(intake.getTargetRPM()));
         dashboard.addData("Intake P", intake.getP());
