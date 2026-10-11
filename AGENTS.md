@@ -616,10 +616,10 @@ Done:
       CR servo (hold), plus `toggle()`/`active` added to `Button`
 
 Next:
-- [ ] Student lessons in `TeamCode/.../NEXT_STEPS.md`, in order: **toggle buttons**
-      (opt-in `addToggle`, private state, `isOn()`), then **two flywheels** via a
-      `lib/Flywheel` class with velocity PIDF
-- [ ] Test the intake and pollen servo on the robot
+- [ ] **Tune the velocity motors** with F = 12 as the start (see Velocity motors below):
+      check each settles at target, then trim F per motor, then P
+- [ ] Toggle-button lesson in `NEXT_STEPS.md` (opt-in `addToggle`, private state, `isOn()`)
+      — the flywheel lesson is done, as `lib/VelocityMotor`
 - [ ] Optional: re-copy upstream `PinpointTuner.java` now that PR #115 is merged (ours
       already has the same fix, so this only keeps us in sync)
 - [ ] Delete `PanelsDemo.java` when it stops being useful
@@ -896,6 +896,28 @@ auto = new AutoSequence(follower)
   `Paths.line(a, b).facingPoint(GOAL)` instead — no step needed.
 - BIOBUZZ shape: intake runs the whole match (set in `start()`), so the real steps are drive,
   aim, shoot. `TemplateAutonomous.java` is the starter.
+
+## Velocity motors (`lib/VelocityMotor`)
+
+Written by the student 2026-10-10 — the `NEXT_STEPS` flywheel lesson, generalized. Used for
+`shooterPollen`, `shooterNectar` (28 ticks/rev, the default) and `intake` (145.1 ticks/rev).
+Each motor has its **own** PIDF, set only through `setPIDF()`; the fields are private
+(2026-10-11) because writing `shooter.P = 50` changed the number without sending it to the
+motor. Read them with `getP()`…`getF()`.
+
+**Defaults: P = 200, I = 0, D = 0, F = 12** (F set 2026-10-11, was 0).
+
+**Why F matters — the "always 200 RPM low" symptom.** With F = 0 the shooter settled about
+200 RPM under target (4000 asked, ~3800 read) every time. That is steady-state error from
+P-only control: P outputs power only from error, so the wheel settles where the error is just
+big enough to supply the power it needs to hold speed. More P shrinks the gap but never closes
+it. F supplies that baseline power with no error required. Side effect of the old setup:
+`atSpeed()` uses `RPM_TOLERANCE = 100`, so sitting 200 low meant **"ready" never went true**.
+
+**F = 32767 / max ticks per second.** 6000 RPM × 28 / 60 = 2800 → F ≈ 11.7; intake 1150 RPM ×
+145.1 / 60 ≈ 2781 → F ≈ 11.8. Hence 12 for all three to start. Refine per motor by running at
+full power, reading `getVelocity()`, and using the measured value. Then: settles low → raise F
+or add a little I; settles high → lower F; oscillates → P is now too strong on top of F.
 
 ## Student lessons
 
