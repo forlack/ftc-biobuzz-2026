@@ -382,6 +382,18 @@ adb devices                              # confirm hub is on USB
 ./gradlew :TeamCode:installDebug
 ```
 
+### Linux Wi-Fi deploy helper (`deploy-linux`, 2026-10-11)
+
+Counterpart to the macOS `deploy` for this CachyOS box. Uses NetworkManager: `nmcli connection
+up <saved connection>` to join the robot and to return, so it never touches a Wi-Fi password —
+the robot network must be saved once via the Wi-Fi menu. Same flags as the Mac script (`-r`,
+`-c`, `--stay`, `--check`), same build-first ordering, same restore-in-`finally` with Ctrl+C
+ignored during restore, same adb kill-server escalation. Prefers the SDK's adb from
+`local.properties`. Tests: `tests/test_deploy_linux.py`.
+
+**Do not run it from an agent session on this machine** — joining the robot network drops the
+agent's internet mid-run.
+
 ### Deploying over Wi-Fi instead of USB
 
 `persist.adb.tcp.port = 5555` is already set on our Control Hub, so adb-over-TCP is on

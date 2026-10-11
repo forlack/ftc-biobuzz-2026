@@ -120,6 +120,20 @@ that network early, when it does not matter, rather than finding out before a de
 Where USB is available, prefer it: `./gradlew :TeamCode:installDebug` keeps your internet and
 switches no networks. This script is for when USB is not an option.
 
+**On Linux (NetworkManager), use `./deploy-linux`.** Same idea and the same flags (`-r`, `-c`,
+`--stay`, `--check`), but simpler: NetworkManager already stores the robot network's password,
+so the script never handles one. Join the robot network once from the Wi-Fi menu, then:
+
+```bash
+./deploy-linux -r "ROBOT WIFI" --check   # first time: name the saved connection, dry run
+./deploy-linux                           # build, deploy, come back to your Wi-Fi
+./deploy-linux --stay                    # ...or stay on the robot network for Panels
+```
+
+The robot network name is remembered in `~/.config/ftc/deploy-wifi.json` (names only, no
+passwords). Run it from your own terminal — if an AI agent runs it, the agent loses its
+internet connection while you are on the robot network.
+
 Run `python3 -B -m unittest discover -s tests -v` for simulated cleanup tests.
 
 For a manual deployment:

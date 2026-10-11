@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+"""Build FTC, deploy over robot Wi-Fi, and restore the previous network on Linux.
+
+Uses NetworkManager (nmcli). The robot network must already be a saved connection --
+join it once from the Wi-Fi menu and NetworkManager remembers the password, so this script
+never handles one.
+"""
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+ROOT = Path(__file__).resolve().parent
+NMCLI = shutil.which('nmcli') or '/usr/bin/nmcli'
+DEFAULT_ROBOT_IP = '192.168.43.1'
+
+
+def run(args, *, timeout=30, capture=True, env=None):
+    return subprocess.run(args, check=True, text=True, timeout=timeout,
+                          capture_output=capture, env=env)
+
+
+# ---- Private config: remembers network names only, never passwords -------------
+
+def load_config(path):
+    if not path.is_file():
+        return {}
+    try:
+        config = json.loads(path.read_text())
+    except (ValueError, OSError):
+        raise RuntimeError(f'Cannot read {path}.') from None
+    return config if isinstance(config, dict) else {}
+
+
+def save_config(path, config):
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    temporary = path.with_name(f'.{path.name}.tmp')
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, 'w') as file:
+        json.dump(config, file, indent=2)
+        file.write('\n')
+    os.replace(temporary, path)
+
+
+# ---- NetworkManager -------------------------------------------------------------
+
+def wifi_device():
+    """The first Wi-Fi device NetworkManager manages, e.g. wlan0."""
+    for line in run([NMCLI, '-t', '-f', 'DEVICE,TYPE', 'device']).stdout.splitlines():
+        device, _, kind = line.partition(':')
+        if kind == 'wifi':
+            return device
+    return None
+
+
+def active_connection(device):
+    """Name of the connection currently up on this device, or None."""
+    for line in run([NMCLI, '-t', '-f', 'DEVICE,CONNECTION', 'device']).stdout.splitlines():
+        name, _, connection = line.partition(':')
+        if name == device:
+            return connection or None
+    return None
+
+
+def saved_wifi_connections():
+    names = []
+    for line in run([NMCLI, '-t', '-f', 'NAME,TYPE', 'connection', 'show']).stdout.splitlines():
+        name, _, kind = line.rpartition(':')
+        if kind == '802-11-wireless':
+            names.append(name.replace('\\:', ':'))
+    return names
+
+
+def match_connection(value, saved):
+    """Exact name, or the one saved connection matching ignoring case and punctuation."""
+    if value is None or value in saved:
+        return value
+    simple = ''.join(c for c in value.casefold() if c.isalnum())
+    matches = [n for n in saved if ''.join(c for c in n.casefold() if c.isalnum()) == simple]
+    return matches[0] if len(matches) == 1 else value
+
+
+def bring_up(connection):
+    try:
+        run([NMCLI, 'connection', 'up', connection], timeout=45)
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or '').strip()
+        raise RuntimeError(f'Could not join {connection!r}: {detail}') from None
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f'Timed out joining {connection!r}.') from None
+
+
+# ---- adb ------------------------------------------------------------------------
+
+def find_adb():
+    props = ROOT / 'local.properties'
+    if props.is_file():
+        for line in props.read_text().splitlines():
+            if line.startswith('sdk.dir='):
+                candidate = Path(line.split('=', 1)[1].strip()) / 'platform-tools' / 'adb'
+                if candidate.is_file():
+                    return str(candidate)
+    return shutil.which('adb')
+
+
+def connect_adb(adb, target):
+    for attempt in range(10):
+        if attempt == 3:
+            # A wedged transport makes `adb connect` answer "already connected" forever
+            # while get-state stays "offline". Only killing the server clears it.
+            print('ADB is not responding; restarting the ADB server…', flush=True)
+            try:
+                run([adb, 'kill-server'], timeout=10)
+            except (subprocess.SubprocessError, OSError):
+                pass
+        try:
+            run([adb, 'connect', target], timeout=10)
+            state = run([adb, '-s', target, 'get-state'], timeout=10)
+        except (subprocess.SubprocessError, OSError):
+            time.sleep(1)
+            continue
+        if state.stdout.strip() == 'device':
+            return
+        time.sleep(1)
+    raise RuntimeError('Control Hub ADB is not ready. Check hub power and Wi-Fi.')
+
+
+# ---- Deploy ---------------------------------------------------------------------
+
+def deploy(args, previous, adb, env):
+    target = f'{args.robot_ip}:5555'
+    restore = previous is not None and previous != args.robot
+    error = None
+    joined = False
+    try:
+        print(f'Joining {args.robot}…', flush=True)
+        bring_up(args.robot)
+        joined = True
+        try:
+            run([adb, 'disconnect', target])
+        except subprocess.CalledProcessError:
+            pass  # No existing transport is normal on the first deployment.
+        connect_adb(adb, target)
+        # Explicit serial avoids installing onto a USB-connected Driver Hub by accident.
+        deploy_env = dict(env, ANDROID_SERIAL=target)
+        run([str(ROOT / 'gradlew'), '--offline', ':TeamCode:installDebug', '--console=plain'],
+            timeout=300, capture=False, env=deploy_env)
+    except BaseException as exc:
+        error = exc
+    finally:
+        # A second Ctrl+C must not cancel restoring the network.
+        old_handlers = {sig: signal.signal(sig, signal.SIG_IGN)
+                        for sig in (signal.SIGINT, signal.SIGTERM)}
+        # --stay keeps you on the robot network, but only if joining it worked.
+        staying = args.stay and joined
+        try:
+            if not staying:
+                try:
+                    run([adb, 'disconnect', target], timeout=10)
+                except (subprocess.SubprocessError, OSError):
+                    pass
+            if restore and not staying:
+                print(f'Returning to {previous}…', flush=True)
+                try:
+                    bring_up(previous)
+                except Exception as exc:
+                    print(f'Network restore failed: {exc}\nSelect {previous!r} in the Wi-Fi menu.',
+                          file=sys.stderr)
+                    if error is None:
+                        error = exc
+        finally:
+            for sig, handler in old_handlers.items():
+                signal.signal(sig, handler)
+    if error is not None:
+        raise error
+    if staying:
+        print(f'Staying on {args.robot}. ADB stays connected to {target}.')
+        print(f'Panels: http://{args.robot_ip}:8001')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('--config', type=Path, default=Path.home() / '.config/ftc/deploy-wifi.json',
+                        help='private file that remembers network names (no passwords)')
+    parser.add_argument('-r', '--robot-wifi', dest='robot',
+                        help='saved NetworkManager connection for the robot; remembered')
+    parser.add_argument('-c', '--current-wifi', dest='current',
+                        help='connection to return to; defaults to the one you are on')
+    parser.add_argument('--robot-ip', help=f'robot address (default {DEFAULT_ROBOT_IP})')
+    parser.add_argument('-s', '--stay', action='store_true',
+                        help='stay on the robot Wi-Fi after deploying (for Panels and logs)')
+    parser.add_argument('--check', action='store_true',
+                        help='check setup without building or changing networks')
+    args = parser.parse_args()
+
+    if not Path(NMCLI).is_file():
+        parser.error('nmcli not found. This script needs NetworkManager.')
+    config_path = args.config.expanduser()
+    config = load_config(config_path)
+    saved = saved_wifi_connections()
+
+    args.robot = match_connection(args.robot, saved) or config.get('robot_ssid')
+    if not args.robot:
+        parser.error('Name the robot network once with -r "<saved connection>"; it is remembered.')
+    if args.robot not in saved:
+        parser.error(f'{args.robot!r} is not a saved Wi-Fi connection. Join it once from the '
+                     f'Wi-Fi menu so NetworkManager saves it, then rerun.')
+    args.robot_ip = args.robot_ip or config.get('robot_ip') or DEFAULT_ROBOT_IP
+
+    device = wifi_device()
+    if not device:
+        parser.error('No Wi-Fi device found.')
+    previous = match_connection(args.current, saved) or active_connection(device)
+    if previous == args.robot:
+        parser.error('Start on your normal network so dependencies can download before deploying.')
+    if previous is None:
+        print('Not connected to any Wi-Fi now; will not restore afterwards.')
+
+    adb = find_adb()
+    if not adb:
+        parser.error('adb not found. Install Android SDK platform-tools.')
+
+    config['robot_ssid'] = args.robot
+    config['robot_ip'] = args.robot_ip
+    save_config(config_path, config)
+
+    if args.check:
+        after = args.robot if args.stay else (previous or 'nothing')
+        print(f'Setup ready: {previous or "no Wi-Fi"} -> {args.robot} -> {after}. '
+              f'adb: {adb}. No networks changed.')
+        return
+
+    os.chdir(ROOT)
+    env = dict(os.environ)
+    print('Building before switching Wi-Fi…', flush=True)
+    run([str(ROOT / 'gradlew'), ':TeamCode:assembleDebug', '--console=plain'],
+        timeout=600, capture=False, env=env)
+    deploy(args, previous, adb, env)
+    print('Deployment complete.')
+
+
+if __name__ == '__main__':
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt()
+    signal.signal(signal.SIGTERM, interrupted)
+    try:
+        main()
+    except KeyboardInterrupt:
+        print('Deployment interrupted.', file=sys.stderr)
+        sys.exit(130)
+    except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+        print(f'Deployment failed: {exc}', file=sys.stderr)
+        sys.exit(1)
