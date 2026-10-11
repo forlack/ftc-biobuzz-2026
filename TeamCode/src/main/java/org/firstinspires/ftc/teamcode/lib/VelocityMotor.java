@@ -8,7 +8,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 /** A motor that holds a target speed using the hub's velocity control. */
 public class VelocityMotor {
     public static double RPM_TOLERANCE = 100;    // how close counts as "ready"
-    public double P, I, D, F;
+    // Private so they can only change through setPIDF(), which also sends them to the motor.
+    private double P, I, D, F;
     private final DcMotorEx motor;
     private final double ticksPerRevolution;
     private double targetRPM = 0;
@@ -42,6 +43,11 @@ public class VelocityMotor {
         D = derivative;
         F = feedforward;
     }
+
+    public double getP() { return P; }
+    public double getI() { return I; }
+    public double getD() { return D; }
+    public double getF() { return F; }
 
     /** Spin to this speed. 0 = off. */
     public void setTargetRPM(double rpm) {

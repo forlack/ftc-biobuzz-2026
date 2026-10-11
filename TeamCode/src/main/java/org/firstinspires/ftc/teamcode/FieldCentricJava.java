@@ -83,7 +83,7 @@ public class FieldCentricJava extends LinearOpMode {
         // Hardware names must match the active robot config exactly.
         // Intake.
         intake = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD, 145.1);
-        intake.setPIDF(INTAKE_P, intake.I, intake.D, intake.F);
+        intake.setPIDF(INTAKE_P, intake.getI(), intake.getD(), intake.getF());
 
         // Pollen shooter and feed.
         shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
@@ -165,8 +165,8 @@ public class FieldCentricJava extends LinearOpMode {
     }
 
     private void updateIntake() {
-        if (INTAKE_P != intake.P) {
-            intake.setPIDF(INTAKE_P, intake.I, intake.D, intake.F);
+        if (INTAKE_P != intake.getP()) {
+            intake.setPIDF(INTAKE_P, intake.getI(), intake.getD(), intake.getF());
         }
         if (toggleIntake.pressed()) {
             toggleIntake.toggle();
@@ -176,7 +176,7 @@ public class FieldCentricJava extends LinearOpMode {
         dashboard.addData("Intake", toggleIntake.active ? "ON" : "OFF");
         dashboard.addData("Intake RPM (actual / target)",
                 Math.round(intake.getRPM()) + " / " + Math.round(intake.getTargetRPM()));
-        dashboard.addData("Intake P", intake.P);
+        dashboard.addData("Intake P", intake.getP());
     }
 
     private void updateServos() {
