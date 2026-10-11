@@ -161,9 +161,11 @@ def deploy(args, interface, previous, previous_router, adb, env, passwords):
     target = f'{args.robot_ip}:5555'
     restore = previous != args.ssid
     error = None
+    joined = False
     try:
         print(f'Joining {args.ssid}…', flush=True)
         join(interface, args.ssid, args.robot_ip, passwords[args.ssid])
+        joined = True
         try:
             run([adb, 'disconnect', target])
         except subprocess.CalledProcessError:
@@ -179,12 +181,16 @@ def deploy(args, interface, previous, previous_router, adb, env, passwords):
         # A second Ctrl+C must not cancel the attempt to restore Wi-Fi.
         old_handlers = {sig: signal.signal(sig, signal.SIG_IGN)
                         for sig in (signal.SIGINT, signal.SIGTERM)}
+        # --stay keeps you on the robot network, but only if joining it worked. A failed join
+        # still restores Wi-Fi so you are never left with no network at all.
+        staying = getattr(args, 'stay', False) and joined
         try:
-            try:
-                run([adb, 'disconnect', target], timeout=10)
-            except (subprocess.SubprocessError, OSError):
-                pass
-            if restore:
+            if not staying:
+                try:
+                    run([adb, 'disconnect', target], timeout=10)
+                except (subprocess.SubprocessError, OSError):
+                    pass
+            if restore and not staying:
                 print(f'Returning to {previous}…', flush=True)
                 try:
                     join(interface, previous, previous_router, passwords[previous])
@@ -198,6 +204,9 @@ def deploy(args, interface, previous, previous_router, adb, env, passwords):
                 signal.signal(sig, handler)
     if error is not None:
         raise error
+    if staying:
+        print(f'Staying on {args.ssid}. ADB stays connected to {target}.')
+        print(f'Panels: http://{args.robot_ip}:8001')
 
 
 def main():
@@ -211,6 +220,8 @@ def main():
                         dest='return_wifi',
                         help='Wi-Fi to come back to; defaults to the one you are on')
     parser.add_argument('--interface', help='Wi-Fi interface (normally en0; autodetected)')
+    parser.add_argument('-s', '--stay', action='store_true',
+                        help='stay on the robot Wi-Fi after deploying (for Panels and logs)')
     parser.add_argument('--check', action='store_true', help='check setup without building or changing networks')
     args = parser.parse_args()
     if sys.platform != 'darwin':

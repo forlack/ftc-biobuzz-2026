@@ -153,6 +153,31 @@ class RestoreTests(unittest.TestCase):
             module.connect_adb('/sdk/adb', '192.168.43.1:5555')
         self.assertIn(['/sdk/adb', 'kill-server'], calls)
 
+    def test_stay_skips_restore_and_keeps_adb(self):
+        args = SimpleNamespace(ssid='Robot Wi-Fi', robot_ip='192.168.43.1', stay=True)
+        commands = []
+        def run(command, **kwargs):
+            commands.append(command)
+            return SimpleNamespace(stdout='device\n' if 'get-state' in command else '', stderr='')
+        with patch.object(module, 'run', side_effect=run), \
+             patch.object(module.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='device\n')), \
+             patch.object(module, 'join') as join:
+            module.deploy(args, 'en0', 'Home Wi-Fi', '10.0.0.1', '/sdk/adb', {},
+                          {'Robot Wi-Fi': 'robot-secret', 'Home Wi-Fi': 'home-secret'})
+        self.assertEqual(join.call_count, 1)   # joined the robot, never went back
+        disconnects = [c for c in commands if c[1:2] == ['disconnect']]
+        self.assertEqual(len(disconnects), 1)   # only the pre-connect cleanup, none afterwards
+
+    def test_stay_still_restores_when_robot_join_fails(self):
+        args = SimpleNamespace(ssid='Robot Wi-Fi', robot_ip='192.168.43.1', stay=True)
+        with patch.object(module, 'run', return_value=SimpleNamespace(stdout='', stderr='')), \
+             patch.object(module, 'join') as join:
+            join.side_effect = [RuntimeError('join failed'), None]
+            with self.assertRaises(RuntimeError):
+                module.deploy(args, 'en0', 'Home Wi-Fi', '10.0.0.1', '/sdk/adb', {},
+                              {'Robot Wi-Fi': 'robot-secret', 'Home Wi-Fi': 'home-secret'})
+        self.assertEqual(join.call_args_list[-1].args, ('en0', 'Home Wi-Fi', '10.0.0.1', 'home-secret'))
+
     def test_success_restores(self):
         self.exercise()
 

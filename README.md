@@ -92,6 +92,18 @@ spaces, or punctuation.
 ```
 
 `-c` is also spelled `--current-wifi`, `--home-wifi` or `--return-wifi`.
+
+**To stay on the robot's network afterwards** — for Panels, logs, or quick re-deploys — add
+`--stay` (or `-s`):
+
+```bash
+./deploy --stay
+# Panels at http://192.168.43.1:8001, adb still connected
+```
+
+It still builds on your normal Wi-Fi first, so dependencies download while you have
+internet. If joining the robot's network fails, it returns you to your Wi-Fi anyway, so you
+are never left with no network. Re-join your normal Wi-Fi yourself when you are done.
 `-h`/`--help` shows help. `--robot-ip` and `--config`
 provide other overrides. Router-address
 checks provide limited verification when macOS redacts SSIDs. If restoration
