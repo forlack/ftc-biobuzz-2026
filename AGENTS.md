@@ -852,7 +852,7 @@ Don't confuse these with the **Velocity** tuners in the *Automatic* folder — t
 `FieldCentricJava` is a faithful port of Blocks `Field Centric (Best)`. **Sign conventions
 were preserved exactly, not "fixed":**
 - `x` and `theta` are negated; `y` is **not** — despite a Blocks comment claiming it is.
-  This is only correct because `FrontLeft`/`BackLeft` are REVERSE. Don't "correct" it
+  This is only correct because `frontLeft`/`backLeft` are REVERSE. Don't "correct" it
   without re-testing drive feel.
 - Powers use a flat 0.25 / 0.5 multiplier with **no normalization** (no divide-by-max).
 

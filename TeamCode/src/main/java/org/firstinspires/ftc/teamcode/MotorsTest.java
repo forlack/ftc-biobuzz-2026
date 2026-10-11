@@ -47,10 +47,10 @@ public class MotorsTest extends LinearOpMode {
             "ROBOT: Backward (-X)",
             "ROBOT: Left (+Y)",
             "ROBOT: Right (-Y)",
-            "MOTOR: FrontLeft (raw)",
-            "MOTOR: FrontRight (raw)",
-            "MOTOR: BackLeft (raw)",
-            "MOTOR: BackRight (raw)",
+            "MOTOR: frontLeft (raw)",
+            "MOTOR: frontRight (raw)",
+            "MOTOR: backLeft (raw)",
+            "MOTOR: backRight (raw)",
             "MOTOR: All four (raw)",
     };
 
