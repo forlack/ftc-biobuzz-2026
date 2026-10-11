@@ -27,7 +27,7 @@ public class VelocityMotor {
         P=200;
         I=0;
         D=0;
-        F=0;
+        F=12;   // ~32767 / max ticks/sec; measure each motor to refine
         motor = hardwareMap.get(DcMotorEx.class, name);
         motor.setDirection(direction);
         motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
