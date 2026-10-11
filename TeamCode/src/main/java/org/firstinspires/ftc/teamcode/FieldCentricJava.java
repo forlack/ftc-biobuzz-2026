@@ -36,10 +36,12 @@ public class FieldCentricJava extends LinearOpMode {
 
     // Target speeds -- editable live in Panels.
     public static double INTAKE_RPM = 600;
-    public static double INTAKE_P = 30;
+    public static double INTAKE_P = 15;
     public static double INTAKE_F = 15;
     public static double POLLEN_FLYWHEEL_RPM = 3850;
     public static double NECTAR_FLYWHEEL_RPM = 4050;
+    /** Turn both flywheels on or off from Panels. They start on. */
+    public static boolean FLYWHEELS_ON = true;
 
     // Drive and dashboard.
     private MecanumDrive chassis;
@@ -106,6 +108,7 @@ public class FieldCentricJava extends LinearOpMode {
             return;
         }
         chassis.resetHeading();
+        toggleIntake.active = true;   // intake starts on; D-pad Up still toggles it
 
         while (opModeIsActive()) {
             readGamepad();
@@ -189,8 +192,8 @@ public class FieldCentricJava extends LinearOpMode {
     }
 
     private void updateShooter() {
-        shooterPollen.setTargetRPM(POLLEN_FLYWHEEL_RPM);
-        shooterNectar.setTargetRPM(NECTAR_FLYWHEEL_RPM);
+        shooterPollen.setTargetRPM(FLYWHEELS_ON ? POLLEN_FLYWHEEL_RPM : 0);
+        shooterNectar.setTargetRPM(FLYWHEELS_ON ? NECTAR_FLYWHEEL_RPM : 0);
         dashboard.addLine("");
         dashboard.addLine("--- SHOOTERS ---");
         dashboard.addData("Pollen RPM (actual / target)",
