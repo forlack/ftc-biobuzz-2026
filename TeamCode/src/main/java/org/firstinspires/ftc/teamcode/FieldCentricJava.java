@@ -22,11 +22,10 @@ import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
  *   right stick X     turn
  *   left trigger      hold for slow mode (0.25)
  *   right trigger     hold for turbo (1.0)
- *   B                 toggle intake
+ *   D-pad Up          toggle intake
  *   right bumper      hold pollen gate open
  *   left bumper       hold nectar gate open
  *   A (btn 2)         make the way you are facing the new "forward"
- *   D-pad Up / Down   raise / lower the speed limit
  *   Y (btn 4)         switch between velocity mode and raw power
  *   X (btn 1)         switch between BRAKE and coasting
  */
@@ -63,8 +62,6 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button.Group buttons = new Button.Group();
 
     // Drive controls. Each lambda reads the current pad when buttons.update() runs.
-    private final Button speedUp      = buttons.add(() -> pad.dpad_up);
-    private final Button speedDown    = buttons.add(() -> pad.dpad_down);
     private final Button velocityMode = buttons.add(() -> pad.y);
     private final Button brakeMode    = buttons.add(() -> pad.x);
     private final Button slowMode     = buttons.add(() -> pad.left_trigger > 0.5);
@@ -72,7 +69,7 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button resetFront   = buttons.add(() -> pad.a);
 
     // Mechanism controls.
-    private final Button toggleIntake = buttons.add(() -> pad.b);
+    private final Button toggleIntake = buttons.add(() -> pad.dpad_up);
     private final Button pollenGate   = buttons.add(() -> pad.right_bumper);
     private final Button nectarGate   = buttons.add(() -> pad.left_bumper);
 
@@ -127,12 +124,6 @@ public class FieldCentricJava extends LinearOpMode {
 
     /** The buttons that change how the robot drives, rather than driving it. */
     private void updateDriveSettings() {
-        if (speedUp.pressed()) {
-            chassis.changeDefaultSpeed(+1);
-        }
-        if (speedDown.pressed()) {
-            chassis.changeDefaultSpeed(-1);
-        }
         if (velocityMode.pressed()) {
             chassis.toggleVelocityMode();
         }
