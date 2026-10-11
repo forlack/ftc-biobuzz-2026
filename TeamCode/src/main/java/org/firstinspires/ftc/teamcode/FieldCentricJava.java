@@ -24,6 +24,7 @@ import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
  *   right trigger     hold for turbo (1.0)
  *   D-pad Up          toggle intake
  *   D-pad Down        hold to run the intake backwards (clear a jam)
+ *   D-pad Left        toggle both flywheels on / off
  *   right bumper      hold pollen gate open
  *   left bumper       hold nectar gate open
  *   A (btn 2)         make the way you are facing the new "forward"
@@ -74,6 +75,7 @@ public class FieldCentricJava extends LinearOpMode {
     // Mechanism controls.
     private final Button toggleIntake = buttons.add(() -> pad.dpad_up);
     private final Button reverseIntake = buttons.add(() -> pad.dpad_down);
+    private final Button toggleFlywheels = buttons.add(() -> pad.dpad_left);
     private final Button pollenGate   = buttons.add(() -> pad.right_bumper);
     private final Button nectarGate   = buttons.add(() -> pad.left_bumper);
 
@@ -192,6 +194,10 @@ public class FieldCentricJava extends LinearOpMode {
     }
 
     private void updateShooter() {
+        // Flips the same switch Panels shows, so the button and Panels always agree.
+        if (toggleFlywheels.pressed()) {
+            FLYWHEELS_ON = !FLYWHEELS_ON;
+        }
         shooterPollen.setTargetRPM(FLYWHEELS_ON ? POLLEN_FLYWHEEL_RPM : 0);
         shooterNectar.setTargetRPM(FLYWHEELS_ON ? NECTAR_FLYWHEEL_RPM : 0);
         dashboard.addLine("");
