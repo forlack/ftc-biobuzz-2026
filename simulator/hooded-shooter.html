@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hooded Shooter Sim</title>
+<style>
+:root{
+  --bg:#f5f3ec; --panel:#ffffff; --ink:#1d1e22; --muted:#6a6d75; --line:#e3e0d6; --grid:#ece9e0;
+  --accent:#d08a00; --accent-soft:#fff3d6; --blue:#2563eb; --good:#15803d; --warn:#c2410c; --bad:#b91c1c;
+  --wheel:#3a3e46; --tread:#5b6170; --hood:#9aa0aa; --pollen:#f2c200; --nectar:#d63a3a; --cell:#d63a3a;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15161a; --panel:#1e2026; --ink:#ececee; --muted:#9a9ea8; --line:#2e313a; --grid:#262930;
+    --accent:#f0b429; --accent-soft:#3a2f12; --blue:#60a5fa; --good:#4ade80; --warn:#fb923c; --bad:#f87171;
+    --wheel:#c9ccd3; --tread:#8b91a0; --hood:#6b7280; --pollen:#f5cf2a; --nectar:#f05252; --cell:#f05252;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15161a; --panel:#1e2026; --ink:#ececee; --muted:#9a9ea8; --line:#2e313a; --grid:#262930;
+  --accent:#f0b429; --accent-soft:#3a2f12; --blue:#60a5fa; --good:#4ade80; --warn:#fb923c; --bad:#f87171;
+  --wheel:#c9ccd3; --tread:#8b91a0; --hood:#6b7280; --pollen:#f5cf2a; --nectar:#f05252; --cell:#f05252;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:16px 20px 8px;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
+header h1{font-size:20px;margin:0;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted)}
+.wrap{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;padding:8px 20px 24px}
+@media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr);padding:8px 16px 24px}}
+aside{display:flex;flex-direction:column;gap:12px;min-width:0}
+main{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px;font-weight:600}
+.ctl{margin:8px 0}
+.ctl .row{display:flex;justify-content:space-between;gap:8px}
+.ctl label{font-weight:500}
+.ctl output{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:600;white-space:nowrap}
+.ctl input[type=range]{width:100%;accent-color:var(--accent)}
+.ctl .hint{font-size:12px;color:var(--muted)}
+select{width:100%;padding:5px 6px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit}
+.check{display:flex;gap:8px;align-items:center;margin:6px 0}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;background:transparent;color:var(--ink);padding:6px;font:inherit;cursor:pointer}
+.seg button.on{background:var(--accent);color:#1d1e22;font-weight:600}
+.btn{border:1px solid var(--accent);background:var(--accent);color:#1d1e22;font-weight:600;padding:8px 12px;border-radius:8px;cursor:pointer;font:inherit;font-weight:600}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.stat .k{font-size:12px;color:var(--muted)}
+.stat .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat .s{font-size:12px;color:var(--muted)}
+.stat.verdict .v{font-size:18px}
+canvas{display:block;width:100%;border-radius:8px}
+#field{height:clamp(260px,42vw,470px)}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:1100px){.pair{grid-template-columns:minmax(0,1fr)}}
+#closeup{height:340px}
+#chart{height:340px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td{padding:4px 6px;border-bottom:1px solid var(--line)}
+td:last-child{text-align:right}
+details summary{cursor:pointer;font-weight:600}
+.notes{color:var(--ink)}
+.notes code{background:var(--accent-soft);padding:1px 4px;border-radius:4px;font-size:13px}
+.notes p,.notes li{max-width:75ch}
+.small{font-size:12px;color:var(--muted)}
+a{color:var(--blue)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🐝 Hooded Flywheel Shooter Simulator</h1>
+  <p>FTC BIOBUZZ · single flywheel + fixed hood · slip, spin, drag and Magnus lift</p>
+</header>
+
+<div class="wrap">
+  <aside id="controls"></aside>
+
+  <main>
+    <div class="stats" id="stats"></div>
+
+    <div class="card">
+      <h2>Field side view: shot toward the upward HIVE CELL</h2>
+      <canvas id="field"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>Simulated shot</span>
+        <span><i style="background:var(--muted);height:2px"></i>Dashed: ideal (v_wheel ÷ 2, no slip, no flywheel slowdown)</span>
+        <span><i style="background:var(--blue);height:2px"></i>Dotted: no air (no drag, no Magnus)</span>
+      </div>
+    </div>
+
+    <div class="pair">
+      <div class="card">
+        <h2>Shooter close-up (slow motion)</h2>
+        <canvas id="closeup"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--good)"></i>Contact gripping</span>
+          <span><i style="background:var(--warn)"></i>Contact slipping</span>
+          <span><i style="background:var(--blue)"></i>Squish (ball/wheel overlap)</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Inside the hood: speed vs. time</h2>
+        <canvas id="chart"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--muted)"></i>Wheel surface speed</span>
+          <span><i style="background:var(--accent)"></i>Ball speed (center)</span>
+          <span><i style="background:var(--blue)"></i>Ball spin speed (ω·r)</span>
+          <span><i style="background:var(--good)"></i>No-slip target (surface ÷ 2)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Details</h2>
+      <table id="details"></table>
+    </div>
+
+    <div class="card notes">
+      <details>
+        <summary>How the math works</summary>
+        <p><b>Perfect grip.</b> The hood doesn't move, so a ball pinched between the wheel and the hood rolls along the hood. Its center moves at the average of the two surfaces:
+        <code>v = v_wheel / 2</code>, where <code>v_wheel = ω_wheel · R_wheel</code>. The spin is <code>ω_ball = v_wheel / (2·r_ball)</code>. That makes the spin ratio <code>r·ω / v = 1</code> for every perfect-grip hooded shot, whatever the wheel size or RPM.</p>
+        <p><b>Slip.</b> The ball enters at the feed speed with no spin. Squeezing it by the compression <code>c</code> gives a normal force <code>N_wheel = k·c</code>. The hood pushes back with <code>N_hood = N_wheel + m·v²/ρ</code>, because the ball travels on a curve of radius <code>ρ = R_wheel + r_ball − c</code>. Friction at each contact is at most <code>μ·N</code> and opposes the sliding at that contact:</p>
+        <ul>
+          <li>wheel contact slip: <code>u_w = v_wheel − (v + ω·r)</code></li>
+          <li>hood contact slip: <code>u_h = v − ω·r</code></li>
+          <li><code>m·dv/dt = F_w + F_h</code>, <code>I·dω/dt = r·(F_w − F_h)</code>, <code>I_wheel·dΩ/dt = τ_motor − F_w·R_wheel</code></li>
+        </ul>
+        <p>This is stepped forward a microsecond at a time until the ball has rolled through the hood's wrap angle. With enough friction and contact length, both slips reach zero and the ball locks into perfect grip. Otherwise it leaves slower and with less spin. Each shot also takes energy from the flywheel, so the wheel slows down. The motor fights back at full power, using the linear torque curve of a goBILDA 6000 RPM motor (stall torque 0.144 N·m). That slowdown, not slip, is usually why a real shot falls short of <code>v_wheel/2</code>, so more spinning mass makes shots more consistent.</p>
+        <p><b>Flight.</b> The flight includes gravity, drag <code>½ρ·C_d·A·v²</code> and Magnus lift <code>½ρ·C_L·A·v²</code>, with <code>C_L = S/(2S+1)</code> and <code>S = r·ω/v</code>. Backspin lifts the ball and topspin pushes it down. Spin decay is ignored because the flight is short.</p>
+        <p><b>Field geometry</b> (Competition Manual §9, TU04, Fig. 9-10 and 9-13): the upward CELL opening runs from 53.5 in to 65.6 in above the tiles. The opening is 14 in, tilted 30° toward the shooter, and the cell is 12 in deep. The model assumes the upward cell faces you, and it scores a shot as IN when the ball crosses that opening with at least one ball radius of clearance at each lip. POLLEN is 2.8 in and 0.055 lb; NECTAR is 3.6 in and 0.091 lb (AndyMark). The goBILDA Gecko wheel is 72 mm, 56 g, 30A silicone.</p>
+        <p class="small"><b>Estimates you should calibrate:</b> the friction values, ball/wheel stiffness, C_d and Magnus scale are reasonable starting points, not measurements. Shoot real balls, measure range and apex height, then adjust friction, stiffness and Magnus until the sim matches. After that it can predict.</p>
+      </details>
+    </div>
+  </main>
+</div>
+
+<script>
+const IN = 0.0254, DEG = Math.PI / 180, G = 9.81, RHO_AIR = 1.2;
+const $ = id => document.getElementById(id);
+
+// ---- Field geometry (BIOBUZZ manual §9, Fig 9-10) ----
+const CELL_BOTTOM_IN = 53.5, CELL_TOP_IN = 65.6, CELL_OPEN_IN = 14, CELL_DEPTH_IN = 12;
+const CELL_RISE = CELL_TOP_IN - CELL_BOTTOM_IN;
+const CELL_RUN = Math.sqrt(CELL_OPEN_IN ** 2 - CELL_RISE ** 2);
+
+const BALLS = {
+  pollen: { name: 'POLLEN (yellow, 2.8 in)', d: 2.8, m: 24.9, color: 'pollen' },
+  nectar: { name: 'NECTAR (red/blue, 3.6 in)', d: 3.6, m: 41.3, color: 'nectar' },
+  custom: { name: 'Custom ball', d: null, m: null, color: 'pollen' },
+};
+const WHEEL_MATS = [
+  ['goBILDA Gecko silicone 30A', 1.0], ['Compliant wheel ~35A', 0.9], ['Worn / dusty Gecko', 0.65],
+  ['Stealth / hard rubber', 0.6], ['Hard plastic', 0.35], ['Custom', null]];
+const HOOD_MATS = [
+  ['Polycarbonate (smooth)', 0.30], ['Aluminum', 0.25], ['HDPE / Delrin', 0.18], ['3D-printed PLA / PETG', 0.35],
+  ['Foam-lined', 0.6], ['Grip tape', 0.8], ['Custom', null]];
+const INERTIA = [['Hollow thin shell (2/3)', 0.667], ['Thick-wall hollow (0.55)', 0.55], ['Solid / foam (2/5)', 0.4]];
+
+const CONTROLS = {
+  Flywheel: [
+    { id: 'wheelD', label: 'Wheel diameter', min: 40, max: 150, step: 1, val: 72, unit: 'mm', hint: 'goBILDA Gecko = 72 mm' },
+    { id: 'rpm', label: 'Flywheel speed', min: 300, max: 6000, step: 25, val: 3600, unit: 'RPM', hint: 'Wheel RPM after gearing. TeleOp pollen = 3850, nectar = 4050' },
+    { id: 'wheelMass', label: 'Spinning mass on shaft', min: 20, max: 600, step: 1, val: 112, unit: 'g', hint: '2 Gecko wheels ≈ 112 g. More mass = less speed lost per shot' },
+  ],
+  Ball: [
+    { id: 'ballD', label: 'Ball diameter', min: 1.5, max: 5, step: 0.05, val: 2.8, unit: 'in' },
+    { id: 'ballMass', label: 'Ball mass', min: 5, max: 120, step: 0.5, val: 24.9, unit: 'g' },
+  ],
+  'Squish & hood': [
+    { id: 'comp', label: 'Squish (ball ↔ flywheel)', min: 0, max: 30, step: 0.5, val: 8, unit: 'mm', hint: '' },
+    { id: 'stiff', label: 'Squish stiffness', min: 0.5, max: 10, step: 0.1, val: 3, unit: 'N/mm', hint: 'Ball + wheel combined. Sets normal force = stiffness × compression' },
+    { id: 'wrap', label: 'Hood wrap angle', min: 20, max: 180, step: 1, val: 90, unit: '°', hint: 'How far around the wheel the ball travels in contact' },
+    { id: 'feed', label: 'Feed speed into wheel', min: 0, max: 3, step: 0.05, val: 0.5, unit: 'm/s' },
+  ],
+  Friction: [
+    { id: 'muW', label: 'Wheel ↔ ball μ', min: 0.05, max: 1.6, step: 0.01, val: 1.0, unit: '' },
+    { id: 'muH', label: 'Hood ↔ ball μ', min: 0, max: 1.2, step: 0.01, val: 0.35, unit: '' },
+  ],
+  Launch: [
+    { id: 'angle', label: 'Launch angle (hood exit)', min: 10, max: 80, step: 0.5, val: 55, unit: '°' },
+    { id: 'launchH', label: 'Launch height', min: 4, max: 30, step: 0.5, val: 14, unit: 'in', hint: 'Ball center height where it leaves the hood' },
+  ],
+  Air: [
+    { id: 'cd', label: 'Drag coefficient C_d', min: 0, max: 1.2, step: 0.01, val: 0.5, unit: '' },
+    { id: 'magnus', label: 'Magnus scale', min: 0, max: 2, step: 0.05, val: 1, unit: '×', hint: 'Calibrate against real shots' },
+  ],
+  Target: [
+    { id: 'dist', label: 'Distance to CELL lip', min: 12, max: 140, step: 1, val: 72, unit: 'in', hint: 'Horizontal: launch point → bottom lip of the opening' },
+  ],
+  Playback: [
+    { id: 'slowmo', label: 'Close-up slow motion', min: 5, max: 1000, step: 5, val: 20, unit: '×' },
+    { id: 'speed', label: 'Field playback speed', min: 0.1, max: 1, step: 0.05, val: 0.5, unit: '×' },
+  ],
+};
+
+const state = { ballType: 'pollen', spin: 'back', kI: 0.667, air: true, ghosts: true, motor: true };
+// goBILDA 5203 6000 RPM (1:1): stall torque 1.47 kg·cm
+const MOTOR_STALL = 0.144, MOTOR_FREE = 6000 * 2 * Math.PI / 60;
+
+// ---------- Build controls ----------
+function fmt(v, step) { const d = step < 0.1 ? 2 : step < 1 ? 1 : 0; return Number(v).toFixed(d); }
+function makeSelect(id, options, onChange) {
+  const s = document.createElement('select'); s.id = id;
+  options.forEach(([label, val], i) => { const o = document.createElement('option'); o.value = i; o.textContent = label; s.appendChild(o); });
+  s.addEventListener('change', () => onChange(options[s.value]));
+  return s;
+}
+function buildControls() {
+  const root = $('controls');
+  const fire = document.createElement('div'); fire.className = 'card';
+  fire.innerHTML = `<div class="btns"><button class="btn" id="fireBtn">▶ Fire</button><button class="btn ghost" id="solveBtn">Solve RPM to hit CELL</button></div><div class="small" id="solveMsg" style="margin-top:6px"></div>`;
+  root.appendChild(fire);
+  for (const [group, ctls] of Object.entries(CONTROLS)) {
+    const card = document.createElement('div'); card.className = 'card';
+    card.innerHTML = `<h2>${group}</h2>`;
+    root.appendChild(card);
+    if (group === 'Ball') {
+      card.appendChild(makeSelect('ballType', Object.entries(BALLS).map(([k, b]) => [b.name, k]), ([, k]) => {
+        state.ballType = k; const b = BALLS[k];
+        if (b.d) { setVal('ballD', b.d); setVal('ballMass', b.m); }
+        recompute();
+      }));
+      const s = makeSelect('kI', INERTIA, ([, v]) => { state.kI = v; recompute(); });
+      s.style.marginTop = '6px'; card.appendChild(s);
+    }
+    if (group === 'Launch') {
+      const seg = document.createElement('div'); seg.className = 'seg';
+      seg.innerHTML = `<button data-v="back" class="on">Wheel under → backspin</button><button data-v="top">Wheel over → topspin</button>`;
+      seg.querySelectorAll('button').forEach(b => b.onclick = () => {
+        state.spin = b.dataset.v; seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); recompute();
+      });
+      card.appendChild(seg);
+    }
+    for (const c of ctls) {
+      const d = document.createElement('div'); d.className = 'ctl';
+      d.innerHTML = `<div class="row"><label for="${c.id}">${c.label}</label><output id="${c.id}_o"></output></div>
+        <input type="range" id="${c.id}" min="${c.min}" max="${c.max}" step="${c.step}" value="${c.val}">
+        <div class="hint" id="${c.id}_hint">${c.hint || ''}</div>`;
+      if (group === 'Friction') {
+        const mats = c.id === 'muW' ? WHEEL_MATS : HOOD_MATS;
+        const sel = makeSelect(c.id + 'Mat', mats, ([, v]) => { if (v != null) { setVal(c.id, v); recompute(); } });
+        d.insertBefore(sel, d.querySelector('input'));
+        sel.style.margin = '4px 0';
+      }
+      card.appendChild(d);
+      const inp = d.querySelector('input');
+      inp.addEventListener('input', () => {
+        showVal(c);
+        if (group === 'Friction') matchPreset(c.id);
+        if (c.id === 'ballD' || c.id === 'ballMass') { state.ballType = 'custom'; $('ballType').value = 2; }
+        if (group !== 'Playback') recompute(); else restart();
+      });
+      showVal(c);
+    }
+    if (group === 'Flywheel') {
+      const a = document.createElement('label'); a.className = 'check';
+      a.innerHTML = `<input type="checkbox" id="motorOn" checked> Motor pushes during the shot (goBILDA 6000 RPM, 1:1)`;
+      card.appendChild(a);
+      a.querySelector('input').onchange = e => { state.motor = e.target.checked; recompute(); };
+    }
+    if (group === 'Air') {
+      const a = document.createElement('div');
+      a.innerHTML = `<label class="check"><input type="checkbox" id="airOn" checked> Air drag + Magnus lift</label>
+        <label class="check"><input type="checkbox" id="ghostOn" checked> Show comparison paths</label>`;
+      card.appendChild(a);
+      a.querySelector('#airOn').onchange = e => { state.air = e.target.checked; recompute(); };
+      a.querySelector('#ghostOn').onchange = e => { state.ghosts = e.target.checked; };
+    }
+  }
+  $('fireBtn').onclick = restart;
+  $('solveBtn').onclick = solveRPM;
+}
+function ctlSpec(id) { for (const g of Object.values(CONTROLS)) for (const c of g) if (c.id === id) return c; }
+function showVal(c) {
+  $(c.id + '_o').textContent = fmt($(c.id).value, c.step) + (c.unit ? ' ' + c.unit : '');
+  if (c.id === 'comp' || c.id === 'ballD') showSquish();
+}
+// Squish = how much the hood gap is smaller than the ball. Hood gap = ball diameter − squish.
+function showSquish() {
+  if (!$('comp_hint')) return; // ball controls build before the squish slider exists
+  const mm = +$('comp').value, dIn = +$('ballD').value;
+  $('comp_o').textContent = `${mm.toFixed(1)} mm · ${(mm / 25.4).toFixed(2)} in`;
+  $('comp_hint').innerHTML = `${(mm / (dIn * 25.4) * 100).toFixed(0)}% of the ball diameter. ` +
+    `<b>Hood gap ${(dIn - mm / 25.4).toFixed(2)} in</b> (${(dIn * 25.4 - mm).toFixed(1)} mm) from wheel surface to hood. ` +
+    `Typical start: 10–15% squish.`;
+}
+function setVal(id, v) { $(id).value = v; showVal(ctlSpec(id)); }
+function matchPreset(id) {
+  const mats = id === 'muW' ? WHEEL_MATS : HOOD_MATS, v = +$(id).value;
+  const i = mats.findIndex(([, x]) => x != null && Math.abs(x - v) < 0.005);
+  $(id + 'Mat').value = i >= 0 ? i : mats.length - 1;
+}
+function params() {
+  const p = { ...state };
+  for (const g of Object.values(CONTROLS)) for (const c of g) p[c.id] = +$(c.id).value;
+  return p;
+}
+
+// ---------- Physics: contact phase inside the hood ----------
+function contact(p) {
+  const Rw = p.wheelD / 2000, rb = p.ballD * IN / 2, m = p.ballMass / 1000, I = p.kI * m * rb * rb;
+  const c = Math.min(p.comp / 1000, rb * 0.9), rho = Rw + rb - c, wrap = p.wrap * DEG, L = rho * wrap;
+  const Iw = 0.5 * (p.wheelMass / 1000) * Rw * Rw;
+  const Om0 = p.rpm * 2 * Math.PI / 60, Vw0 = Om0 * Rw;
+  const Nw = p.stiff * 1000 * c;
+  const eps = 0.02; // m/s, smooths the friction sign near zero slip
+  const k = (p.muW * Nw + p.muH * (Nw + m * Vw0 * Vw0 / rho)) / eps * (1 / m + rb * rb / I + Rw * Rw / Iw);
+  const dt = Math.min(5e-6, 0.3 / Math.max(k, 1));
+  let Om = Om0, v = Math.max(p.feed, 0.02), w = 0, s = 0, t = 0, th = 0;
+  let next = 0, stalled = false, slipE = 0, gripT = null;
+  const samples = [];
+  const push = (uw, uh, Nh) => samples.push({ t, s, v, w, Om, th, uw, uh, Nh });
+  while (s < L) {
+    if (t > 0.5 || v <= 0) { stalled = true; break; }
+    const Vw = Om * Rw, uw = Vw - (v + w * rb), uh = v - w * rb, Nh = Nw + m * v * v / rho;
+    const Fw = p.muW * Nw * Math.tanh(uw / eps), Fh = -p.muH * Nh * Math.tanh(uh / eps);
+    if (t >= next) { push(uw, uh, Nh); next += 2e-5; }
+    if (gripT === null && Math.abs(uw) < 0.05 && Math.abs(uh) < 0.05) gripT = t;
+    slipE += (Math.abs(Fw * uw) + Math.abs(Fh * uh)) * dt;
+    const tau = p.motor ? Math.max(0, MOTOR_STALL * (1 - Om / MOTOR_FREE)) : 0;
+    v += (Fw + Fh) / m * dt; w += rb * (Fw - Fh) / I * dt; Om += (tau - Fw * Rw) / Iw * dt;
+    s += v * dt; th += w * dt; t += dt;
+  }
+  const Vw = Om * Rw;
+  push(Vw - (v + w * rb), v - w * rb, Nw + m * v * v / rho);
+  return { Rw, rb, m, I, rho, L, wrap, Nw, Om0, Vw0, samples, stalled, slipE, gripT,
+    exit: { v: Math.max(v, 0), w, Om, t } };
+}
+
+// ---------- Physics: flight ----------
+function cellGeom(p) {
+  const B = { x: p.dist * IN, y: CELL_BOTTOM_IN * IN };
+  const d = { x: CELL_RUN / CELL_OPEN_IN, y: CELL_RISE / CELL_OPEN_IN };
+  const n = { x: -d.y, y: d.x }; // points back toward the shooter
+  const T = { x: B.x + d.x * CELL_OPEN_IN * IN, y: B.y + d.y * CELL_OPEN_IN * IN };
+  return { B, T, d, n };
+}
+function flight(p, c, exit, air) {
+  const rb = c.rb, m = c.m, A = Math.PI * rb * rb, a = p.angle * DEG;
+  const sg = (p.spin === 'back' ? 1 : -1) * Math.sign(exit.w || 1);
+  const S0 = Math.abs(exit.w);
+  const kD = air ? 0.5 * RHO_AIR * p.cd * A / m : 0, kL = air ? 0.5 * RHO_AIR * A / m * p.magnus : 0;
+  const acc = (vx, vy) => {
+    const v = Math.hypot(vx, vy) || 1e-9, S = rb * S0 / v, CL = S / (2 * S + 1);
+    return [-kD * v * vx - kL * CL * v * vy * sg, -G - kD * v * vy + kL * CL * v * vx * sg];
+  };
+  let x = 0, y = p.launchH * IN, vx = exit.v * Math.cos(a), vy = exit.v * Math.sin(a), t = 0;
+  const dt = 0.001, pts = [{ t, x, y, vx, vy }];
+  const cg = cellGeom(p);
+  let side = (x - cg.B.x) * cg.n.x + (y - cg.B.y) * cg.n.y, cross = null, apex = { x, y };
+  while (t < 4 && y > rb && x < 260 * IN) {
+    const [ax1, ay1] = acc(vx, vy);
+    const mvx = vx + ax1 * dt / 2, mvy = vy + ay1 * dt / 2;
+    const [ax2, ay2] = acc(mvx, mvy);
+    x += mvx * dt; y += mvy * dt; vx += ax2 * dt; vy += ay2 * dt; t += dt;
+    pts.push({ t, x, y, vx, vy });
+    if (y > apex.y) apex = { x, y, t };
+    const ns = (x - cg.B.x) * cg.n.x + (y - cg.B.y) * cg.n.y;
+    if (!cross && side > 0 && ns <= 0) {
+      const f = side / (side - ns), q = pts[pts.length - 2];
+      const cx = q.x + (x - q.x) * f, cy = q.y + (y - q.y) * f;
+      const u = ((cx - cg.B.x) * cg.d.x + (cy - cg.B.y) * cg.d.y) / IN;
+      cross = { x: cx, y: cy, u, t: q.t + dt * f, vx, vy, idx: pts.length - 1 };
+      const r = rb / IN;
+      cross.verdict = u >= r && u <= CELL_OPEN_IN - r ? 'in' : (u > -r && u < r) || (u > CELL_OPEN_IN - r && u < CELL_OPEN_IN + r) ? 'lip' : u <= -r ? 'low' : 'high';
+      if (cross.verdict === 'in') { // let it travel a little into the cell, then stop
+        for (let i = 0; i < 40 && t < 4; i++) {
+          x += vx * dt; y += vy * dt; vy -= G * dt; t += dt; pts.push({ t, x, y, vx, vy });
+        }
+        break;
+      }
+    }
+    side = ns;
+  }
+  const last = pts[pts.length - 1];
+  return { pts, apex, cross, T: last.t, landX: last.x, landed: last.y <= rb + 1e-6 };
+}
+
+function simulate(p) {
+  const c = contact(p);
+  const fl = flight(p, c, c.exit, p.air);
+  const idealExit = { v: c.Vw0 / 2, w: c.Vw0 / (2 * c.rb) };
+  const ideal = flight(p, c, idealExit, p.air);
+  const vac = flight(p, c, c.exit, false);
+  return { p, c, fl, ideal, vac, idealExit };
+}
+
+// ---------- Solve RPM ----------
+function solveRPM() {
+  const p = params();
+  const target = CELL_OPEN_IN / 2;
+  const f = rpm => { const q = { ...p, rpm }; const c = contact(q); const fl = flight(q, c, c.exit, q.air); return fl.cross ? fl.cross.u - target : -1e3; };
+  let lo = 300, hi = 6000;
+  const msg = $('solveMsg');
+  if (f(hi) < 0) { msg.textContent = `Even 6000 RPM can't reach the opening center at ${p.angle}° from ${p.dist} in. Raise the angle or move closer.`; return; }
+  if (f(lo) > 0) { msg.textContent = 'Already over at the minimum RPM.'; return; }
+  for (let i = 0; i < 30; i++) { const mid = (lo + hi) / 2; if (f(mid) < 0) lo = mid; else hi = mid; }
+  const rpm = Math.round(hi / 5) * 5;
+  setVal('rpm', Math.min(6000, rpm));
+  msg.textContent = `≈ ${Math.round(hi)} RPM puts the ball through the middle of the opening.`;
+  recompute();
+}
+
+// ---------- Rendering helpers ----------
+let C = {};
+function readColors() { const cs = getComputedStyle(document.documentElement); for (const k of ['bg', 'panel', 'ink', 'muted', 'line', 'grid', 'accent', 'blue', 'good', 'warn', 'bad', 'wheel', 'tread', 'hood', 'pollen', 'nectar', 'cell']) C[k] = cs.getPropertyValue('--' + k).trim(); }
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+function fit(cv) {
+  const r = cv.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, W: r.width, H: r.height };
+}
+function arrow(ctx, x1, y1, x2, y2, col, w = 2) {
+  const a = Math.atan2(y2 - y1, x2 - x1), h = 8;
+  ctx.strokeStyle = ctx.fillStyle = col; ctx.lineWidth = w;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - h * Math.cos(a - 0.4), y2 - h * Math.sin(a - 0.4));
+  ctx.lineTo(x2 - h * Math.cos(a + 0.4), y2 - h * Math.sin(a + 0.4)); ctx.closePath(); ctx.fill();
+}
+const ballColor = () => C[BALLS[state.ballType].color];
+function sampleAt(samples, t) {
+  let lo = 0, hi = samples.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (samples[m].t <= t) lo = m; else hi = m; }
+  return samples[lo];
+}
+function interpPts(pts, t) {
+  if (t <= 0) return pts[0];
+  const i = Math.min(pts.length - 1, Math.floor(t / 0.001));
+  return pts[i];
+}
+
+// ---------- Close-up ----------
+let wheelAngle = 0;
+function drawCloseup(simT, wallDt) {
+  const { ctx, W, H } = fit($('closeup'));
+  const { p, c } = sim;
+  ctx.fillStyle = C.panel; ctx.fillRect(0, 0, W, H);
+  const back = p.spin === 'back';
+  const ext = c.rho + c.rb + 0.012;
+  const sc = Math.min(W, H) * 0.40 / ext;
+  const cx = W * 0.42, cy = H * (back ? 0.6 : 0.4);
+  const X = x => cx + x * sc, Y = y => cy - y * sc;
+  const a = p.angle * DEG;
+  const phiExit = back ? a + Math.PI / 2 : a - Math.PI / 2;
+  const phiEntry = back ? phiExit + c.wrap : phiExit - c.wrap;
+  const dirPhi = back ? -1 : 1;
+
+  // current state
+  let Om, bx, by, th, v, uw = null, uh = null, inContact = simT <= c.exit.t;
+  if (inContact) {
+    const s = sampleAt(c.samples, simT);
+    const phi = phiEntry + dirPhi * s.s / c.rho;
+    bx = c.rho * Math.cos(phi); by = c.rho * Math.sin(phi); th = s.th; Om = s.Om; v = s.v; uw = s.uw; uh = s.uh;
+  } else {
+    const dtE = simT - c.exit.t;
+    bx = c.rho * Math.cos(phiExit) + c.exit.v * Math.cos(a) * dtE;
+    by = c.rho * Math.sin(phiExit) + c.exit.v * Math.sin(a) * dtE;
+    th = c.samples[c.samples.length - 1].th + c.exit.w * dtE; Om = c.exit.Om; v = c.exit.v;
+  }
+  wheelAngle += (back ? -1 : 1) * Om * wallDt / p.slowmo;
+
+  // hood
+  const hoodR = c.rho + c.rb;
+  ctx.strokeStyle = C.hood; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath();
+  const a0 = phiEntry, a1 = phiExit + (back ? -0.08 : 0.08);
+  ctx.arc(X(0), Y(0), hoodR * sc + 3.5, -a0, -a1, back ? false : true);
+  ctx.stroke();
+  ctx.fillStyle = C.muted; ctx.font = '12px system-ui';
+  const hl = (phiEntry + phiExit) / 2;
+  ctx.fillText('hood', X((hoodR + 0.012) * Math.cos(hl)) - 12, Y((hoodR + 0.012) * Math.sin(hl)));
+
+  // wheel
+  const Rpx = c.Rw * sc;
+  ctx.save(); ctx.translate(X(0), Y(0)); ctx.rotate(-wheelAngle);
+  ctx.fillStyle = C.tread; ctx.beginPath(); ctx.arc(0, 0, Rpx, 0, 2 * Math.PI); ctx.fill();
+  ctx.fillStyle = C.panel; ctx.beginPath(); ctx.arc(0, 0, Rpx * 0.72, 0, 2 * Math.PI); ctx.fill();
+  ctx.strokeStyle = C.wheel; ctx.lineWidth = 3;
+  for (let i = 0; i < 6; i++) { const q = i * Math.PI / 3; ctx.beginPath(); ctx.moveTo(Rpx * 0.2 * Math.cos(q), Rpx * 0.2 * Math.sin(q)); ctx.lineTo(Rpx * 0.72 * Math.cos(q), Rpx * 0.72 * Math.sin(q)); ctx.stroke(); }
+  ctx.fillStyle = C.wheel; ctx.beginPath(); ctx.arc(0, 0, Rpx * 0.2, 0, 2 * Math.PI); ctx.fill();
+  ctx.fillStyle = C.accent; ctx.beginPath(); ctx.arc(Rpx * 0.86, 0, 3, 0, 2 * Math.PI); ctx.fill();
+  ctx.restore();
+
+  // ball
+  const rpx = c.rb * sc;
+  ctx.save(); ctx.translate(X(bx), Y(by)); ctx.rotate(-(back ? 1 : -1) * th);
+  ctx.globalAlpha = 0.92; ctx.fillStyle = ballColor(); ctx.beginPath(); ctx.arc(0, 0, rpx, 0, 2 * Math.PI); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-rpx, 0); ctx.lineTo(rpx, 0); ctx.stroke();
+  ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(rpx * 0.6, 0, 3, 0, 2 * Math.PI); ctx.fill();
+  ctx.restore();
+
+  // squish: shade where the ball and wheel overlap (the rubber/ball deform there)
+  if (p.comp > 0) {
+    ctx.save(); ctx.beginPath(); ctx.arc(X(bx), Y(by), rpx, 0, 2 * Math.PI); ctx.clip();
+    ctx.globalAlpha = 0.75; ctx.fillStyle = C.blue; ctx.beginPath(); ctx.arc(X(0), Y(0), Rpx, 0, 2 * Math.PI); ctx.fill();
+    ctx.restore();
+  }
+  // contact markers
+  if (inContact) {
+    const rl = Math.hypot(bx, by), ux = bx / rl, uy = by / rl;
+    const mark = (px, py, u) => { ctx.fillStyle = Math.abs(u) < 0.1 ? C.good : C.warn; ctx.beginPath(); ctx.arc(X(px), Y(py), 5, 0, 2 * Math.PI); ctx.fill(); };
+    mark(bx - ux * c.rb, by - uy * c.rb, uw);
+    mark(bx + ux * c.rb, by + uy * c.rb, uh);
+  }
+  // velocity arrow
+  let dir = inContact ? Math.atan2(by, bx) + dirPhi * Math.PI / 2 : a;
+  const L = 18 + 6 * v;
+  arrow(ctx, X(bx), Y(by), X(bx) + L * Math.cos(dir), Y(by) - L * Math.sin(dir), C.accent, 2.5);
+  // launch direction guide
+  ctx.setLineDash([4, 5]); ctx.strokeStyle = C.muted; ctx.lineWidth = 1;
+  const ex = c.rho * Math.cos(phiExit), ey = c.rho * Math.sin(phiExit);
+  ctx.beginPath(); ctx.moveTo(X(ex), Y(ey)); ctx.lineTo(X(ex) + 400 * Math.cos(a), Y(ey) - 400 * Math.sin(a)); ctx.stroke(); ctx.setLineDash([]);
+
+  // labels
+  ctx.fillStyle = C.ink; ctx.font = '600 13px system-ui';
+  const lines = [
+    `t = ${(Math.min(simT, 9.99) * 1000).toFixed(2)} ms   (slow-mo ×${p.slowmo})`,
+    inContact ? `in hood: ${(100 * sampleAt(c.samples, simT).s / c.L).toFixed(0)}% of wrap` : 'released',
+    `wheel ${(Om * 60 / 2 / Math.PI).toFixed(0)} RPM · ball ${(v / IN / 12).toFixed(1)} ft/s`,
+    `squish ${p.comp.toFixed(1)} mm · hood gap ${(p.ballD - p.comp / 25.4).toFixed(2)} in`,
+  ];
+  lines.forEach((l, i) => ctx.fillText(l, 10, 20 + i * 18));
+  if (inContact) {
+    ctx.font = '12px system-ui'; ctx.fillStyle = C.muted;
+    ctx.fillText(`wheel slip ${uw.toFixed(2)} m/s · hood slip ${uh.toFixed(2)} m/s`, 10, H - 12);
+  }
+}
+
+// ---------- Contact chart ----------
+function drawChart(simT) {
+  const { ctx, W, H } = fit($('chart'));
+  const { c } = sim;
+  ctx.fillStyle = C.panel; ctx.fillRect(0, 0, W, H);
+  const pad = { l: 46, r: 12, t: 12, b: 34 };
+  const S = c.samples, tMax = S[S.length - 1].t || 1e-3, vMax = c.Vw0 * 1.08;
+  const X = t => pad.l + (t / tMax) * (W - pad.l - pad.r), Y = v => H - pad.b - (v / vMax) * (H - pad.t - pad.b);
+  ctx.strokeStyle = C.grid; ctx.fillStyle = C.muted; ctx.font = '11px system-ui'; ctx.lineWidth = 1;
+  const vStep = vMax > 20 ? 5 : vMax > 8 ? 2 : 1;
+  for (let v = 0; v <= vMax; v += vStep) { ctx.beginPath(); ctx.moveTo(pad.l, Y(v)); ctx.lineTo(W - pad.r, Y(v)); ctx.stroke(); ctx.fillText(v + '', pad.l - 22, Y(v) + 4); }
+  const tms = tMax * 1000, tStep = tms > 40 ? 10 : tms > 15 ? 5 : tms > 6 ? 2 : tms > 2 ? 0.5 : 0.2;
+  for (let t = 0; t <= tms + 1e-9; t += tStep) { ctx.fillText(+t.toFixed(1) + '', X(t / 1000) - 6, H - pad.b + 14); }
+  ctx.fillText('time in hood (ms)', W / 2 - 40, H - 6);
+  ctx.save(); ctx.translate(12, H / 2 + 20); ctx.rotate(-Math.PI / 2); ctx.fillText('speed (m/s)', 0, 0); ctx.restore();
+  const line = (f, col, dash) => { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash(dash || []); ctx.beginPath(); S.forEach((s, i) => { const y = Y(f(s)); i ? ctx.lineTo(X(s.t), y) : ctx.moveTo(X(s.t), y); }); ctx.stroke(); ctx.setLineDash([]); };
+  line(s => s.Om * c.Rw, C.muted);
+  line(s => s.Om * c.Rw / 2, C.good, [5, 4]);
+  line(s => s.v, C.accent);
+  line(s => s.w * c.rb, C.blue, [6, 4]);
+  if (c.gripT != null) { ctx.fillStyle = C.good; ctx.fillText('grip locked', X(c.gripT) + 4, pad.t + 12); ctx.strokeStyle = C.good; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(X(c.gripT), pad.t); ctx.lineTo(X(c.gripT), H - pad.b); ctx.stroke(); ctx.setLineDash([]); }
+  const tt = Math.min(simT, tMax);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(tt), pad.t); ctx.lineTo(X(tt), H - pad.b); ctx.stroke();
+}
+
+// ---------- Field ----------
+function drawField(flT) {
+  const { ctx, W, H } = fit($('field'));
+  const { p, c, fl, ideal, vac } = sim;
+  ctx.fillStyle = C.panel; ctx.fillRect(0, 0, W, H);
+  const cg = cellGeom(p);
+  const xMin = -24 * IN;
+  let xMax = Math.max(cg.T.x + 22 * IN, Math.min(fl.landX, 220 * IN) + 6 * IN);
+  let yMax = Math.max(78 * IN, Math.min(fl.apex.y, 160 * IN) + 8 * IN);
+  const pad = { l: 34, r: 10, t: 10, b: 26 };
+  const sc = Math.min((W - pad.l - pad.r) / (xMax - xMin), (H - pad.t - pad.b) / yMax);
+  const X = x => pad.l + (x - xMin) * sc, Y = y => H - pad.b - y * sc;
+  // grid every foot
+  ctx.lineWidth = 1; ctx.font = '11px system-ui';
+  for (let ft = -2; ft * 12 * IN <= xMax; ft++) {
+    const x = X(ft * 12 * IN); ctx.strokeStyle = C.grid; ctx.beginPath(); ctx.moveTo(x, Y(0)); ctx.lineTo(x, pad.t); ctx.stroke();
+    ctx.fillStyle = C.muted; if (ft >= 0) ctx.fillText(ft + ' ft', x - 8, H - 8);
+  }
+  for (let ft = 1; ft * 12 * IN <= yMax + 1e-9 && Y(ft * 12 * IN) > pad.t; ft++) {
+    const y = Y(ft * 12 * IN); ctx.strokeStyle = C.grid; ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.fillStyle = C.muted; ctx.fillText(ft + "'", 8, y + 4);
+  }
+  ctx.strokeStyle = C.muted; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(pad.l, Y(0)); ctx.lineTo(W - pad.r, Y(0)); ctx.stroke();
+
+  // robot
+  ctx.fillStyle = C.line; ctx.strokeStyle = C.muted; ctx.lineWidth = 1.5;
+  const rh = Math.max(4 * IN, p.launchH * IN - 4 * IN);
+  ctx.fillRect(X(-18 * IN), Y(rh), 18 * IN * sc, rh * sc); ctx.strokeRect(X(-18 * IN), Y(rh), 18 * IN * sc, rh * sc);
+  ctx.fillStyle = C.tread; ctx.beginPath(); ctx.arc(X(-c.rho * Math.cos(p.angle * DEG)), Y(p.launchH * IN - c.rho * Math.sin(p.angle * DEG + Math.PI / 2)), Math.max(3, c.Rw * sc), 0, 2 * Math.PI); ctx.fill();
+  ctx.fillStyle = C.muted; ctx.fillText('robot', X(-15 * IN), Y(rh) + 14);
+
+  // cell
+  const { B, T, n } = cg, D = CELL_DEPTH_IN * IN;
+  const B2 = { x: B.x - n.x * D, y: B.y - n.y * D }, T2 = { x: T.x - n.x * D, y: T.y - n.y * D };
+  ctx.fillStyle = C.cell; ctx.globalAlpha = 0.14;
+  ctx.beginPath(); ctx.moveTo(X(B.x), Y(B.y)); ctx.lineTo(X(B2.x), Y(B2.y)); ctx.lineTo(X(T2.x), Y(T2.y)); ctx.lineTo(X(T.x), Y(T.y)); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1; ctx.strokeStyle = C.cell; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(X(B.x), Y(B.y)); ctx.lineTo(X(B2.x), Y(B2.y)); ctx.lineTo(X(T2.x), Y(T2.y)); ctx.lineTo(X(T.x), Y(T.y)); ctx.stroke();
+  ctx.setLineDash([3, 4]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(B.x), Y(B.y)); ctx.lineTo(X(T.x), Y(T.y)); ctx.stroke(); ctx.setLineDash([]);
+  // pivot post
+  ctx.strokeStyle = C.muted; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+  ctx.beginPath(); ctx.moveTo(X(B2.x), Y(B2.y)); ctx.lineTo(X(B2.x), Y(0)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = C.cell; ctx.font = '600 11px system-ui';
+  ctx.fillText('53.5 in', X(B.x) - 46, Y(B.y) + 4);
+  ctx.fillText('65.6 in', X(T.x) - 46, Y(T.y) + 4);
+  ctx.fillText('HIVE CELL', X(B2.x) + 6, Y(B2.y) + 14);
+
+  const path = (pts, col, dash, w) => {
+    ctx.strokeStyle = col; ctx.lineWidth = w; ctx.setLineDash(dash);
+    ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(X(q.x), Y(q.y)) : ctx.moveTo(X(q.x), Y(q.y))); ctx.stroke(); ctx.setLineDash([]);
+  };
+  if (state.ghosts) { path(ideal.pts, C.muted, [7, 5], 1.5); if (p.air) path(vac.pts, C.blue, [2, 4], 1.5); }
+  // traveled part solid, remainder faint
+  const cur = Math.min(fl.pts.length - 1, Math.max(0, Math.floor(flT / 0.001)));
+  ctx.globalAlpha = 0.25; path(fl.pts, C.accent, [], 3); ctx.globalAlpha = 1;
+  path(fl.pts.slice(0, cur + 1), C.accent, [], 3);
+
+  // apex
+  ctx.fillStyle = C.ink; ctx.font = '600 12px system-ui';
+  ctx.beginPath(); ctx.arc(X(fl.apex.x), Y(fl.apex.y), 3.5, 0, 2 * Math.PI); ctx.fill();
+  ctx.fillText(`apex ${(fl.apex.y / IN).toFixed(1)} in`, X(fl.apex.x) - 30, Y(fl.apex.y) - 8);
+  if (fl.landed && (!fl.cross || fl.cross.verdict !== 'in')) {
+    ctx.fillText(`lands ${(fl.landX / IN).toFixed(0)} in`, X(fl.landX) - 30, Y(0) - 8);
+  }
+  if (fl.cross) {
+    const col = fl.cross.verdict === 'in' ? C.good : fl.cross.verdict === 'lip' ? C.warn : C.bad;
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(fl.cross.x), Y(fl.cross.y), c.rb * sc + 4, 0, 2 * Math.PI); ctx.stroke();
+  }
+
+  // ball
+  const q = fl.pts[cur];
+  ctx.fillStyle = ballColor(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(X(q.x), Y(q.y), Math.max(4, c.rb * sc), 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+  // spin indicator: arc arrow
+  const rr = Math.max(4, c.rb * sc) + 5, ccw = p.spin === 'back';
+  ctx.strokeStyle = C.blue; ctx.lineWidth = 1.5; ctx.beginPath();
+  ctx.arc(X(q.x), Y(q.y), rr, -0.3, -2.2, ccw); ctx.stroke();
+  const ea = ccw ? -2.2 : -2.2, hx = X(q.x) + rr * Math.cos(ea), hy = Y(q.y) + rr * Math.sin(ea);
+  ctx.fillStyle = C.blue; ctx.beginPath(); ctx.arc(hx, hy, 2.5, 0, 2 * Math.PI); ctx.fill();
+  ctx.fillStyle = C.ink; ctx.font = '12px system-ui';
+  ctx.fillText(`t = ${q.t.toFixed(2)} s`, W - 80, 20);
+}
+
+// ---------- Stats ----------
+const ftps = v => (v / IN / 12).toFixed(1);
+function renderStats() {
+  const { p, c, fl, idealExit } = sim;
+  const eff = c.exit.v / idealExit.v * 100, spinRpm = c.exit.w * 60 / 2 / Math.PI;
+  const idealSpin = idealExit.w * 60 / 2 / Math.PI, drop = (1 - c.exit.Om / c.Om0) * 100;
+  const v = fl.cross ? fl.cross.verdict : 'short';
+  const verdict = { in: ['IN ✔', C.good, `crosses ${fl.cross?.u.toFixed(1)} in up the 14 in opening`], lip: ['Clips lip', C.warn, `crosses at ${fl.cross?.u.toFixed(1)} in; bounce is a coin flip`],
+    low: ['Too low ✘', C.bad, 'hits below the bottom lip'], high: ['Too high ✘', C.bad, 'sails over the top lip'], short: ['Short ✘', C.bad, 'never reaches the cell'] }[v];
+  const tiles = [
+    ['Wheel surface speed', `${ftps(c.Vw0)} ft/s`, `${c.Vw0.toFixed(2)} m/s`],
+    ['Exit speed', `${ftps(c.exit.v)} ft/s`, `${eff.toFixed(0)}% of no-slip (${ftps(idealExit.v)} ft/s)`],
+    ['Ball spin', `${Math.abs(spinRpm).toFixed(0)} RPM`, `${p.spin === 'back' ? 'backspin' : 'topspin'} · ideal ${idealSpin.toFixed(0)} · r·ω/v ${(c.exit.w * c.rb / Math.max(c.exit.v, 1e-6)).toFixed(2)}`],
+    ['Grip', c.stalled ? 'STALLED' : c.gripT != null ? `locked @ ${(c.gripT * 1000).toFixed(1)} ms` : 'slipping at exit', `contact time ${(c.exit.t * 1000).toFixed(1)} ms`],
+    ['Flywheel drop', `−${drop.toFixed(1)}%`, `${(c.Om0 * 60 / 2 / Math.PI).toFixed(0)} → ${(c.exit.Om * 60 / 2 / Math.PI).toFixed(0)} RPM`],
+    ['Max height', `${(fl.apex.y / IN).toFixed(1)} in`, `at ${(fl.apex.x / IN).toFixed(0)} in out`],
+    ['Range (floor)', fl.landed ? `${(fl.landX / IN).toFixed(0)} in` : (fl.cross && fl.cross.verdict === 'in' ? 'in cell' : '> 260 in'), fl.landed ? `${(fl.landX / IN / 12).toFixed(1)} ft` : ''],
+  ];
+  $('stats').innerHTML = tiles.map(([k, v, s]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join('')
+    + `<div class="stat verdict" style="border-color:${verdict[1]}"><div class="k">CELL at ${p.dist} in</div><div class="v" style="color:${verdict[1]}">${verdict[0]}</div><div class="s">${verdict[2]}</div></div>`;
+
+  const ke = 0.5 * c.m * c.exit.v ** 2, kr = 0.5 * c.I * c.exit.w ** 2;
+  const nh = c.samples[c.samples.length - 1].Nh;
+  const rows = [
+    ['Path radius ρ (wheel center → ball center)', `${(c.rho * 1000).toFixed(1)} mm`],
+    ['Contact path length', `${(c.L / IN).toFixed(2)} in`],
+    ['Normal force, wheel side', `${c.Nw.toFixed(1)} N`],
+    ['Normal force, hood side at exit (adds m·v²/ρ)', `${nh.toFixed(1)} N`],
+    ['Ball inertia I', `${(c.I * 1e6).toFixed(1)} g·m² ×10⁻³`],
+    ['Ball energy: travel / spin', `${ke.toFixed(2)} J / ${kr.toFixed(2)} J`],
+    ['Energy lost to slip (heat)', `${c.slipE.toFixed(2)} J`],
+    ['Flight time to cell', fl.cross ? `${fl.cross.t.toFixed(2)} s` : '—'],
+    ['Ball direction entering cell', fl.cross ? (a => `${Math.abs(a).toFixed(1)}° ${a >= 0 ? 'rising' : 'falling'}`)(Math.atan2(fl.cross.vy, fl.cross.vx) / DEG) : '—'],
+    ['Exit speed with perfect grip', `${ftps(sim.idealExit.v)} ft/s (${sim.idealExit.v.toFixed(2)} m/s)`],
+  ];
+  $('details').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+}
+
+// ---------- Animation loop ----------
+let sim, phase = 'contact', phaseStart = 0, lastTs = 0, pending = false;
+function recompute() {
+  if (pending) return; pending = true;
+  requestAnimationFrame(() => { pending = false; sim = simulate(params()); renderStats(); restart(); });
+}
+function restart() { phase = 'contact'; phaseStart = performance.now(); }
+function frame(ts) {
+  const wallDt = Math.min(0.05, (ts - (lastTs || ts)) / 1000); lastTs = ts;
+  if (sim) {
+    const p = params(), el = (ts - phaseStart) / 1000;
+    const contactWall = Math.max(0.02, sim.c.exit.t * p.slowmo);
+    let simT, flT;
+    if (phase === 'contact') {
+      simT = Math.min(el / contactWall, 1) * sim.c.exit.t; flT = 0;
+      if (el >= contactWall) { phase = 'flight'; phaseStart = ts; }
+    } else if (phase === 'flight') {
+      simT = sim.c.exit.t + el / p.slowmo; flT = el * p.speed;
+      if (flT >= sim.fl.T) { phase = 'hold'; phaseStart = ts; }
+    } else {
+      simT = sim.c.exit.t + 1; flT = sim.fl.T;
+      if (el > 1.5) restart();
+    }
+    if (phase === 'hold') simT = Math.min(simT, sim.c.exit.t + 0.02);
+    drawCloseup(simT, wallDt);
+    drawChart(simT);
+    drawField(flT);
+  }
+  requestAnimationFrame(frame);
+}
+
+readColors();
+buildControls();
+matchPreset('muW'); matchPreset('muH'); showSquish();
+recompute();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
