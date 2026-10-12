@@ -141,7 +141,7 @@ a{color:var(--blue)}
         </ul>
         <p>This is stepped forward a microsecond at a time until the ball has rolled through the hood's wrap angle. With enough friction and contact length, both slips reach zero and the ball locks into perfect grip. Otherwise it leaves slower and with less spin. Each shot also takes energy from the flywheel, so the wheel slows down. The motor fights back at full power, using the linear torque curve of a goBILDA 6000 RPM motor (stall torque 0.144 N·m). That slowdown, not slip, is usually why a real shot falls short of <code>v_wheel/2</code>, so more spinning mass makes shots more consistent.</p>
         <p><b>Flight.</b> The flight includes gravity, drag <code>½ρ·C_d·A·v²</code> and Magnus lift <code>½ρ·C_L·A·v²</code>, with <code>C_L = S/(2S+1)</code> and <code>S = r·ω/v</code>. Backspin lifts the ball and topspin pushes it down. Spin decay is ignored because the flight is short.</p>
-        <p><b>Field geometry</b> (Competition Manual §9, TU04, Fig. 9-10 and 9-13): the upward CELL opening runs from 53.5 in to 65.6 in above the tiles. The opening is 14 in, tilted 30° toward the shooter, and the cell is 12 in deep. The model assumes the upward cell faces you, and it scores a shot as IN when the ball crosses that opening with at least one ball radius of clearance at each lip. POLLEN is 2.8 in and 0.055 lb; NECTAR is 3.6 in and 0.091 lb (AndyMark). The goBILDA Gecko wheel is 72 mm, 56 g, 30A silicone.</p>
+        <p><b>Field geometry</b> (Competition Manual §9, TU04, Fig. 9-10 and 9-13): the upward CELL opening runs from 53.5 in to 65.6 in above the tiles. The opening is 14 in, tilted 30° toward the shooter, and the cell is 12 in deep. The model assumes the upward cell faces you, and it scores a shot as IN when the ball crosses that opening with at least one ball radius of clearance at each lip. POLLEN is 2.8 in and 0.055 lb; NECTAR is 3.6 in and 0.091 lb (AndyMark). The flywheel defaults to goBILDA parts: the Hogback Traction Wheel (72 mm, 55 g, 50A silicone) and the Steel Flywheel (60 mm, 115 g, 551 g·cm²). The Hogback's MOI is estimated at 430 g·cm² because goBILDA doesn't publish it, and the 0.9 friction value is an estimate too.</p>
         <p class="small"><b>Estimates you should calibrate:</b> the friction values, ball/wheel stiffness, C_d and Magnus scale are reasonable starting points, not measurements. Shoot real balls, measure range and apex height, then adjust friction, stiffness and Magnus until the sim matches. After that it can predict.</p>
       </details>
     </div>
@@ -162,8 +162,12 @@ const BALLS = {
   nectar: { name: 'NECTAR (red/blue, 3.6 in)', d: 3.6, m: 41.3, color: 'nectar' },
   custom: { name: 'Custom ball', d: null, m: null, color: 'pollen' },
 };
+// goBILDA parts on the shooter shaft. MOI in g·cm².
+// Steel Flywheel 60 mm: 115 g, 551 g·cm² (goBILDA spec). Hogback 72 mm: 55 g; MOI is our
+// estimate (0.6·m·R², most mass in the tread), goBILDA doesn't publish it.
+const HOGBACK_MOI = 430, STEEL_FLYWHEEL_MOI = 551;
 const WHEEL_MATS = [
-  ['goBILDA Gecko silicone 30A', 1.0], ['Compliant wheel ~35A', 0.9], ['Worn / dusty Gecko', 0.65],
+  ['goBILDA Hogback silicone 50A', 0.9], ['goBILDA Gecko silicone 30A', 1.0], ['Compliant wheel ~35A', 0.9], ['Worn / dusty wheel', 0.65],
   ['Stealth / hard rubber', 0.6], ['Hard plastic', 0.35], ['Custom', null]];
 const HOOD_MATS = [
   ['Polycarbonate (smooth)', 0.30], ['Aluminum', 0.25], ['HDPE / Delrin', 0.18], ['3D-printed PLA / PETG', 0.35],
@@ -172,9 +176,11 @@ const INERTIA = [['Hollow thin shell (2/3)', 0.667], ['Thick-wall hollow (0.55)'
 
 const CONTROLS = {
   Flywheel: [
-    { id: 'wheelD', label: 'Wheel diameter', min: 40, max: 150, step: 1, val: 72, unit: 'mm', hint: 'goBILDA Gecko = 72 mm' },
-    { id: 'rpm', label: 'Flywheel speed', min: 300, max: 6000, step: 25, val: 3600, unit: 'RPM', hint: 'Wheel RPM after gearing. TeleOp pollen = 3850, nectar = 4050' },
-    { id: 'wheelMass', label: 'Spinning mass on shaft', min: 20, max: 600, step: 1, val: 112, unit: 'g', hint: '2 Gecko wheels ≈ 112 g. More mass = less speed lost per shot' },
+    { id: 'wheelD', label: 'Wheel diameter', min: 40, max: 150, step: 1, val: 72, unit: 'mm', hint: 'goBILDA Hogback = 72 mm' },
+    { id: 'rpm', label: 'Flywheel speed', min: 300, max: 6000, step: 25, val: 3450, unit: 'RPM', hint: 'Wheel RPM after gearing. TeleOp pollen = 3850, nectar = 4050' },
+    { id: 'nHog', label: 'Hogback 72 mm wheels', min: 0, max: 4, step: 1, val: 1, unit: '', hint: '55 g each, 50A silicone' },
+    { id: 'nFly', label: 'Steel Flywheels (60 mm)', min: 0, max: 4, step: 1, val: 1, unit: '', hint: '115 g each, 551 g·cm² each' },
+    { id: 'extraMoi', label: 'Other spinning parts', min: 0, max: 3000, step: 10, val: 0, unit: 'g·cm²', hint: '' },
   ],
   Ball: [
     { id: 'ballD', label: 'Ball diameter', min: 1.5, max: 5, step: 0.05, val: 2.8, unit: 'in' },
@@ -187,7 +193,7 @@ const CONTROLS = {
     { id: 'feed', label: 'Feed speed into wheel', min: 0, max: 3, step: 0.05, val: 0.5, unit: 'm/s' },
   ],
   Friction: [
-    { id: 'muW', label: 'Wheel ↔ ball μ', min: 0.05, max: 1.6, step: 0.01, val: 1.0, unit: '' },
+    { id: 'muW', label: 'Wheel ↔ ball μ', min: 0.05, max: 1.6, step: 0.01, val: 0.9, unit: '' },
     { id: 'muH', label: 'Hood ↔ ball μ', min: 0, max: 1.2, step: 0.01, val: 0.35, unit: '' },
   ],
   Launch: [
@@ -288,8 +294,15 @@ function ctlSpec(id) { for (const g of Object.values(CONTROLS)) for (const c of 
 function showVal(c) {
   $(c.id + '_o').textContent = fmt($(c.id).value, c.step) + (c.unit ? ' ' + c.unit : '');
   if (c.id === 'comp' || c.id === 'ballD') showSquish();
+  if (c.id === 'nHog' || c.id === 'nFly' || c.id === 'extraMoi') showMoi();
 }
 // Squish = how much the hood gap is smaller than the ball. Hood gap = ball diameter − squish.
+const shaftMoi = p => p.nHog * HOGBACK_MOI + p.nFly * STEEL_FLYWHEEL_MOI + p.extraMoi;
+function showMoi() {
+  if (!$('extraMoi_hint')) return;
+  const q = { nHog: +$('nHog').value, nFly: +$('nFly').value, extraMoi: +$('extraMoi').value };
+  $('extraMoi_hint').innerHTML = `<b>Total shaft MOI ${shaftMoi(q).toFixed(0)} g·cm²</b> · ${q.nHog * 55 + q.nFly * 115} g of goBILDA parts. More MOI = less speed lost per shot.`;
+}
 function showSquish() {
   if (!$('comp_hint')) return; // ball controls build before the squish slider exists
   const mm = +$('comp').value, dIn = +$('ballD').value;
@@ -313,7 +326,7 @@ function params() {
 function contact(p) {
   const Rw = p.wheelD / 2000, rb = p.ballD * IN / 2, m = p.ballMass / 1000, I = p.kI * m * rb * rb;
   const c = Math.min(p.comp / 1000, rb * 0.9), rho = Rw + rb - c, wrap = p.wrap * DEG, L = rho * wrap;
-  const Iw = 0.5 * (p.wheelMass / 1000) * Rw * Rw;
+  const Iw = Math.max(1, shaftMoi(p)) * 1e-7; // g·cm² → kg·m²
   const Om0 = p.rpm * 2 * Math.PI / 60, Vw0 = Om0 * Rw;
   const Nw = p.stiff * 1000 * c;
   const eps = 0.02; // m/s, smooths the friction sign near zero slip
@@ -722,7 +735,7 @@ function frame(ts) {
 
 readColors();
 buildControls();
-matchPreset('muW'); matchPreset('muH'); showSquish();
+matchPreset('muW'); matchPreset('muH'); showSquish(); showMoi();
 recompute();
 requestAnimationFrame(frame);
 </script>
