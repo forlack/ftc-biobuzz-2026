@@ -29,6 +29,13 @@ header h1{font-size:20px;margin:0;letter-spacing:-.01em}
 header p{margin:0;color:var(--muted)}
 .wrap{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;padding:8px 20px 24px}
 @media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr);padding:8px 16px 24px}}
+/* Wide screens: the config column scrolls on its own; the simulator column stays put */
+@media (min-width:901px){
+  body{height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  .wrap{flex:1;min-height:0;padding-bottom:0}
+  aside,main{overflow-y:auto;overscroll-behavior:contain;padding-bottom:24px}
+  aside{padding-right:4px;scrollbar-width:thin}
+}
 aside{display:flex;flex-direction:column;gap:12px;min-width:0}
 main{display:flex;flex-direction:column;gap:16px;min-width:0}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
@@ -174,7 +181,7 @@ const CONTROLS = {
     { id: 'ballMass', label: 'Ball mass', min: 5, max: 120, step: 0.5, val: 24.9, unit: 'g' },
   ],
   'Squish & hood': [
-    { id: 'comp', label: 'Squish (ball ↔ flywheel)', min: 0, max: 30, step: 0.5, val: 8, unit: 'mm', hint: '' },
+    { id: 'comp', label: 'Squish (ball ↔ flywheel)', min: 0, max: 10, step: 0.25, val: 2, unit: 'mm', hint: '' },
     { id: 'stiff', label: 'Squish stiffness', min: 0.5, max: 10, step: 0.1, val: 3, unit: 'N/mm', hint: 'Ball + wheel combined. Sets normal force = stiffness × compression' },
     { id: 'wrap', label: 'Hood wrap angle', min: 20, max: 180, step: 1, val: 90, unit: '°', hint: 'How far around the wheel the ball travels in contact' },
     { id: 'feed', label: 'Feed speed into wheel', min: 0, max: 3, step: 0.05, val: 0.5, unit: 'm/s' },
@@ -286,10 +293,9 @@ function showVal(c) {
 function showSquish() {
   if (!$('comp_hint')) return; // ball controls build before the squish slider exists
   const mm = +$('comp').value, dIn = +$('ballD').value;
-  $('comp_o').textContent = `${mm.toFixed(1)} mm · ${(mm / 25.4).toFixed(2)} in`;
+  $('comp_o').textContent = `${mm.toFixed(2)} mm · ${(mm / 25.4).toFixed(2)} in`;
   $('comp_hint').innerHTML = `${(mm / (dIn * 25.4) * 100).toFixed(0)}% of the ball diameter. ` +
-    `<b>Hood gap ${(dIn - mm / 25.4).toFixed(2)} in</b> (${(dIn * 25.4 - mm).toFixed(1)} mm) from wheel surface to hood. ` +
-    `Typical start: 10–15% squish.`;
+    `<b>Hood gap ${(dIn - mm / 25.4).toFixed(2)} in</b> (${(dIn * 25.4 - mm).toFixed(1)} mm) from wheel surface to hood.`;
 }
 function setVal(id, v) { $(id).value = v; showVal(ctlSpec(id)); }
 function matchPreset(id) {
@@ -528,7 +534,7 @@ function drawCloseup(simT, wallDt) {
     `t = ${(Math.min(simT, 9.99) * 1000).toFixed(2)} ms   (slow-mo ×${p.slowmo})`,
     inContact ? `in hood: ${(100 * sampleAt(c.samples, simT).s / c.L).toFixed(0)}% of wrap` : 'released',
     `wheel ${(Om * 60 / 2 / Math.PI).toFixed(0)} RPM · ball ${(v / IN / 12).toFixed(1)} ft/s`,
-    `squish ${p.comp.toFixed(1)} mm · hood gap ${(p.ballD - p.comp / 25.4).toFixed(2)} in`,
+    `squish ${p.comp.toFixed(2)} mm · hood gap ${(p.ballD - p.comp / 25.4).toFixed(2)} in`,
   ];
   lines.forEach((l, i) => ctx.fillText(l, 10, 20 + i * 18));
   if (inContact) {
