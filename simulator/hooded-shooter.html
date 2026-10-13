@@ -189,6 +189,10 @@ const $ = id => document.getElementById(id);
 // ---- Field geometry (BIOBUZZ manual §9, Fig 9-10) ----
 const CELL_BOTTOM_IN = 53.5, CELL_TOP_IN = 65.6, CELL_OPEN_IN = 14, CELL_DEPTH_IN = 12;
 const CELL_RISE = CELL_TOP_IN - CELL_BOTTOM_IN;
+// Field (§9.2, 9.6, Fig 9-8/9-9): 144 in square inside the walls, HIVE pivot at field center,
+// 43.95 in up. Each CELL's open end is 21.46 in from the pivot along the HIVE (18.84 / 2 + 12.04),
+// and the HIVE tips 30°, which puts the bottom lip 19.26 in from field center toward the shooter.
+const FIELD_IN = 144, PIVOT_H_IN = 43.95, LIP_FROM_CENTER_IN = 19.26, FRAME_BASE_IN = 38.95, WALL_H_IN = 12;
 const CELL_RUN = Math.sqrt(CELL_OPEN_IN ** 2 - CELL_RISE ** 2);
 
 const BALLS = {
@@ -232,14 +236,16 @@ const CONTROLS = {
   ],
   Launch: [
     { id: 'angle', label: 'Launch angle (hood exit)', min: 10, max: 80, step: 0.5, val: 55, unit: '°' },
-    { id: 'launchH', label: 'Launch height', min: 4, max: 30, step: 0.5, val: 14, unit: 'in', hint: 'Ball center height where it leaves the hood' },
+    { id: 'launchH', label: 'Launch height', min: 4, max: 30, step: 0.5, val: 8, unit: 'in', hint: 'Ball center height where it leaves the hood' },
   ],
   Air: [
     { id: 'cd', label: 'Drag coefficient C_d', min: 0, max: 1.2, step: 0.01, val: 0.5, unit: '' },
     { id: 'magnus', label: 'Magnus scale', min: 0, max: 2, step: 0.05, val: 1, unit: '×', hint: 'Calibrate against real shots' },
   ],
   Target: [
-    { id: 'dist', label: 'Distance to CELL lip', min: 12, max: 140, step: 1, val: 72, unit: 'in', hint: 'Horizontal: launch point → bottom lip of the opening' },
+    { id: 'dist', label: 'Distance to CELL lip', min: 12, max: 120, step: 1, val: 49, unit: 'in', hint: 'Horizontal: launch point → bottom lip of the opening. The lip is 19.3 in from field center, so the field wall is 52.7 in behind it.' },
+    { id: 'robotL', label: 'Robot length', min: 10, max: 24, step: 0.5, val: 18, unit: 'in' },
+    { id: 'inset', label: 'Ball exit, in from robot edge', min: 0, max: 12, step: 0.25, val: 3.75, unit: 'in', hint: 'How far the launch point sits inside the shooter end of the robot. At 3.75 in, 49 in to the lip puts the robot flush against the wall.' },
   ],
   'HIVE CELL bounce': [
     { id: 'wallE', label: 'Bounciness e (ball ↔ panel)', min: 0.05, max: 0.95, step: 0.01, val: 0.3, unit: '', hint: 'Measure it: drop a ball onto the cell panel from 36 in. e = √(rebound height ÷ 36). Panel flex lowers it.' },
@@ -253,7 +259,7 @@ const CONTROLS = {
   ],
 };
 
-const state = { ballType: 'pollen', spin: 'back', kI: 0.667, air: true, ghosts: true, motor: true };
+const state = { mount: 'back', ballType: 'pollen', spin: 'back', kI: 0.667, air: true, ghosts: true, motor: true };
 // goBILDA 5203 6000 RPM (1:1): stall torque 1.47 kg·cm
 const MOTOR_STALL = 0.144, MOTOR_FREE = 6000 * 2 * Math.PI / 60;
 
@@ -288,6 +294,14 @@ function buildControls() {
       seg.innerHTML = `<button data-v="back" class="on">Wheel under → backspin</button><button data-v="top">Wheel over → topspin</button>`;
       seg.querySelectorAll('button').forEach(b => b.onclick = () => {
         state.spin = b.dataset.v; seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); recompute();
+      });
+      card.appendChild(seg);
+    }
+    if (group === 'Target') {
+      const seg = document.createElement('div'); seg.className = 'seg';
+      seg.innerHTML = `<button data-v="back" class="on">Shoot from back</button><button data-v="front">Shoot from front</button>`;
+      seg.querySelectorAll('button').forEach(b => b.onclick = () => {
+        state.mount = b.dataset.v; seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); recompute();
       });
       card.appendChild(seg);
     }
@@ -627,15 +641,21 @@ function drawField(flT) {
   const { p, c, fl, ideal, vac } = sim;
   ctx.fillStyle = C.panel; ctx.fillRect(0, 0, W, H);
   const cg = cellGeom(p);
-  const xMin = -24 * IN;
-  let xMax = Math.max(cg.T.x + 22 * IN, Math.min(fl.landX, 220 * IN) + 6 * IN);
+  // field walls: pivot at field center, lip LIP_FROM_CENTER_IN toward the shooter
+  const pivotX = cg.B.x + LIP_FROM_CENTER_IN * IN, nearWall = pivotX - FIELD_IN / 2 * IN, farWall = pivotX + FIELD_IN / 2 * IN;
+  // robot body: the shooter end is `inset` behind the launch point. Shooting from the back, the
+  // robot faces the HIVE and the ball goes out over it; from the front, the robot trails behind.
+  const L = p.robotL * IN, ins = p.inset * IN;
+  const body = p.mount === 'back' ? [-ins, L - ins] : [ins - L, ins];
+  const xMin = Math.min(nearWall, body[0]) - 4 * IN;
+  let xMax = farWall + 4 * IN;
   let yMax = Math.max(78 * IN, Math.min(fl.apex.y, 160 * IN) + 8 * IN);
   const pad = { l: 34, r: 10, t: 10, b: 26 };
   const sc = Math.min((W - pad.l - pad.r) / (xMax - xMin), (H - pad.t - pad.b) / yMax);
   const X = x => pad.l + (x - xMin) * sc, Y = y => H - pad.b - y * sc;
   // grid every foot
   ctx.lineWidth = 1; ctx.font = '11px system-ui';
-  for (let ft = -2; ft * 12 * IN <= xMax; ft++) {
+  for (let ft = Math.ceil(xMin / (12 * IN)); ft * 12 * IN <= xMax; ft++) {
     const x = X(ft * 12 * IN); ctx.strokeStyle = C.grid; ctx.beginPath(); ctx.moveTo(x, Y(0)); ctx.lineTo(x, pad.t); ctx.stroke();
     ctx.fillStyle = C.muted; if (ft >= 0) ctx.fillText(ft + ' ft', x - 8, H - 8);
   }
@@ -645,12 +665,31 @@ function drawField(flT) {
   }
   ctx.strokeStyle = C.muted; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(pad.l, Y(0)); ctx.lineTo(W - pad.r, Y(0)); ctx.stroke();
 
+  // field perimeter walls
+  ctx.fillStyle = C.muted;
+  for (const wx of [nearWall, farWall]) ctx.fillRect(X(wx) - (wx === nearWall ? 4 : 0), Y(WALL_H_IN * IN), 4, WALL_H_IN * IN * sc);
+  ctx.font = '11px system-ui'; ctx.fillText('wall', X(nearWall) + 3, Y(WALL_H_IN * IN) - 4); ctx.fillText('wall', X(farWall) - 26, Y(WALL_H_IN * IN) - 4);
+  // HIVE frame: triangle from the pivot down to a 38.95 in base
+  ctx.strokeStyle = C.muted; ctx.lineWidth = 1.5; ctx.beginPath();
+  ctx.moveTo(X(pivotX - FRAME_BASE_IN / 2 * IN), Y(0)); ctx.lineTo(X(pivotX), Y(PIVOT_H_IN * IN)); ctx.lineTo(X(pivotX + FRAME_BASE_IN / 2 * IN), Y(0)); ctx.stroke();
+  ctx.fillStyle = C.muted; ctx.beginPath(); ctx.arc(X(pivotX), Y(PIVOT_H_IN * IN), 3, 0, 2 * Math.PI); ctx.fill();
+  ctx.fillText('field center', X(pivotX) - 30, Y(0) - 6);
+  { // HIVE arm from the cell to the pivot
+    const D = CELL_DEPTH_IN * IN, b2 = { x: cg.B.x - cg.n.x * D, y: cg.B.y - cg.n.y * D };
+    ctx.strokeStyle = C.cell; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(b2.x), Y(b2.y)); ctx.lineTo(X(pivotX), Y(PIVOT_H_IN * IN)); ctx.stroke();
+  }
+
   // robot
-  ctx.fillStyle = C.line; ctx.strokeStyle = C.muted; ctx.lineWidth = 1.5;
+  const clash = body[0] < nearWall - 0.01 * IN;
+  ctx.fillStyle = C.line; ctx.strokeStyle = clash ? C.bad : C.muted; ctx.lineWidth = 1.5;
   const rh = Math.max(4 * IN, p.launchH * IN - 4 * IN);
-  ctx.fillRect(X(-18 * IN), Y(rh), 18 * IN * sc, rh * sc); ctx.strokeRect(X(-18 * IN), Y(rh), 18 * IN * sc, rh * sc);
+  ctx.fillRect(X(body[0]), Y(rh), L * sc, rh * sc); ctx.strokeRect(X(body[0]), Y(rh), L * sc, rh * sc);
+  const gap = Math.max(0, (body[0] - nearWall) / IN);
+  ctx.fillStyle = clash ? C.bad : C.muted;
+  ctx.fillText(clash ? `robot is ${((nearWall - body[0]) / IN).toFixed(1)} in through the wall` : gap < 0.05 ? 'robot against wall' : `${gap.toFixed(1)} in to wall`,
+    X(nearWall) + 6, Y(WALL_H_IN * IN) - 18);
   ctx.fillStyle = C.tread; ctx.beginPath(); ctx.arc(X(-c.rho * Math.cos(p.angle * DEG)), Y(p.launchH * IN - c.rho * Math.sin(p.angle * DEG + Math.PI / 2)), Math.max(3, c.Rw * sc), 0, 2 * Math.PI); ctx.fill();
-  ctx.fillStyle = C.muted; ctx.fillText('robot', X(-15 * IN), Y(rh) + 14);
+  ctx.fillStyle = C.muted; ctx.fillText(`robot ${p.robotL} in`, X(body[0]) + 4, Y(rh) + 14);
 
   // cell
   const { B, T, n } = cg, D = CELL_DEPTH_IN * IN;
@@ -660,9 +699,6 @@ function drawField(flT) {
   ctx.globalAlpha = 1; ctx.strokeStyle = C.cell; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(X(B.x), Y(B.y)); ctx.lineTo(X(B2.x), Y(B2.y)); ctx.lineTo(X(T2.x), Y(T2.y)); ctx.lineTo(X(T.x), Y(T.y)); ctx.stroke();
   ctx.setLineDash([3, 4]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(B.x), Y(B.y)); ctx.lineTo(X(T.x), Y(T.y)); ctx.stroke(); ctx.setLineDash([]);
-  // pivot post
-  ctx.strokeStyle = C.muted; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
-  ctx.beginPath(); ctx.moveTo(X(B2.x), Y(B2.y)); ctx.lineTo(X(B2.x), Y(0)); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle = C.cell; ctx.font = '600 11px system-ui';
   ctx.fillText('53.5 in', X(B.x) - 46, Y(B.y) + 4);
   ctx.fillText('65.6 in', X(T.x) - 46, Y(T.y) + 4);
