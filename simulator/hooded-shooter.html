@@ -210,7 +210,13 @@ const WHEEL_MATS = [
 const HOOD_MATS = [
   ['Polycarbonate (smooth)', 0.30], ['Aluminum', 0.25], ['HDPE / Delrin', 0.18], ['3D-printed PLA / PETG', 0.35],
   ['Foam-lined', 0.6], ['Grip tape', 0.8], ['Custom', null]];
-const INERTIA = [['Hollow thin shell (2/3)', 0.667], ['Thick-wall hollow (0.55)', 0.55], ['Solid / foam (2/5)', 0.4]];
+const INERTIA = [['Hollow shell (set wall thickness)', 'shell'], ['Solid / foam (2/5)', 0.4]];
+// Hollow sphere, outer radius R, wall t: I = (2/5)·m·(R⁵ − r⁵)/(R³ − r³), r = R − t. Returns I ÷ (m·R²).
+// A 2 mm wall gives ≈ 0.63, close to the thin-shell limit of 2/3: nearly all the mass is at the surface.
+function shellK(dIn, tMm) {
+  const R = dIn * 25.4 / 2, r = Math.max(0, R - tMm);
+  return 0.4 * (R ** 5 - r ** 5) / (R ** 3 - r ** 3) / (R * R);
+}
 
 const CONTROLS = {
   Flywheel: [
@@ -223,6 +229,7 @@ const CONTROLS = {
   Ball: [
     { id: 'ballD', label: 'Ball diameter', min: 1.5, max: 5, step: 0.05, val: 2.8, unit: 'in' },
     { id: 'ballMass', label: 'Ball mass', min: 5, max: 120, step: 0.5, val: 24.9, unit: 'g' },
+    { id: 'wallT', label: 'Ball wall thickness', min: 0.5, max: 10, step: 0.1, val: 2, unit: 'mm', hint: '' },
   ],
   'Squish & hood': [
     { id: 'comp', label: 'Squish (ball ↔ flywheel)', min: 0, max: 10, step: 0.1, val: 2, unit: 'mm', hint: '' },
@@ -259,7 +266,7 @@ const CONTROLS = {
   ],
 };
 
-const state = { mount: 'back', ballType: 'pollen', spin: 'back', kI: 0.667, air: true, ghosts: true, motor: true };
+const state = { mount: 'back', ballType: 'pollen', spin: 'back', kI: 'shell', air: true, ghosts: true, motor: true };
 // goBILDA 5203 6000 RPM (1:1): stall torque 1.47 kg·cm
 const MOTOR_STALL = 0.144, MOTOR_FREE = 6000 * 2 * Math.PI / 60;
 
@@ -286,7 +293,7 @@ function buildControls() {
         if (b.d) { setVal('ballD', b.d); setVal('ballMass', b.m); }
         recompute();
       }));
-      const s = makeSelect('kI', INERTIA, ([, v]) => { state.kI = v; recompute(); });
+      const s = makeSelect('kI', INERTIA, ([, v]) => { state.kI = v; showShell(); recompute(); });
       s.style.marginTop = '6px'; card.appendChild(s);
     }
     if (group === 'Launch') {
@@ -348,6 +355,7 @@ function ctlSpec(id) { for (const g of Object.values(CONTROLS)) for (const c of 
 function showVal(c) {
   $(c.id + '_o').textContent = fmt($(c.id).value, c.step) + (c.unit ? ' ' + c.unit : '');
   if (c.id === 'comp' || c.id === 'ballD') showSquish();
+  if (c.id === 'wallT' || c.id === 'ballD') showShell();
   if (c.id === 'nHog' || c.id === 'nFly' || c.id === 'extraMoi') showMoi();
 }
 // Squish = how much the hood gap is smaller than the ball. Hood gap = ball diameter − squish.
@@ -364,6 +372,12 @@ function showSquish() {
   $('comp_hint').innerHTML = `${(mm / (dIn * 25.4) * 100).toFixed(0)}% of the ball diameter. ` +
     `<b>Hood gap ${(dIn - mm / 25.4).toFixed(2)} in</b> (${(dIn * 25.4 - mm).toFixed(1)} mm) from wheel surface to hood.`;
 }
+function showShell() {
+  if (!$('wallT_hint') || !$('ballD')) return;
+  const solid = state.kI !== 'shell', k = solid ? state.kI : shellK(+$('ballD').value, +$('wallT').value);
+  $('wallT_hint').innerHTML = solid ? 'Not used: the ball is set to solid.' :
+    `<b>I = ${k.toFixed(3)}·m·r²</b> (thin-shell limit 0.667, solid 0.400). Nearly all the mass rides at the surface.`;
+}
 function setVal(id, v) { $(id).value = v; showVal(ctlSpec(id)); }
 function matchPreset(id) {
   const mats = id === 'muW' ? WHEEL_MATS : HOOD_MATS, v = +$(id).value;
@@ -373,6 +387,7 @@ function matchPreset(id) {
 function params() {
   const p = { ...state };
   for (const g of Object.values(CONTROLS)) for (const c of g) p[c.id] = +$(c.id).value;
+  if (p.kI === 'shell') p.kI = shellK(p.ballD, p.wallT);
   return p;
 }
 
@@ -1070,7 +1085,7 @@ function frame(ts) {
 
 readColors();
 buildControls();
-matchPreset('muW'); matchPreset('muH'); showSquish(); showMoi();
+matchPreset('muW'); matchPreset('muH'); showSquish(); showShell(); showMoi();
 $('sweepBtn').onclick = runSweep;
 $('heat').addEventListener('click', heatClick);
 recompute();
