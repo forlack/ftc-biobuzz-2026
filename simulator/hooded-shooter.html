@@ -64,8 +64,11 @@ canvas{display:block;width:100%;border-radius:8px}
 #field{height:clamp(260px,42vw,470px)}
 .pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
 @media (max-width:1100px){.pair{grid-template-columns:minmax(0,1fr)}}
-#closeup{height:340px}
+#closeup{height:360px}
 #chart{height:340px}
+#cell{height:360px}
+#heat{height:320px;cursor:pointer}
+#impacts td{font-size:13px}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);margin-top:6px}
 .legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
@@ -103,6 +106,14 @@ a{color:var(--blue)}
 
     <div class="pair">
       <div class="card">
+        <h2>Inside the HIVE CELL (slow motion)</h2>
+        <canvas id="cell"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--blue)"></i>Numbered wall hits</span>
+          <span>↺ = backspin direction (as fired) · ↻ = topspin direction</span>
+        </div>
+      </div>
+      <div class="card">
         <h2>Shooter close-up (slow motion)</h2>
         <canvas id="closeup"></canvas>
         <div class="legend">
@@ -111,6 +122,9 @@ a{color:var(--blue)}
           <span><i style="background:var(--blue)"></i>Squish (ball/wheel overlap)</span>
         </div>
       </div>
+    </div>
+
+    <div class="pair">
       <div class="card">
         <h2>Inside the hood: speed vs. time</h2>
         <canvas id="chart"></canvas>
@@ -121,6 +135,25 @@ a{color:var(--blue)}
           <span><i style="background:var(--good)"></i>No-slip target (surface ÷ 2)</span>
         </div>
       </div>
+      <div class="card">
+        <h2>Wall hits</h2>
+        <table id="impacts"></table>
+        <p class="small">"Bounce" is the outgoing ÷ incoming speed straight into the wall. It's lower than your e setting when friction grabs the ball. Spin changes because friction at the wall pushes the ball's surface toward rolling along that wall.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Best launch angle (bounce sweep)</h2>
+      <div class="btns"><button class="btn" id="sweepBtn">Run angle sweep</button></div>
+      <p class="small" id="sweepMsg">For every angle from 20° to 75°, this aims at 17 points across the opening, from below the bottom lip to over the top lip. It solves the RPM for each one, then runs the full bounce. Takes a few seconds.</p>
+      <canvas id="heat"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--good)"></i>Scored (settles in the cell)</span>
+        <span><i style="background:var(--warn)"></i>Entered, then bounced out</span>
+        <span><i style="background:var(--bad);opacity:.4"></i>Missed the opening</span>
+        <span>Outlined column = current angle</span>
+      </div>
+      <div id="sweepSummary"></div>
     </div>
 
     <div class="card">
@@ -141,6 +174,7 @@ a{color:var(--blue)}
         </ul>
         <p>This is stepped forward a microsecond at a time until the ball has rolled through the hood's wrap angle. With enough friction and contact length, both slips reach zero and the ball locks into perfect grip. Otherwise it leaves slower and with less spin. Each shot also takes energy from the flywheel, so the wheel slows down. The motor fights back at full power, using the linear torque curve of a goBILDA 6000 RPM motor (stall torque 0.144 N·m). That slowdown, not slip, is usually why a real shot falls short of <code>v_wheel/2</code>, so more spinning mass makes shots more consistent.</p>
         <p><b>Flight.</b> The flight includes gravity, drag <code>½ρ·C_d·A·v²</code> and Magnus lift <code>½ρ·C_L·A·v²</code>, with <code>C_L = S/(2S+1)</code> and <code>S = r·ω/v</code>. Backspin lifts the ball and topspin pushes it down. Spin decay is ignored because the flight is short.</p>
+        <p><b>Bouncing in the cell.</b> Each cell wall is a thin line, and so are the two lips. When the ball touches one, the wall pushes back with a spring-damper force <code>N = k·δ − c·v_n</code>. Here <code>δ</code> is how far the ball has squished into the wall, <code>k</code> is the panel give and <code>c</code> is tuned so a straight-on hit keeps fraction <code>e</code> of its speed. Friction acts along the wall, up to <code>μ·N</code>. It pushes the contact point's slip <code>u = v_along − ω·r</code> toward zero, but never past it. When friction is strong enough the ball grips the wall for a moment, so its spin flips to match rolling along that wall. That's why backspin hitting the back wall can kick the ball down into the cell, while topspin can climb the wall and pop out. The ball scores if it comes to rest inside the cell. The HIVE tipping and the side walls aren't modeled.</p>
         <p><b>Field geometry</b> (Competition Manual §9, TU04, Fig. 9-10 and 9-13): the upward CELL opening runs from 53.5 in to 65.6 in above the tiles. The opening is 14 in, tilted 30° toward the shooter, and the cell is 12 in deep. The model assumes the upward cell faces you, and it scores a shot as IN when the ball crosses that opening with at least one ball radius of clearance at each lip. POLLEN is 2.8 in and 0.055 lb; NECTAR is 3.6 in and 0.091 lb (AndyMark). The flywheel defaults to goBILDA parts: the Hogback Traction Wheel (72 mm, 55 g, 50A silicone) and the Steel Flywheel (60 mm, 115 g, 551 g·cm²). The Hogback's MOI is estimated at 430 g·cm² because goBILDA doesn't publish it, and the 0.9 friction value is an estimate too.</p>
         <p class="small"><b>Estimates you should calibrate:</b> the friction values, ball/wheel stiffness, C_d and Magnus scale are reasonable starting points, not measurements. Shoot real balls, measure range and apex height, then adjust friction, stiffness and Magnus until the sim matches. After that it can predict.</p>
       </details>
@@ -177,7 +211,7 @@ const INERTIA = [['Hollow thin shell (2/3)', 0.667], ['Thick-wall hollow (0.55)'
 const CONTROLS = {
   Flywheel: [
     { id: 'wheelD', label: 'Wheel diameter', min: 40, max: 150, step: 1, val: 72, unit: 'mm', hint: 'goBILDA Hogback = 72 mm' },
-    { id: 'rpm', label: 'Flywheel speed', min: 300, max: 6000, step: 25, val: 3450, unit: 'RPM', hint: 'Wheel RPM after gearing. TeleOp pollen = 3850, nectar = 4050' },
+    { id: 'rpm', label: 'Flywheel speed', min: 300, max: 6000, step: 5, val: 3450, unit: 'RPM', hint: 'Wheel RPM after gearing. TeleOp pollen = 3850, nectar = 4050' },
     { id: 'nHog', label: 'Hogback 72 mm wheels', min: 0, max: 4, step: 1, val: 1, unit: '', hint: '55 g each, 50A silicone' },
     { id: 'nFly', label: 'Steel Flywheels (60 mm)', min: 0, max: 4, step: 1, val: 1, unit: '', hint: '115 g each, 551 g·cm² each' },
     { id: 'extraMoi', label: 'Other spinning parts', min: 0, max: 3000, step: 10, val: 0, unit: 'g·cm²', hint: '' },
@@ -207,9 +241,15 @@ const CONTROLS = {
   Target: [
     { id: 'dist', label: 'Distance to CELL lip', min: 12, max: 140, step: 1, val: 72, unit: 'in', hint: 'Horizontal: launch point → bottom lip of the opening' },
   ],
+  'HIVE CELL bounce': [
+    { id: 'wallE', label: 'Bounciness e (ball ↔ panel)', min: 0.05, max: 0.95, step: 0.01, val: 0.3, unit: '', hint: 'Measure it: drop a ball onto the cell panel from 36 in. e = √(rebound height ÷ 36). Panel flex lowers it.' },
+    { id: 'wallK', label: 'Panel give (stiffness)', min: 1, max: 60, step: 1, val: 15, unit: 'N/mm', hint: 'Ball squish + panel flex. Softer = longer contact, so friction has more time to change the spin.' },
+    { id: 'wallMu', label: 'Ball ↔ polycarbonate μ', min: 0, max: 1, step: 0.01, val: 0.3, unit: '', hint: 'Tape two balls together so they can\'t roll, then tilt a panel until they slide: μ = tan(angle).' },
+  ],
   Playback: [
     { id: 'slowmo', label: 'Close-up slow motion', min: 5, max: 1000, step: 5, val: 20, unit: '×' },
     { id: 'speed', label: 'Field playback speed', min: 0.1, max: 1, step: 0.05, val: 0.5, unit: '×' },
+    { id: 'cellSlow', label: 'Cell close-up slow motion', min: 1, max: 100, step: 1, val: 10, unit: '×' },
   ],
 };
 
@@ -404,7 +444,7 @@ function flight(p, c, exit, air) {
 
 function simulate(p) {
   const c = contact(p);
-  const fl = flight(p, c, c.exit, p.air);
+  const fl = shootBounce(p, c, c.exit);
   const idealExit = { v: c.Vw0 / 2, w: c.Vw0 / (2 * c.rb) };
   const ideal = flight(p, c, idealExit, p.air);
   const vac = flight(p, c, c.exit, false);
@@ -634,7 +674,7 @@ function drawField(flT) {
   };
   if (state.ghosts) { path(ideal.pts, C.muted, [7, 5], 1.5); if (p.air) path(vac.pts, C.blue, [2, 4], 1.5); }
   // traveled part solid, remainder faint
-  const cur = Math.min(fl.pts.length - 1, Math.max(0, Math.floor(flT / 0.001)));
+  const cur = idxAt(fl.pts, flT);
   ctx.globalAlpha = 0.25; path(fl.pts, C.accent, [], 3); ctx.globalAlpha = 1;
   path(fl.pts.slice(0, cur + 1), C.accent, [], 3);
 
@@ -642,11 +682,11 @@ function drawField(flT) {
   ctx.fillStyle = C.ink; ctx.font = '600 12px system-ui';
   ctx.beginPath(); ctx.arc(X(fl.apex.x), Y(fl.apex.y), 3.5, 0, 2 * Math.PI); ctx.fill();
   ctx.fillText(`apex ${(fl.apex.y / IN).toFixed(1)} in`, X(fl.apex.x) - 30, Y(fl.apex.y) - 8);
-  if (fl.landed && (!fl.cross || fl.cross.verdict !== 'in')) {
+  if (fl.landed && fl.verdict !== 'scored') {
     ctx.fillText(`lands ${(fl.landX / IN).toFixed(0)} in`, X(fl.landX) - 30, Y(0) - 8);
   }
   if (fl.cross) {
-    const col = fl.cross.verdict === 'in' ? C.good : fl.cross.verdict === 'lip' ? C.warn : C.bad;
+    const col = fl.verdict === 'scored' ? C.good : fl.verdict === 'out' ? C.warn : C.bad;
     ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(fl.cross.x), Y(fl.cross.y), c.rb * sc + 4, 0, 2 * Math.PI); ctx.stroke();
   }
 
@@ -655,10 +695,10 @@ function drawField(flT) {
   ctx.fillStyle = ballColor(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.arc(X(q.x), Y(q.y), Math.max(4, c.rb * sc), 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
   // spin indicator: arc arrow
-  const rr = Math.max(4, c.rb * sc) + 5, ccw = p.spin === 'back';
+  const rr = Math.max(4, c.rb * sc) + 5, ccw = q.w >= 0;
   ctx.strokeStyle = C.blue; ctx.lineWidth = 1.5; ctx.beginPath();
-  ctx.arc(X(q.x), Y(q.y), rr, -0.3, -2.2, ccw); ctx.stroke();
-  const ea = ccw ? -2.2 : -2.2, hx = X(q.x) + rr * Math.cos(ea), hy = Y(q.y) + rr * Math.sin(ea);
+  ctx.arc(X(q.x), Y(q.y), rr, ccw ? -0.3 : -2.2, ccw ? -2.2 : -0.3, ccw); ctx.stroke();
+  const ea = ccw ? -2.2 : -0.3, hx = X(q.x) + rr * Math.cos(ea), hy = Y(q.y) + rr * Math.sin(ea);
   ctx.fillStyle = C.blue; ctx.beginPath(); ctx.arc(hx, hy, 2.5, 0, 2 * Math.PI); ctx.fill();
   ctx.fillStyle = C.ink; ctx.font = '12px system-ui';
   ctx.fillText(`t = ${q.t.toFixed(2)} s`, W - 80, 20);
@@ -670,8 +710,9 @@ function renderStats() {
   const { p, c, fl, idealExit } = sim;
   const eff = c.exit.v / idealExit.v * 100, spinRpm = c.exit.w * 60 / 2 / Math.PI;
   const idealSpin = idealExit.w * 60 / 2 / Math.PI, drop = (1 - c.exit.Om / c.Om0) * 100;
-  const v = fl.cross ? fl.cross.verdict : 'short';
-  const verdict = { in: ['IN ✔', C.good, `crosses ${fl.cross?.u.toFixed(1)} in up the 14 in opening`], lip: ['Clips lip', C.warn, `crosses at ${fl.cross?.u.toFixed(1)} in; bounce is a coin flip`],
+  const v = fl.verdict, hits = fl.impacts.filter(o => o.vnIn > 0.1).length;
+  const verdict = { scored: ['SCORED ✔', C.good, `enters ${fl.cross?.u.toFixed(1)} in up the opening, ${hits} wall hit${hits === 1 ? '' : 's'}, settles in the cell`],
+    out: ['Bounced out ✘', C.warn, `enters ${fl.cross?.u.toFixed(1)} in up the opening, then bounces back out`],
     low: ['Too low ✘', C.bad, 'hits below the bottom lip'], high: ['Too high ✘', C.bad, 'sails over the top lip'], short: ['Short ✘', C.bad, 'never reaches the cell'] }[v];
   const tiles = [
     ['Wheel surface speed', `${ftps(c.Vw0)} ft/s`, `${c.Vw0.toFixed(2)} m/s`],
@@ -680,7 +721,7 @@ function renderStats() {
     ['Grip', c.stalled ? 'STALLED' : c.gripT != null ? `locked @ ${(c.gripT * 1000).toFixed(1)} ms` : 'slipping at exit', `contact time ${(c.exit.t * 1000).toFixed(1)} ms`],
     ['Flywheel drop', `−${drop.toFixed(1)}%`, `${(c.Om0 * 60 / 2 / Math.PI).toFixed(0)} → ${(c.exit.Om * 60 / 2 / Math.PI).toFixed(0)} RPM`],
     ['Max height', `${(fl.apex.y / IN).toFixed(1)} in`, `at ${(fl.apex.x / IN).toFixed(0)} in out`],
-    ['Range (floor)', fl.landed ? `${(fl.landX / IN).toFixed(0)} in` : (fl.cross && fl.cross.verdict === 'in' ? 'in cell' : '> 260 in'), fl.landed ? `${(fl.landX / IN / 12).toFixed(1)} ft` : ''],
+    ['Range (floor)', fl.landed ? `${(fl.landX / IN).toFixed(0)} in` : (fl.verdict === 'scored' ? 'in cell' : '> 260 in'), fl.landed ? `${(fl.landX / IN / 12).toFixed(1)} ft` : ''],
   ];
   $('stats').innerHTML = tiles.map(([k, v, s]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join('')
     + `<div class="stat verdict" style="border-color:${verdict[1]}"><div class="k">CELL at ${p.dist} in</div><div class="v" style="color:${verdict[1]}">${verdict[0]}</div><div class="s">${verdict[2]}</div></div>`;
@@ -702,11 +743,267 @@ function renderStats() {
   $('details').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
 }
 
+// ---------- Physics: bounces inside the HIVE CELL ----------
+// The cell is three thin polycarbonate walls (bottom, back, top). Contact with a wall is a
+// spring-damper: the spring is ball squish + panel give, the damper is tuned so a straight-on
+// hit keeps fraction e of its speed. Friction at the contact can stop the slip (the ball grips
+// and its spin changes) but never reverses it, which is what makes backspin and topspin bounce
+// so differently.
+const REC = 0.0005; // seconds between recorded points
+// A wall that can only push (never pull) returns more speed than the textbook damping formula
+// predicts, so find the damping that gives exactly e in a straight drop. That way the slider
+// matches what a real drop test measures.
+const dampCache = new Map();
+function dampFor(e, k, m) {
+  const key = `${e}|${k}|${m}`;
+  if (dampCache.has(key)) return dampCache.get(key);
+  const bounce = c => {
+    let d = 0, v = 1; const dt = Math.PI * Math.sqrt(m / k) / 4000;
+    for (let i = 0; i < 40000; i++) { const a = -Math.max(0, k * d + c * v) / m; v += a * dt; d += v * dt; if (d < 0) break; }
+    return -v;
+  };
+  let lo = 0, hi = 20 * Math.sqrt(k * m);
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (bounce(mid) > e) lo = mid; else hi = mid; }
+  dampCache.set(key, lo);
+  return lo;
+}
+function cellWalls(p) {
+  const cg = cellGeom(p), D = CELL_DEPTH_IN * IN;
+  const B2 = { x: cg.B.x - cg.n.x * D, y: cg.B.y - cg.n.y * D }, T2 = { x: cg.T.x - cg.n.x * D, y: cg.T.y - cg.n.y * D };
+  return { cg, B2, T2, walls: [
+    { a: cg.B, b: B2, name: 'bottom', aName: 'bottom lip' },
+    { a: B2, b: T2, name: 'back' },
+    { a: T2, b: cg.T, name: 'top', bName: 'top lip' }] };
+}
+function closest(px, py, a, b) {
+  const ex = b.x - a.x, ey = b.y - a.y;
+  const s = Math.max(0, Math.min(1, ((px - a.x) * ex + (py - a.y) * ey) / (ex * ex + ey * ey)));
+  return { x: a.x + s * ex, y: a.y + s * ey, s };
+}
+function insideCell(x, y, cg) {
+  const rx = x - cg.B.x, ry = y - cg.B.y, depth = -(rx * cg.n.x + ry * cg.n.y), along = rx * cg.d.x + ry * cg.d.y;
+  return depth > 0 && depth < CELL_DEPTH_IN * IN && along > 0 && along < CELL_OPEN_IN * IN;
+}
+function shootBounce(p, c, exit) {
+  const R = c.rb, m = c.m, I = c.I, A = Math.PI * R * R, a = p.angle * DEG;
+  const cw = cellWalls(p), { cg } = cw;
+  const k = p.wallK * 1000, damp = dampFor(Math.min(0.98, Math.max(0.02, p.wallE)), k, m);
+  const kD = p.air ? 0.5 * RHO_AIR * p.cd * A / m : 0, kL = p.air ? 0.5 * RHO_AIR * A / m * p.magnus : 0;
+  let x = 0, y = p.launchH * IN, vx = exit.v * Math.cos(a), vy = exit.v * Math.sin(a);
+  // world convention: w > 0 is counter-clockwise, which is backspin for a ball flying right
+  let w = (p.spin === 'back' ? 1 : -1) * Math.abs(exit.w), th = 0, t = 0;
+  const pts = [{ t, x, y, vx, vy, w, th }], impacts = [], open = cw.walls.map(() => null);
+  let nextRec = REC, apex = { x, y, t }, side = (x - cg.B.x) * cg.n.x + (y - cg.B.y) * cg.n.y;
+  let cross = null, entered = false, still = 0, settled = false;
+  const closeImpact = i => {
+    const o = open[i]; o.vout = Math.hypot(vx, vy); o.vnOut = vx * o.nx + vy * o.ny; o.wout = w; o.tEnd = t;
+    impacts.push(o); open[i] = null;
+  };
+  while (t < 4 && y > R && x < 260 * IN) {
+    const sp = Math.hypot(vx, vy);
+    let near = Infinity;
+    for (const wl of cw.walls) { const q = closest(x, y, wl.a, wl.b); near = Math.min(near, Math.hypot(x - q.x, y - q.y)); }
+    const dt = near < R + sp * 0.003 + 0.005 ? 1e-5 : 1e-3; // fine steps only near the cell
+    const v = sp || 1e-9, S = R * Math.abs(w) / v, CL = S / (2 * S + 1), sg = Math.sign(w);
+    vx += (-kD * v * vx - kL * CL * v * vy * sg) * dt;
+    vy += (-G - kD * v * vy + kL * CL * v * vx * sg) * dt;
+    cw.walls.forEach((wl, i) => {
+      const q = closest(x, y, wl.a, wl.b), dx = x - q.x, dy = y - q.y, d = Math.hypot(dx, dy);
+      if (d >= R || d < 1e-9) { if (open[i]) closeImpact(i); return; }
+      const nx = dx / d, ny = dy / d, vn = vx * nx + vy * ny;
+      if (!open[i]) open[i] = { t, wall: q.s <= 0 && wl.aName ? wl.aName : q.s >= 1 && wl.bName ? wl.bName : wl.name,
+        x: q.x, y: q.y, nx, ny, vin: sp, vnIn: -vn, win: w };
+      const N = Math.max(0, k * (R - d) - damp * vn);
+      vx += N * nx * dt / m; vy += N * ny * dt / m;
+      // slip of the contact point along the wall; friction impulse is capped at μ·N·dt
+      const tx = -ny, ty = nx, u = vx * tx + vy * ty - w * R;
+      const Jmax = p.wallMu * N * dt, J = Math.max(-Jmax, Math.min(Jmax, -u / (1 / m + R * R / I)));
+      vx += J * tx / m; vy += J * ty / m; w -= J * R / I;
+    });
+    x += vx * dt; y += vy * dt; th += w * dt; t += dt;
+    if (y > apex.y) apex = { x, y, t };
+    const ns = (x - cg.B.x) * cg.n.x + (y - cg.B.y) * cg.n.y;
+    if (side > 0 && ns <= 0) { // crossed the plane of the opening, going in
+      const u = ((x - cg.B.x) * cg.d.x + (y - cg.B.y) * cg.d.y) / IN;
+      if (!cross) cross = { x, y, u, t, vx, vy };
+      if (u > 0 && u < CELL_OPEN_IN) entered = true;
+    }
+    side = ns;
+    if (t >= nextRec) { pts.push({ t, x, y, vx, vy, w, th }); nextRec += REC; }
+    if (entered) {
+      still = Math.hypot(vx, vy) < 0.04 ? still + dt : 0;
+      if (still > 0.25) { settled = true; break; }
+    }
+  }
+  open.forEach((o, i) => { if (o) { closeImpact(i); impacts[impacts.length - 1].rest = true; } });
+  pts.push({ t, x, y, vx, vy, w, th });
+  const verdict = entered ? (insideCell(x, y, cg) ? 'scored' : 'out') : !cross ? 'short' : cross.u <= 0 ? 'low' : 'high';
+  if (cross) cross.verdict = verdict;
+  return { pts, apex, cross, impacts, verdict, settled, T: t, landX: x, landed: y <= R + 1e-6, cw };
+}
+
+// ---------- Angle sweep ----------
+// Exit speed and spin depend only on RPM (not angle), so compute them once on an RPM grid.
+function exitTable(p) {
+  const tab = [];
+  for (let rpm = 300; rpm <= 6000; rpm += 50) { const c = contact({ ...p, rpm }); tab.push({ v: c.exit.v, w: c.exit.w }); }
+  return rpm => {
+    const f = (rpm - 300) / 50, i = Math.max(0, Math.min(tab.length - 2, Math.floor(f))), s = Math.min(1, Math.max(0, f - i));
+    return { v: tab[i].v + (tab[i + 1].v - tab[i].v) * s, w: tab[i].w + (tab[i + 1].w - tab[i].w) * s };
+  };
+}
+const SWEEP_ANGLES = [], SWEEP_AIMS = [];
+for (let a = 20; a <= 75; a += 2.5) SWEEP_ANGLES.push(a);
+for (let u = -1; u <= 15; u += 1) SWEEP_AIMS.push(u);
+const sweepKey = p => JSON.stringify({ ...p, angle: 0, rpm: 0, slowmo: 0, speed: 0, cellSlow: 0, ghosts: 0 });
+let sweep = null, sweepToken = 0;
+function runSweep() {
+  const p = params(), token = ++sweepToken, c0 = contact(p);
+  $('sweepMsg').textContent = 'Computing flywheel exit speeds…';
+  setTimeout(() => {
+    const ex = exitTable(p);
+    sweep = { key: sweepKey(p), grid: [], best: null };
+    let ai = 0;
+    const step = () => {
+      if (token !== sweepToken) return;
+      const angle = SWEEP_ANGLES[ai], q = { ...p, angle }, col = [];
+      for (const aim of SWEEP_AIMS) {
+        const f = rpm => { const fl = flight(q, c0, ex(rpm), q.air); return fl.cross ? fl.cross.u - aim : -1e3; };
+        let lo = 300, hi = 6000;
+        if (f(hi) < 0 || f(lo) > 0) { col.push(null); continue; }
+        for (let i = 0; i < 22; i++) { const mid = (lo + hi) / 2; if (f(mid) < 0) lo = mid; else hi = mid; }
+        const rpm = (lo + hi) / 2;
+        col.push({ rpm, angle, aim, verdict: shootBounce(q, c0, ex(rpm)).verdict });
+      }
+      sweep.grid.push(col); ai++;
+      $('sweepMsg').textContent = `Simulating angle ${ai} of ${SWEEP_ANGLES.length}…`;
+      if (ai < SWEEP_ANGLES.length) setTimeout(step, 0); else summarizeSweep();
+    };
+    step();
+  }, 20);
+}
+function summarizeSweep() {
+  // Rank angles by the RPM range that still scores: that's how much flywheel error you can absorb.
+  // Only an unbroken run of scoring aim points counts: two lucky hits with bounce-outs between
+  // them are not a safe RPM range.
+  const rows = sweep.grid.map(col => {
+    let best = null, run = [];
+    const flush = () => {
+      if (!run.length) return;
+      const r = { n: run.length, lo: run[0].rpm, hi: run[run.length - 1].rpm, aimLo: run[0].aim, aimHi: run[run.length - 1].aim };
+      r.win = r.hi - r.lo;
+      if (!best || r.n > best.n || (r.n === best.n && r.win > best.win)) best = r;
+      run = [];
+    };
+    col.forEach(c => { if (c && c.verdict === 'scored') run.push(c); else flush(); });
+    flush();
+    return best && { ...best, angle: col.find(c => c).angle };
+  }).filter(Boolean).sort((a, b) => b.n - a.n || b.win - a.win);
+  sweep.best = rows[0] || null;
+  $('sweepMsg').textContent = 'Done. Click any square to load that shot.';
+  $('sweepSummary').innerHTML = !rows.length ? '<p>No angle scored from this distance. Try moving closer or changing the bounce settings.</p>' :
+    '<table>' + rows.slice(0, 5).map((r, i) => `<tr><td>${i ? '' : '<b>Best</b> '}${r.angle}°</td><td>scores from ${Math.round(r.lo)} to ${Math.round(r.hi)} RPM</td><td>${r.n > 1 ? `window ${Math.round(r.win)} RPM (±${Math.round(r.win / 2)})` : 'single aim point only'}</td><td>${r.n > 1 ? `aim ${r.aimLo} to ${r.aimHi} in up the opening` : `aim ${r.aimLo} in`}</td></tr>`).join('') + '</table>';
+}
+
+// ---------- Cell close-up + heatmap rendering ----------
+let cellStart = 0;
+const spinTxt = w => `${Math.abs(w * 60 / 2 / Math.PI).toFixed(0)} RPM ${w >= 0 ? '↺' : '↻'}`;
+function drawCell(ts) {
+  const { ctx, W, H } = fit($('cell'));
+  const { c, fl, p } = sim, { cg, B2, T2 } = fl.cw;
+  ctx.fillStyle = C.panel; ctx.fillRect(0, 0, W, H);
+  const xs = [cg.B.x, cg.T.x, B2.x, T2.x], ys = [cg.B.y, cg.T.y, B2.y, T2.y], M = 7 * IN;
+  const x0 = Math.min(...xs) - M, x1 = Math.max(...xs) + M, y0 = Math.min(...ys) - M, y1 = Math.max(...ys) + M;
+  const sc = Math.min(W / (x1 - x0), H / (y1 - y0)), ox = (W - (x1 - x0) * sc) / 2, oy = (H + (y1 - y0) * sc) / 2;
+  const X = x => ox + (x - x0) * sc, Y = y => oy - (y - y0) * sc;
+  ctx.fillStyle = C.cell; ctx.globalAlpha = 0.08;
+  ctx.beginPath(); [cg.B, B2, T2, cg.T].forEach((q, i) => i ? ctx.lineTo(X(q.x), Y(q.y)) : ctx.moveTo(X(q.x), Y(q.y))); ctx.fill();
+  ctx.globalAlpha = 1; ctx.strokeStyle = C.cell; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+  ctx.beginPath(); [cg.B, B2, T2, cg.T].forEach((q, i) => i ? ctx.lineTo(X(q.x), Y(q.y)) : ctx.moveTo(X(q.x), Y(q.y))); ctx.stroke();
+  ctx.setLineDash([4, 5]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(cg.B.x), Y(cg.B.y)); ctx.lineTo(X(cg.T.x), Y(cg.T.y)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = C.muted; ctx.font = '12px system-ui';
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  [[mid(cg.B, B2), 'bottom', 0, 18], [mid(B2, T2), 'back', 10, 0], [mid(T2, cg.T), 'top', -10, -10], [mid(cg.B, cg.T), 'opening', -58, 0]]
+    .forEach(([q, s, dx, dy]) => ctx.fillText(s, X(q.x) + dx, Y(q.y) + dy));
+  if (!fl.cross) { ctx.fillStyle = C.ink; ctx.fillText('The ball never reaches the cell.', 12, 22); return; }
+  const t0 = Math.max(0, fl.cross.t - 0.05), t1 = fl.T, slow = p.cellSlow, dur = (t1 - t0) * slow + 1.2;
+  const t = Math.min(t1, t0 + (((ts - cellStart) / 1000) % dur) / slow);
+  const i1 = idxAt(fl.pts, t), i0 = idxAt(fl.pts, t0);
+  ctx.strokeStyle = C.accent; ctx.lineWidth = 2; ctx.globalAlpha = 0.6; ctx.beginPath();
+  for (let i = i0; i <= i1; i++) { const q = fl.pts[i]; i > i0 ? ctx.lineTo(X(q.x), Y(q.y)) : ctx.moveTo(X(q.x), Y(q.y)); }
+  ctx.stroke(); ctx.globalAlpha = 1;
+  const shown = fl.impacts.filter(o => o.vnIn > 0.1);
+  shown.forEach((o, n) => { if (o.t > t) return;
+    ctx.fillStyle = C.blue; ctx.beginPath(); ctx.arc(X(o.x), Y(o.y), 8, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '600 11px system-ui'; ctx.fillText(n + 1, X(o.x) - 3.5, Y(o.y) + 4); });
+  const q = fl.pts[i1], r = c.rb * sc;
+  ctx.save(); ctx.translate(X(q.x), Y(q.y)); ctx.rotate(-q.th);
+  ctx.fillStyle = ballColor(); ctx.beginPath(); ctx.arc(0, 0, r, 0, 2 * Math.PI); ctx.fill();
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2; ctx.stroke(); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-r, 0); ctx.lineTo(r, 0); ctx.stroke();
+  ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(r * 0.6, 0, 3, 0, 2 * Math.PI); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = C.ink; ctx.font = '600 13px system-ui';
+  [`t = ${((t - fl.cross.t) * 1000).toFixed(0)} ms after the opening   (slow-mo ×${slow})`,
+   `speed ${ftps(Math.hypot(q.vx, q.vy))} ft/s · spin ${spinTxt(q.w)}`].forEach((s, i) => ctx.fillText(s, 10, 20 + i * 18));
+}
+function idxAt(pts, t) {
+  let lo = 0, hi = pts.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (pts[m].t <= t) lo = m; else hi = m; }
+  return lo;
+}
+function renderImpacts() {
+  const { fl } = sim, shown = fl.impacts.filter(o => o.vnIn > 0.1);
+  const v = sim.fl.verdict;
+  $('impacts').innerHTML = !shown.length ? '<tr><td>No wall hits.</td></tr>' :
+    '<tr><td><b>#</b></td><td><b>Hit</b></td><td><b>Speed in → out</b></td><td><b>Bounce</b></td><td><b>Spin in → out</b></td></tr>' +
+    shown.map((o, n) => `<tr><td>${n + 1}</td><td>${o.wall}${o.rest ? ' (rolling)' : ''}</td><td>${ftps(o.vin)} → ${ftps(o.vout)} ft/s</td>` +
+      `<td>${o.rest ? '—' : (o.vnOut / o.vnIn).toFixed(2)}</td><td>${spinTxt(o.win)} → ${spinTxt(o.wout)}</td></tr>`).join('');
+}
+function heatLayout(W, H) {
+  const pad = { l: 92, r: 10, t: 10, b: 34 }, nc = SWEEP_ANGLES.length, nr = SWEEP_AIMS.length;
+  return { pad, cw: (W - pad.l - pad.r) / nc, ch: (H - pad.t - pad.b) / nr, nc, nr };
+}
+function drawHeat() {
+  const { ctx, W, H } = fit($('heat'));
+  ctx.fillStyle = C.panel; ctx.fillRect(0, 0, W, H);
+  const L = heatLayout(W, H), { pad, cw, ch } = L;
+  const color = { scored: C.good, out: C.warn, low: C.bad, high: C.bad, short: C.bad };
+  ctx.font = '11px system-ui';
+  SWEEP_ANGLES.forEach((a, i) => {
+    if (a % 10 === 0) { ctx.fillStyle = C.muted; ctx.fillText(a + '°', pad.l + i * cw + cw / 2 - 8, H - pad.b + 14); }
+    SWEEP_AIMS.forEach((u, j) => {
+      const x = pad.l + i * cw, y = pad.t + (L.nr - 1 - j) * ch, cell = sweep && sweep.grid[i] && sweep.grid[i][j];
+      ctx.fillStyle = cell ? color[cell.verdict] : C.grid;
+      ctx.globalAlpha = cell ? (cell.verdict === 'scored' || cell.verdict === 'out' ? 0.9 : 0.35) : 1;
+      ctx.fillRect(x + 1, y + 1, cw - 2, ch - 2); ctx.globalAlpha = 1;
+    });
+  });
+  ctx.fillStyle = C.muted; ctx.fillText('launch angle', W / 2, H - 4);
+  const rowY = u => pad.t + (L.nr - 1 - SWEEP_AIMS.indexOf(u)) * ch + ch / 2 + 4;
+  [[15, 'over the top'], [14, 'top lip'], [7, 'middle'], [0, 'bottom lip'], [-1, 'under']].forEach(([u, s]) => ctx.fillText(s, 6, rowY(u)));
+  const p = params(), ai = SWEEP_ANGLES.indexOf(p.angle);
+  if (ai >= 0) { ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.strokeRect(pad.l + ai * cw, pad.t, cw, H - pad.t - pad.b); }
+  if (sweep && sweep.key !== sweepKey(p)) {
+    ctx.fillStyle = C.ink; ctx.font = '600 13px system-ui'; ctx.fillText('Settings changed. Run the sweep again.', pad.l + 8, pad.t + 18);
+  }
+}
+function heatClick(ev) {
+  if (!sweep) return;
+  const r = $('heat').getBoundingClientRect(), L = heatLayout(r.width, r.height);
+  const i = Math.floor((ev.clientX - r.left - L.pad.l) / L.cw), j = L.nr - 1 - Math.floor((ev.clientY - r.top - L.pad.t) / L.ch);
+  const cell = sweep.grid[i] && sweep.grid[i][j];
+  if (!cell) return;
+  setVal('angle', cell.angle); setVal('rpm', Math.round(cell.rpm / 5) * 5);
+  $('solveMsg').textContent = `Loaded ${cell.angle}° aimed ${cell.aim} in up the opening (${cell.verdict}).`;
+  recompute();
+}
+
 // ---------- Animation loop ----------
 let sim, phase = 'contact', phaseStart = 0, lastTs = 0, pending = false;
 function recompute() {
   if (pending) return; pending = true;
-  requestAnimationFrame(() => { pending = false; sim = simulate(params()); renderStats(); restart(); });
+  requestAnimationFrame(() => { pending = false; sim = simulate(params()); renderStats(); renderImpacts(); cellStart = performance.now(); restart(); });
 }
 function restart() { phase = 'contact'; phaseStart = performance.now(); }
 function frame(ts) {
@@ -729,6 +1026,8 @@ function frame(ts) {
     drawCloseup(simT, wallDt);
     drawChart(simT);
     drawField(flT);
+    drawCell(ts);
+    drawHeat();
   }
   requestAnimationFrame(frame);
 }
@@ -736,6 +1035,8 @@ function frame(ts) {
 readColors();
 buildControls();
 matchPreset('muW'); matchPreset('muH'); showSquish(); showMoi();
+$('sweepBtn').onclick = runSweep;
+$('heat').addEventListener('click', heatClick);
 recompute();
 requestAnimationFrame(frame);
 </script>
