@@ -28,7 +28,7 @@ header{padding:16px 20px 8px;display:flex;flex-wrap:wrap;align-items:baseline;ga
 header h1{font-size:20px;margin:0;letter-spacing:-.01em}
 header p{margin:0;color:var(--muted)}
 .wrap{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;padding:8px 20px 24px}
-@media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr);padding:8px 16px 24px}}
+@media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr);padding:8px 16px 24px}main{order:1}aside{order:2}}
 /* Wide screens: the config column scrolls on its own; the simulator column stays put */
 @media (min-width:901px){
   body{height:100vh;display:flex;flex-direction:column;overflow:hidden}
