@@ -38,7 +38,7 @@ Hardware names are case-sensitive. Updated from the XML on 2026-10-10:
 | Motor | `shooterPollen` | Expansion Hub 2 (2) | 2 | goBILDA 5202 |
 | CR servo | `transportPollen` | Expansion Hub 2 (2) | 0 | continuous rotation |
 | CR servo | `triggerPollen` | Expansion Hub 2 (2) | 1 | continuous rotation |
-| Odometry | `odo` | Control Hub (173) | I2C bus 1, port 0 | goBILDA Pinpoint |
+| Odometry | `pinpoint` | Control Hub (173) | I2C bus 0 (shares it with the IMU; DS slot 1) | goBILDA Pinpoint |
 | IMU | `imu` | Control Hub (173) | I2C bus 0, port 0 | Control Hub BHI260AP |
 
 The drivetrain is split across both hubs. Motor names changed from `FrontLeft`,
@@ -50,7 +50,9 @@ hold the matching gates open. Shooters and transports run continuously after PLA
 The pollen shooter, transport and trigger use REVERSE direction with positive power.
 
 **The config XML is versioned** at `robot-config/2222-Config.xml` (pulled 2026-10-09). Push
-it to a hub with `adb push ... /sdcard/FIRST/`, then Activate on the DS. Re-pull and commit
+it to a hub with `./deploy -m` / `./deploy-linux -m` (pushes `robot-config/*.xml` to
+`/sdcard/FIRST/` before the install, so the app restart loads it), then Activate on the DS if
+it isn't already the active config. Re-pull and commit
 after every DS config change, or the repo copy goes stale. See README.
 
 Drivetrain is **mecanum**. TeleOp IMU orientation: logo **DOWN**, USB **LEFT** (updated 2026-10-10).
@@ -387,7 +389,8 @@ adb devices                              # confirm hub is on USB
 Counterpart to the macOS `deploy` for this CachyOS box. Uses NetworkManager: `nmcli connection
 up <saved connection>` to join the robot and to return, so it never touches a Wi-Fi password —
 the robot network must be saved once via the Wi-Fi menu. Same flags as the Mac script (`-r`,
-`-c`, `--stay`, `--check`), same build-first ordering, same restore-in-`finally` with Ctrl+C
+`-c`, `--stay`, `-m/--hardware-map`, `--map-only`, `--check`; `./update-hardware-map` runs
+the right one with `--map-only`: push XML, `am force-stop` + relaunch the RC app, no build), same build-first ordering, same restore-in-`finally` with Ctrl+C
 ignored during restore, same adb kill-server escalation. Prefers the SDK's adb from
 `local.properties`. Tests: `tests/test_deploy_linux.py`.
 
@@ -632,8 +635,11 @@ Next:
       check each settles at target, then trim F per motor, then P
 - [ ] Toggle-button lesson in `NEXT_STEPS.md` (opt-in `addToggle`, private state, `isOn()`)
       — the flywheel lesson is done, as `lib/VelocityMotor`
-- [ ] Optional: re-copy upstream `PinpointTuner.java` now that PR #115 is merged (ours
-      already has the same fix, so this only keeps us in sync)
+- [x] Re-copied upstream `PinpointTuner.java` and `ForesightTuner.java` (2026-10-14); both now
+      match Quickstart master exactly. Pedro libs are still the latest (revhub 3.0.1, tuning 1.0.1)
+- [ ] Upstream **Quickstart PR #120** (opened 2026-10-14): `Tests.java` Line/Curve/Interpolation
+      ignored the Distance input (a local `double distance = 48;` shadowed the field). Fixed
+      locally the same way and verified on hardware; re-copy upstream once it merges
 - [ ] Delete `PanelsDemo.java` when it stops being useful
 - [ ] Optional: rename the robot SSID and config file to the real team number; delete the
       16 MB of stale `/sdcard/FIRST/java/srcBackups/` zips

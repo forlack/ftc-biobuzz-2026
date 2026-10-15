@@ -1,0 +1,8 @@
+#!/bin/sh
+# Upload robot-config/*.xml to the robot over Wi-Fi and restart the Robot Controller app.
+# No build. Takes the same flags as ./deploy / ./deploy-linux (for example --stay).
+cd "$(dirname "$0")" || exit 1
+case "$(uname)" in
+    Darwin) exec ./deploy --map-only "$@" ;;
+    *)      exec ./deploy-linux --map-only "$@" ;;
+esac

@@ -16,6 +16,36 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
+class HardwareMapTests(unittest.TestCase):
+    def commands(self, hardware_map, map_only=False):
+        args = SimpleNamespace(ssid='Robot Wi-Fi', robot_ip='192.168.43.1',
+                               hardware_map=hardware_map or map_only, map_only=map_only)
+        commands = []
+        def run(command, **kwargs):
+            commands.append(command)
+            return SimpleNamespace(stdout='device\n' if command[-1] == 'get-state' else '', stderr='')
+        with patch.object(module, 'run', side_effect=run), patch.object(module, 'join'):
+            module.deploy(args, 'en0', 'Home', '10.0.0.1', '/sdk/adb', {},
+                          {'Robot Wi-Fi': 'r', 'Home': 'h'})
+        return commands
+
+    def test_hardware_map_pushed_before_install(self):
+        commands = self.commands(True)
+        pushes = [i for i, c in enumerate(commands) if 'push' in c]
+        install = next(i for i, c in enumerate(commands) if ':TeamCode:installDebug' in c)
+        self.assertTrue(pushes)
+        self.assertTrue(all(i < install for i in pushes))
+
+    def test_map_only_restarts_app_without_install(self):
+        commands = self.commands(False, map_only=True)
+        self.assertFalse([c for c in commands if ':TeamCode:installDebug' in c])
+        self.assertTrue([c for c in commands if 'push' in c])
+        self.assertTrue([c for c in commands if 'force-stop' in c])
+
+    def test_no_hardware_map_without_flag(self):
+        self.assertFalse([c for c in self.commands(False) if 'push' in c])
+
+
 class RestoreTests(unittest.TestCase):
     def exercise(self, failure=None, join_failure=False, restore_failure=False):
         args = SimpleNamespace(ssid='Robot Wi-Fi', robot_ip='192.168.43.1')

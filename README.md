@@ -193,14 +193,26 @@ adb pull /sdcard/FIRST ~/ftc/backups/$(date +%Y%m%d-%H%M%S)-controlhub
 The robot config — which device is on which port, under which name — normally lives only on
 the hub. A copy is kept in `robot-config/2222-Config.xml` so it travels with the code.
 
-**Load it onto a hub** (a new hub, or one that lost its config):
+**Load it onto a hub** (a new hub, one that lost its config, or after editing the XML here) —
+add `-m` / `--hardware-map` to a deploy, which uploads every `robot-config/*.xml` before
+installing the app:
 
 ```bash
-adb -s <serial> push robot-config/2222-Config.xml /sdcard/FIRST/
+./deploy -m            # or ./deploy-linux -m
 ```
 
-Then on the Driver Station: **⋮ → Configure Robot → `2222-Config` → Activate.** Copying the
-file does not make it active.
+**Only the map changed?** `./update-hardware-map` uploads it and restarts the Robot Controller
+app — no build, so it works with no internet or while already on the robot network:
+
+```bash
+./update-hardware-map          # Mac or Linux; add --stay to stay on the robot Wi-Fi
+```
+
+or by hand: `adb -s <serial> push robot-config/2222-Config.xml /sdcard/FIRST/`
+
+If `2222-Config` is already the active config, the app restart from the deploy loads the new
+file. Otherwise, on the Driver Station: **⋮ → Configure Robot → `2222-Config` → Activate.**
+Copying the file does not make it active.
 
 The file records **wiring**. If the other robot's devices are on different ports, the names
 load fine but point at the wrong hardware — run **Motors Test** before driving.

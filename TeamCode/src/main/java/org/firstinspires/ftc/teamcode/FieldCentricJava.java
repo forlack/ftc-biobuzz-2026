@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
@@ -43,6 +44,9 @@ public class FieldCentricJava extends LinearOpMode {
     public static double NECTAR_FLYWHEEL_RPM = 4050;
     /** Turn both flywheels on or off from Panels. They start on. */
     public static boolean FLYWHEELS_ON = true;
+    /** Stinger servo end points, 0 to 1. Start at 0.5 and change by 0.05 at a time. */
+    public static double STINGER_UP = 0.5;
+    public static double STINGER_DOWN = 0.5;
 
     // Drive and dashboard.
     private MecanumDrive chassis;
@@ -62,22 +66,24 @@ public class FieldCentricJava extends LinearOpMode {
     private CRServo triggerNectar;
     private CRServo transportNectar;
 
+    private Servo stinger;
+
     // Must be ABOVE the buttons -- they register themselves during construction.
     private final Button.Group buttons = new Button.Group();
 
     // Drive controls. Each lambda reads the current pad when buttons.update() runs.
-    private final Button velocityMode = buttons.add(() -> pad.y);
-    private final Button brakeMode    = buttons.add(() -> pad.x);
-    private final Button slowMode     = buttons.add(() -> pad.left_trigger > 0.5);
-    private final Button turboMode    = buttons.add(() -> pad.right_trigger > 0.5);
-    private final Button resetFront   = buttons.add(() -> pad.a);
+    private final Button velocityMode    = buttons.add(() -> pad.y);
+    private final Button brakeMode       = buttons.add(() -> pad.x);
+    private final Button slowMode        = buttons.add(() -> pad.left_trigger > 0.5);
+    private final Button turboMode       = buttons.add(() -> pad.right_trigger > 0.5);
+    private final Button resetFront      = buttons.add(() -> pad.a);
 
     // Mechanism controls.
-    private final Button toggleIntake = buttons.add(() -> pad.dpad_up);
-    private final Button reverseIntake = buttons.add(() -> pad.dpad_down);
+    private final Button toggleIntake    = buttons.add(() -> pad.dpad_up);
+    private final Button reverseIntake   = buttons.add(() -> pad.dpad_down);
     private final Button toggleFlywheels = buttons.add(() -> pad.dpad_left);
-    private final Button pollenGate   = buttons.add(() -> pad.right_bumper);
-    private final Button nectarGate   = buttons.add(() -> pad.left_bumper);
+    private final Button gate            = buttons.add(() -> pad.right_bumper);
+    private final Button sting           = buttons.add(() -> pad.left_bumper);
 
     @Override
     public void runOpMode() {
@@ -100,6 +106,7 @@ public class FieldCentricJava extends LinearOpMode {
         shooterNectar = new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD);
         triggerNectar = hardwareMap.get(CRServo.class, "triggerNectar");
         transportNectar = hardwareMap.get(CRServo.class, "transportNectar");
+        stinger = hardwareMap.get(Servo.class, "stinger");
 
         // Dashboard.
         dashboard = new DriveDashboard(chassis, telemetry);
@@ -183,14 +190,18 @@ public class FieldCentricJava extends LinearOpMode {
         dashboard.addData("Intake", reverseIntake.down() ? "REVERSE" : (toggleIntake.active ? "ON" : "OFF"));
         dashboard.addData("Intake RPM (actual / target)",
                 Math.round(intake.getRPM()) + " / " + Math.round(intake.getTargetRPM()));
+        dashboard.addData("Intake % off target", percentOff(intake));
         dashboard.addData("Intake P", intake.getP());
     }
 
     private void updateServos() {
-        transportPollen.setPower(1);
-        triggerNectar.setPower(nectarGate.down() ? 1 : 0);
-        triggerPollen.setPower(pollenGate.down() ? 1 : 0);
-        transportNectar.setPower(1);
+        // Transports run only while the flywheels are on (D-pad left or Panels FLYWHEELS_ON).
+        transportPollen.setPower(FLYWHEELS_ON ? 1 : 0);
+        triggerNectar.setPower(gate.down() ? 1 : 0);
+        triggerPollen.setPower(gate.down() ? 1 : 0);
+        transportNectar.setPower(FLYWHEELS_ON ? 1 : 0);
+        stinger.setPosition(sting.down() ? STINGER_DOWN : STINGER_UP);
+        dashboard.addData("Stinger position", stinger.getPosition());
     }
 
     private void updateShooter() {
@@ -204,7 +215,19 @@ public class FieldCentricJava extends LinearOpMode {
         dashboard.addLine("--- SHOOTERS ---");
         dashboard.addData("Pollen RPM (actual / target)",
                 Math.round(shooterPollen.getRPM()) + " / " + Math.round(shooterPollen.getTargetRPM()));
+        dashboard.addData("Pollen % off target", percentOff(shooterPollen));
         dashboard.addData("Nectar RPM (actual / target)",
                 Math.round(shooterNectar.getRPM()) + " / " + Math.round(shooterNectar.getTargetRPM()));
+        dashboard.addData("Nectar % off target", percentOff(shooterNectar));
+    }
+
+    /** How far the motor is from its target, as a percent. Negative means too slow. */
+    private static String percentOff(VelocityMotor motor) {
+        double target = motor.getTargetRPM();
+        if (target == 0) {
+            return "--";
+        }
+        double percent = (motor.getRPM() - target) / Math.abs(target) * 100;
+        return String.format("%+.1f%%", percent);
     }
 }

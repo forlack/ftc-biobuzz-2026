@@ -32,7 +32,7 @@ public class LocalizationCheck extends LinearOpMode {
     public void runOpMode() {
         TelemetryManager panels = PanelsTelemetry.INSTANCE.getTelemetry();
         Follower follower = Constants.create(hardwareMap);
-        GoBildaPinpointDriver pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
+        GoBildaPinpointDriver pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "pinpoint");
         follower.setPose(new Pose(0, 0, 0));
 
         panels.addLine("Push by hand. Motors are off. A = reset to 0.");

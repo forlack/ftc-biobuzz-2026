@@ -16,6 +16,9 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
+HARDWARE_MAP_DIR = ROOT / 'robot-config'
+HUB_CONFIG_DIR = '/sdcard/FIRST'
+RC_PACKAGE = 'com.qualcomm.ftcrobotcontroller'
 NMCLI = shutil.which('nmcli') or '/usr/bin/nmcli'
 DEFAULT_ROBOT_IP = '192.168.43.1'
 
@@ -108,6 +111,24 @@ def find_adb():
     return shutil.which('adb')
 
 
+def push_hardware_map(adb, target):
+    """Copy robot-config/*.xml to the hub, where the Robot Controller looks for configs."""
+    files = sorted(HARDWARE_MAP_DIR.glob('*.xml'))
+    if not files:
+        raise RuntimeError(f'No .xml hardware maps in {HARDWARE_MAP_DIR}.')
+    for file in files:
+        print(f'Uploading hardware map {file.name}…', flush=True)
+        run([adb, '-s', target, 'push', str(file), HUB_CONFIG_DIR + '/'], timeout=30)
+
+
+def restart_robot_controller(adb, target):
+    """Relaunch the Robot Controller app so it reads the uploaded hardware map."""
+    print('Restarting the Robot Controller app…', flush=True)
+    run([adb, '-s', target, 'shell', 'am', 'force-stop', RC_PACKAGE], timeout=15)
+    run([adb, '-s', target, 'shell', 'monkey', '-p', RC_PACKAGE,
+         '-c', 'android.intent.category.LAUNCHER', '1'], timeout=15)
+
+
 def connect_adb(adb, target):
     for attempt in range(10):
         if attempt == 3:
@@ -148,8 +169,14 @@ def deploy(args, previous, adb, env):
         connect_adb(adb, target)
         # Explicit serial avoids installing onto a USB-connected Driver Hub by accident.
         deploy_env = dict(env, ANDROID_SERIAL=target)
-        run([str(ROOT / 'gradlew'), '--offline', ':TeamCode:installDebug', '--console=plain'],
-            timeout=300, capture=False, env=deploy_env)
+        if getattr(args, 'hardware_map', False):
+            # Before installing: the reinstall restarts the app, which reloads the map.
+            push_hardware_map(adb, target)
+        if getattr(args, 'map_only', False):
+            restart_robot_controller(adb, target)
+        else:
+            run([str(ROOT / 'gradlew'), '--offline', ':TeamCode:installDebug',
+                 '--console=plain'], timeout=300, capture=False, env=deploy_env)
     except BaseException as exc:
         error = exc
     finally:
@@ -194,9 +221,14 @@ def main():
     parser.add_argument('--robot-ip', help=f'robot address (default {DEFAULT_ROBOT_IP})')
     parser.add_argument('-s', '--stay', action='store_true',
                         help='stay on the robot Wi-Fi after deploying (for Panels and logs)')
+    parser.add_argument('-m', '--hardware-map', action='store_true',
+                        help='also upload robot-config/*.xml to the hub (restart applies it)')
+    parser.add_argument('--map-only', action='store_true',
+                        help='only upload robot-config/*.xml and restart the app; no build')
     parser.add_argument('--check', action='store_true',
                         help='check setup without building or changing networks')
     args = parser.parse_args()
+    args.hardware_map = args.hardware_map or args.map_only
 
     if not Path(NMCLI).is_file():
         parser.error('nmcli not found. This script needs NetworkManager.')
@@ -216,7 +248,7 @@ def main():
     if not device:
         parser.error('No Wi-Fi device found.')
     previous = match_connection(args.current, saved) or active_connection(device)
-    if previous == args.robot:
+    if not args.map_only and previous == args.robot:
         parser.error('Start on your normal network so dependencies can download before deploying.')
     if previous is None:
         print('Not connected to any Wi-Fi now; will not restore afterwards.')
@@ -229,6 +261,8 @@ def main():
     config['robot_ip'] = args.robot_ip
     save_config(config_path, config)
 
+    if args.hardware_map and not list(HARDWARE_MAP_DIR.glob('*.xml')):
+        parser.error(f'No .xml hardware maps in {HARDWARE_MAP_DIR}.')
     if args.check:
         after = args.robot if args.stay else (previous or 'nothing')
         print(f'Setup ready: {previous or "no Wi-Fi"} -> {args.robot} -> {after}. '
@@ -237,9 +271,10 @@ def main():
 
     os.chdir(ROOT)
     env = dict(os.environ)
-    print('Building before switching Wi-Fi…', flush=True)
-    run([str(ROOT / 'gradlew'), ':TeamCode:assembleDebug', '--console=plain'],
-        timeout=600, capture=False, env=env)
+    if not args.map_only:
+        print('Building before switching Wi-Fi…', flush=True)
+        run([str(ROOT / 'gradlew'), ':TeamCode:assembleDebug', '--console=plain'],
+            timeout=600, capture=False, env=env)
     deploy(args, previous, adb, env)
     print('Deployment complete.')
 

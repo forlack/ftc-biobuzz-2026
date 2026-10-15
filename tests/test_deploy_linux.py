@@ -28,8 +28,10 @@ def fake_run(failure=None):
 
 
 class LinuxDeployTests(unittest.TestCase):
-    def deploy(self, stay=False, failure=None, bring_up_effect=None):
-        args = SimpleNamespace(robot='Robot', robot_ip='192.168.43.1', stay=stay)
+    def deploy(self, stay=False, failure=None, bring_up_effect=None, hardware_map=False,
+               map_only=False):
+        args = SimpleNamespace(robot='Robot', robot_ip='192.168.43.1', stay=stay,
+                               hardware_map=hardware_map or map_only, map_only=map_only)
         run, commands = fake_run(failure)
         with patch.object(module, 'run', side_effect=run), \
              patch.object(module, 'bring_up', side_effect=bring_up_effect) as bring_up:
@@ -66,6 +68,29 @@ class LinuxDeployTests(unittest.TestCase):
         bring_up, _, error = self.deploy(stay=True,
                                          bring_up_effect=[RuntimeError('join failed'), None])
         self.assertIsInstance(error, RuntimeError)
+        self.assertEqual(bring_up.call_args_list[-1].args[0], 'Home')
+
+    def test_hardware_map_pushed_before_install(self):
+        _, commands, error = self.deploy(hardware_map=True)
+        self.assertIsNone(error)
+        pushes = [i for i, c in enumerate(commands) if 'push' in c]
+        install = next(i for i, c in enumerate(commands) if ':TeamCode:installDebug' in c)
+        self.assertTrue(pushes)
+        self.assertTrue(all(i < install for i in pushes))
+        self.assertEqual(commands[pushes[0]][-1], '/sdcard/FIRST/')
+
+    def test_no_hardware_map_without_flag(self):
+        _, commands, _ = self.deploy()
+        self.assertFalse([c for c in commands if 'push' in c])
+
+    def test_map_only_restarts_app_without_install(self):
+        bring_up, commands, error = self.deploy(map_only=True)
+        self.assertIsNone(error)
+        self.assertFalse([c for c in commands if ':TeamCode:installDebug' in c])
+        push = next(i for i, c in enumerate(commands) if 'push' in c)
+        stop = next(i for i, c in enumerate(commands) if 'force-stop' in c)
+        self.assertLess(push, stop)
+        self.assertTrue([c for c in commands if 'monkey' in c])
         self.assertEqual(bring_up.call_args_list[-1].args[0], 'Home')
 
     def test_match_connection_ignores_case_and_punctuation(self):

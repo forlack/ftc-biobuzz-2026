@@ -48,11 +48,11 @@ public class Constants {
     // stock 3.0.1 tuner always reported FORWARD; it read its answer after Stop, when the
     // Pinpoint has reset y to 0.
     public static PinpointConfig localizerConfig = new PinpointConfig(c -> {
-        c.name.set("odo");
+        c.name.set("pinpoint");
         c.podType.set(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        c.xPodOffset.set(2.519128604198065);
-        c.yPodOffset.set(6.620623370793861);
-        c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        c.xPodOffset.set(0.0);   // pods sit on the robot's center lines
+        c.yPodOffset.set(0.0);
+        c.xPodDirection.set(GoBildaPinpointDriver.EncoderDirection.REVERSED);
         c.yPodDirection.set(GoBildaPinpointDriver.EncoderDirection.REVERSED);
         c.globalDistanceUnit.set(DistanceUnit.INCH);
         c.offsetUnits.set(DistanceUnit.INCH);
