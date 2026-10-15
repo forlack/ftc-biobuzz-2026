@@ -23,6 +23,11 @@ Last updated: 2026-10-10
 
 ### Robot configuration (`2222-Config.xml`)
 
+Forward/backward (X) odometry pod physically flipped on 2026-10-15: current Pedro
+`xPodDirection` is FORWARD, `yPodDirection` remains REVERSED. Both configured pod
+offsets are 0.0 on the competition robot. Historical test-chassis measurements below
+do not describe this mounting. Verify with Localization Check: pushing forward increases X.
+
 Hardware names are case-sensitive. Updated from the XML on 2026-10-10:
 
 | Device | Name | Hub | Port | Type |

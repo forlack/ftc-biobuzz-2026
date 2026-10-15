@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.bylazar.configurables.annotations.Configurable;
+import com.bylazar.configurables.annotations.Sorter;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
@@ -36,16 +37,38 @@ import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 @TeleOp(name = "Field Centric (Java)", group = "Drive")
 public class FieldCentricJava extends LinearOpMode {
 
-    // Target speeds -- editable live in Panels.
+    // Intake -- editable live in Panels.
+    @Sorter(sort = 10)
     public static double INTAKE_RPM = 600;
+    @Sorter(sort = 11)
     public static double INTAKE_P = 15;
+    @Sorter(sort = 12)
     public static double INTAKE_F = 15;
-    public static double POLLEN_FLYWHEEL_RPM = 3850;
-    public static double NECTAR_FLYWHEEL_RPM = 4050;
+
     /** Turn both flywheels on or off from Panels. They start on. */
+    @Sorter(sort = 20)
     public static boolean FLYWHEELS_ON = true;
-    /** Stinger servo end points, 0 to 1. Start at 0.5 and change by 0.05 at a time. */
-    public static double STINGER_UP = 0.5;
+
+    // Pollen flywheel.
+    @Sorter(sort = 21)
+    public static double POLLEN_FLYWHEEL_RPM = 3400;
+    @Sorter(sort = 22)
+    public static double POLLEN_FLYWHEEL_P = 200;
+    @Sorter(sort = 23)
+    public static double POLLEN_FLYWHEEL_F = 12;
+
+    // Nectar flywheel.
+    @Sorter(sort = 30)
+    public static double NECTAR_FLYWHEEL_RPM = 3650;
+    @Sorter(sort = 31)
+    public static double NECTAR_FLYWHEEL_P = 200;
+    @Sorter(sort = 32)
+    public static double NECTAR_FLYWHEEL_F = 12;
+
+    /** Stinger servo end points, 0 to 1. */
+    @Sorter(sort = 40)
+    public static double STINGER_UP = 0;
+    @Sorter(sort = 41)
     public static double STINGER_DOWN = 0.5;
 
     // Drive and dashboard.
@@ -97,6 +120,7 @@ public class FieldCentricJava extends LinearOpMode {
 
         // Pollen shooter and feed.
         shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
+        shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, shooterPollen.getI(), shooterPollen.getD(), POLLEN_FLYWHEEL_F);
         triggerPollen = hardwareMap.get(CRServo.class, "triggerPollen");
         triggerPollen.setDirection(DcMotorSimple.Direction.REVERSE);
         transportPollen = hardwareMap.get(CRServo.class, "transportPollen");
@@ -104,6 +128,7 @@ public class FieldCentricJava extends LinearOpMode {
 
         // Nectar shooter and feed.
         shooterNectar = new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD);
+        shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, shooterNectar.getI(), shooterNectar.getD(), NECTAR_FLYWHEEL_F);
         triggerNectar = hardwareMap.get(CRServo.class, "triggerNectar");
         transportNectar = hardwareMap.get(CRServo.class, "transportNectar");
         stinger = hardwareMap.get(Servo.class, "stinger");
@@ -205,6 +230,12 @@ public class FieldCentricJava extends LinearOpMode {
     }
 
     private void updateShooter() {
+        if (POLLEN_FLYWHEEL_P != shooterPollen.getP() || POLLEN_FLYWHEEL_F != shooterPollen.getF()) {
+            shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, shooterPollen.getI(), shooterPollen.getD(), POLLEN_FLYWHEEL_F);
+        }
+        if (NECTAR_FLYWHEEL_P != shooterNectar.getP() || NECTAR_FLYWHEEL_F != shooterNectar.getF()) {
+            shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, shooterNectar.getI(), shooterNectar.getD(), NECTAR_FLYWHEEL_F);
+        }
         // Flips the same switch Panels shows, so the button and Panels always agree.
         if (toggleFlywheels.pressed()) {
             FLYWHEELS_ON = !FLYWHEELS_ON;
@@ -221,13 +252,12 @@ public class FieldCentricJava extends LinearOpMode {
         dashboard.addData("Nectar % off target", percentOff(shooterNectar));
     }
 
-    /** How far the motor is from its target, as a percent. Negative means too slow. */
-    private static String percentOff(VelocityMotor motor) {
+    /** Numeric percent error for graphing. Negative means too slow; zero target reports 0. */
+    private static double percentOff(VelocityMotor motor) {
         double target = motor.getTargetRPM();
         if (target == 0) {
-            return "--";
+            return 0;
         }
-        double percent = (motor.getRPM() - target) / Math.abs(target) * 100;
-        return String.format("%+.1f%%", percent);
+        return (motor.getRPM() - target) / Math.abs(target) * 100;
     }
 }
