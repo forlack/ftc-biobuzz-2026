@@ -19,19 +19,20 @@ import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
  *
  * The loop never waits for anything -- read AGENTS.md before adding to it.
  *
- * Controls:
- *   left stick        drive (field-centric)
+ * Driver (gamepad 1):
+ *   left stick        drive (field-centric, raw power with brake)
  *   right stick X     turn
- *   left trigger      hold for slow mode (0.25)
- *   right trigger     hold for turbo (1.0)
- *   D-pad Up          toggle intake
- *   D-pad Down        hold to run the intake backwards (clear a jam)
- *   D-pad Left        toggle both flywheels on / off
- *   right bumper      hold pollen gate open
- *   left bumper       hold nectar gate open
- *   A (btn 2)         make the way you are facing the new "forward"
- *   Y (btn 4)         switch between velocity mode and raw power
- *   X (btn 1)         switch between BRAKE and coasting
+ *   left bumper       hold for slow mode (0.25)
+ *   right bumper      hold for turbo (1.0)
+ *   B                 reset forward heading
+ *   A + right bumper  hold to force shoot (testing shortcut)
+ *
+ * Operator (gamepad 2):
+ *   X                 toggle intake
+ *   D-pad Down        hold to reverse intake
+ *   A                 toggle both flywheels
+ *   right bumper      hold both gates open
+ *   left bumper       lower stinger while held
  */
 @Configurable
 @TeleOp(name = "Field Centric (Java)", group = "Drive")
@@ -48,22 +49,24 @@ public class FieldCentricJava extends LinearOpMode {
     /** Turn both flywheels on or off from Panels. They start on. */
     @Sorter(sort = 20)
     public static boolean FLYWHEELS_ON = true;
+    @Sorter(sort = 21)
+    public static double FLYWHEEL_F = 12;
 
     // Pollen flywheel.
-    @Sorter(sort = 21)
-    public static double POLLEN_FLYWHEEL_RPM = 3400;
     @Sorter(sort = 22)
-    public static double POLLEN_FLYWHEEL_P = 200;
+    public static double POLLEN_FLYWHEEL_RPM = 3400;
     @Sorter(sort = 23)
-    public static double POLLEN_FLYWHEEL_F = 12;
+    public static double POLLEN_FLYWHEEL_P = 100;
+    @Sorter(sort = 24)
+    public static double POLLEN_FLYWHEEL_D = 0;
 
     // Nectar flywheel.
     @Sorter(sort = 30)
     public static double NECTAR_FLYWHEEL_RPM = 3650;
     @Sorter(sort = 31)
-    public static double NECTAR_FLYWHEEL_P = 200;
-    @Sorter(sort = 32)
-    public static double NECTAR_FLYWHEEL_F = 12;
+    public static double NECTAR_FLYWHEEL_P = 125;
+    @Sorter(sort = 33)
+    public static double NECTAR_FLYWHEEL_D = 0;
 
     /** Stinger servo end points, 0 to 1. */
     @Sorter(sort = 40)
@@ -74,7 +77,9 @@ public class FieldCentricJava extends LinearOpMode {
     // Drive and dashboard.
     private MecanumDrive chassis;
     private DriveDashboard dashboard;
-    private Gamepad pad;
+    private Gamepad drive;
+    private Gamepad operate;
+
 
     // Intake.
     private VelocityMotor intake;
@@ -94,19 +99,18 @@ public class FieldCentricJava extends LinearOpMode {
     // Must be ABOVE the buttons -- they register themselves during construction.
     private final Button.Group buttons = new Button.Group();
 
-    // Drive controls. Each lambda reads the current pad when buttons.update() runs.
-    private final Button velocityMode    = buttons.add(() -> pad.y);
-    private final Button brakeMode       = buttons.add(() -> pad.x);
-    private final Button slowMode        = buttons.add(() -> pad.left_trigger > 0.5);
-    private final Button turboMode       = buttons.add(() -> pad.right_trigger > 0.5);
-    private final Button resetFront      = buttons.add(() -> pad.a);
+    // Drive controls. Each lambda reads the current drive gamepad when buttons.update() runs.
+    private final Button slowMode        = buttons.add(() -> drive.left_bumper);
+    private final Button turboMode       = buttons.add(() -> drive.right_bumper);
+    private final Button resetFront      = buttons.add(() -> drive.b);
+    private final Button forceShoot       = buttons.add(() -> drive.a && drive.right_bumper);
 
     // Mechanism controls.
-    private final Button toggleIntake    = buttons.add(() -> pad.dpad_up);
-    private final Button reverseIntake   = buttons.add(() -> pad.dpad_down);
-    private final Button toggleFlywheels = buttons.add(() -> pad.dpad_left);
-    private final Button gate            = buttons.add(() -> pad.right_bumper);
-    private final Button sting           = buttons.add(() -> pad.left_bumper);
+    private final Button toggleIntake    = buttons.add(() -> operate.x);
+    private final Button reverseIntake   = buttons.add(() -> operate.dpad_down);
+    private final Button toggleFlywheels = buttons.add(() -> operate.a);
+    private final Button gate            = buttons.add(() -> operate.right_bumper);
+    private final Button sting           = buttons.add(() -> operate.left_bumper);
 
     @Override
     public void runOpMode() {
@@ -120,7 +124,7 @@ public class FieldCentricJava extends LinearOpMode {
 
         // Pollen shooter and feed.
         shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
-        shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, shooterPollen.getI(), shooterPollen.getD(), POLLEN_FLYWHEEL_F);
+        shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, 0, POLLEN_FLYWHEEL_D, FLYWHEEL_F);
         triggerPollen = hardwareMap.get(CRServo.class, "triggerPollen");
         triggerPollen.setDirection(DcMotorSimple.Direction.REVERSE);
         transportPollen = hardwareMap.get(CRServo.class, "transportPollen");
@@ -128,7 +132,7 @@ public class FieldCentricJava extends LinearOpMode {
 
         // Nectar shooter and feed.
         shooterNectar = new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD);
-        shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, shooterNectar.getI(), shooterNectar.getD(), NECTAR_FLYWHEEL_F);
+        shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, 0, NECTAR_FLYWHEEL_D, FLYWHEEL_F);
         triggerNectar = hardwareMap.get(CRServo.class, "triggerNectar");
         transportNectar = hardwareMap.get(CRServo.class, "transportNectar");
         stinger = hardwareMap.get(Servo.class, "stinger");
@@ -146,7 +150,6 @@ public class FieldCentricJava extends LinearOpMode {
 
         while (opModeIsActive()) {
             readGamepad();
-            updateDriveSettings();
             updateDriving();
             updateIntake();
             updateServos();
@@ -157,26 +160,16 @@ public class FieldCentricJava extends LinearOpMode {
 
     /** Reads the gamepad once, so everything below sees the same thing. */
     private void readGamepad() {
-        pad = dashboard.mergeGamepad(gamepad1);
+        operate = dashboard.mergeOperatorGamepad(gamepad2);
+        drive = dashboard.mergeGamepad(gamepad1);
         buttons.update();
-    }
-
-    /** The buttons that change how the robot drives, rather than driving it. */
-    private void updateDriveSettings() {
-        if (velocityMode.pressed()) {
-            chassis.toggleVelocityMode();
-        }
-        if (brakeMode.pressed()) {
-            chassis.toggleBrakeMode();
-        }
-
     }
 
     private void updateDriving() {
         // left_stick_y is negative when you push the stick forward, so flip it.
-        double strafe = pad.left_stick_x;
-        double forward = -pad.left_stick_y;
-        double turn = pad.right_stick_x;
+        double strafe = drive.left_stick_x;
+        double forward = -drive.left_stick_y;
+        double turn = drive.right_stick_x;
 
         // Start from the driver's default speed, then let any mode override it. Adding
         // turbo or a precision mode is one more line here -- MecanumDrive never changes.
@@ -220,21 +213,24 @@ public class FieldCentricJava extends LinearOpMode {
     }
 
     private void updateServos() {
-        // Transports run only while the flywheels are on (D-pad left or Panels FLYWHEELS_ON).
+        // Transports run only while the flywheels are on (operator A or Panels FLYWHEELS_ON).
         transportPollen.setPower(FLYWHEELS_ON ? 1 : 0);
-        triggerNectar.setPower(gate.down() ? 1 : 0);
-        triggerPollen.setPower(gate.down() ? 1 : 0);
+        boolean shooting = gate.down() || forceShoot.down();
+        triggerNectar.setPower(shooting ? 1 : 0);
+        triggerPollen.setPower(shooting ? 1 : 0);
         transportNectar.setPower(FLYWHEELS_ON ? 1 : 0);
         stinger.setPosition(sting.down() ? STINGER_DOWN : STINGER_UP);
         dashboard.addData("Stinger position", stinger.getPosition());
     }
 
     private void updateShooter() {
-        if (POLLEN_FLYWHEEL_P != shooterPollen.getP() || POLLEN_FLYWHEEL_F != shooterPollen.getF()) {
-            shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, shooterPollen.getI(), shooterPollen.getD(), POLLEN_FLYWHEEL_F);
+        if (POLLEN_FLYWHEEL_P != shooterPollen.getP()
+                || POLLEN_FLYWHEEL_D != shooterPollen.getD() || FLYWHEEL_F != shooterPollen.getF()) {
+            shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, 0, POLLEN_FLYWHEEL_D, FLYWHEEL_F);
         }
-        if (NECTAR_FLYWHEEL_P != shooterNectar.getP() || NECTAR_FLYWHEEL_F != shooterNectar.getF()) {
-            shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, shooterNectar.getI(), shooterNectar.getD(), NECTAR_FLYWHEEL_F);
+        if (NECTAR_FLYWHEEL_P != shooterNectar.getP()
+                || NECTAR_FLYWHEEL_D != shooterNectar.getD() || FLYWHEEL_F != shooterNectar.getF()) {
+            shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, 0, NECTAR_FLYWHEEL_D, FLYWHEEL_F);
         }
         // Flips the same switch Panels shows, so the button and Panels always agree.
         if (toggleFlywheels.pressed()) {
@@ -247,9 +243,11 @@ public class FieldCentricJava extends LinearOpMode {
         dashboard.addData("Pollen RPM (actual / target)",
                 Math.round(shooterPollen.getRPM()) + " / " + Math.round(shooterPollen.getTargetRPM()));
         dashboard.addData("Pollen % off target", percentOff(shooterPollen));
+        dashboard.addData("Pollen hub PIDF", shooterPollen.getAppliedPIDF());
         dashboard.addData("Nectar RPM (actual / target)",
                 Math.round(shooterNectar.getRPM()) + " / " + Math.round(shooterNectar.getTargetRPM()));
         dashboard.addData("Nectar % off target", percentOff(shooterNectar));
+        dashboard.addData("Nectar hub PIDF", shooterNectar.getAppliedPIDF());
     }
 
     /** Numeric percent error for graphing. Negative means too slow; zero target reports 0. */

@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
 /** A motor that holds a target speed using the hub's velocity control. */
 public class VelocityMotor {
@@ -13,6 +14,7 @@ public class VelocityMotor {
     private final DcMotorEx motor;
     private final double ticksPerRevolution;
     private double targetRPM = 0;
+    private PIDFCoefficients appliedPIDF;
 
     public VelocityMotor(HardwareMap hardwareMap, String name, DcMotorSimple.Direction direction) {
         this(hardwareMap, name, direction, 28);
@@ -38,6 +40,7 @@ public class VelocityMotor {
     /** Applies velocity PIDF coefficients to this motor immediately. */
     public void setPIDF(double proportional, double integral, double derivative, double feedforward) {
         motor.setVelocityPIDFCoefficients(proportional, integral, derivative, feedforward);
+        appliedPIDF = motor.getPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER);
         P = proportional;
         I = integral;
         D = derivative;
@@ -48,6 +51,9 @@ public class VelocityMotor {
     public double getI() { return I; }
     public double getD() { return D; }
     public double getF() { return F; }
+
+    /** Hub coefficient readback captured after the most recent setPIDF(). */
+    public PIDFCoefficients getAppliedPIDF() { return appliedPIDF; }
 
     /** Spin to this speed. 0 = off. */
     public void setTargetRPM(double rpm) {

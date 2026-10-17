@@ -40,7 +40,7 @@ public class MecanumDrive {
     public static double MAX_ALLOWED_SPEED = 1.00;
 
     /** VELOCITY mode lets the motors correct their own speed using the encoders. */
-    public static boolean START_IN_VELOCITY_MODE = true;
+    public static boolean START_IN_VELOCITY_MODE = false;
     /** BRAKE mode makes the robot stop hard instead of rolling when the sticks are released. */
     public static boolean START_IN_BRAKE_MODE = true;
 

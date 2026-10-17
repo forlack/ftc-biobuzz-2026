@@ -30,6 +30,11 @@ public class DriveDashboard {
         return PanelsGamepad.INSTANCE.getFirstManager().asCombinedFTCGamepad(driverStationGamepad);
     }
 
+    /** Combines the second browser gamepad with the operator's controller. */
+    public Gamepad mergeOperatorGamepad(Gamepad driverStationGamepad) {
+        return PanelsGamepad.INSTANCE.getSecondManager().asCombinedFTCGamepad(driverStationGamepad);
+    }
+
     /** Call once before waitForStart(). */
     public void showReady(String opModeName) {
         panels.addLine(opModeName + " ready.");
