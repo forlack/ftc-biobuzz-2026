@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hooded Shooter Sim</title>
+<title>Total Chaos | Team 24621 | Flywheel Simulator</title>
+<meta name="description" content="Team 24621 - Total Chaos: an interactive hooded flywheel shooter simulator for FTC BIOBUZZ.">
+<link rel="icon" type="image/jpeg" href="assets/chaos-symbol.jpg">
 <style>
 :root{
   --bg:#f5f3ec; --panel:#ffffff; --ink:#1d1e22; --muted:#6a6d75; --line:#e3e0d6; --grid:#ece9e0;
@@ -24,9 +26,12 @@
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-header{padding:16px 20px 8px;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
-header h1{font-size:20px;margin:0;letter-spacing:-.01em}
-header p{margin:0;color:var(--muted)}
+header{padding:16px 20px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.team-logo{width:64px;height:64px;flex-shrink:0;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:12px;padding:5px}
+.team-name{margin:0 0 3px;color:var(--accent);font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+header h1{font-size:20px;margin:0;letter-spacing:-.01em;line-height:1.2}
+header .subtitle{margin:5px 0 0;color:var(--muted);font-size:12px}
+@media (max-width:600px){header{padding:12px 16px;gap:10px}.team-logo{width:48px;height:48px}header h1{font-size:17px}.team-name{font-size:10px}}
 .wrap{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;padding:8px 20px 24px}
 @media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr);padding:8px 16px 24px}main{order:1}aside{order:2}}
 /* Wide screens: the config column scrolls on its own; the simulator column stays put */
@@ -84,8 +89,12 @@ a{color:var(--blue)}
 </head>
 <body>
 <header>
-  <h1>🐝 Hooded Flywheel Shooter Simulator</h1>
-  <p>FTC BIOBUZZ · single flywheel + fixed hood · slip, spin, drag and Magnus lift</p>
+  <img class="team-logo" src="assets/chaos-symbol.jpg" alt="Total Chaos eight-arrow chaos symbol" width="64" height="64">
+  <div>
+    <p class="team-name">Team 24621 &middot; Total Chaos</p>
+    <h1>Hooded Flywheel Shooter Simulator</h1>
+    <p class="subtitle">FTC BIOBUZZ &middot; single flywheel + fixed hood &middot; slip, spin, drag and Magnus lift</p>
+  </div>
 </header>
 
 <div class="wrap">
