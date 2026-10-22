@@ -72,7 +72,7 @@ public class FieldCentricJava extends LinearOpMode {
     @Sorter(sort = 40)
     public static double STINGER_UP = 0;
     @Sorter(sort = 41)
-    public static double STINGER_DOWN = 0.5;
+    public static double STINGER_DOWN = 0.45;
 
     // Drive and dashboard.
     private MecanumDrive chassis;

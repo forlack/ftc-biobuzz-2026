@@ -2,13 +2,14 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-10
+Last updated: 2026-10-17
 
 ---
 
 ## Hardware
 
-> **This is a TEST/DEVELOPMENT PLATFORM, not the competition robot.**
+> **Current code targets Team 24621's competition robot.** The test-platform notes
+> below are historical; current Pinpoint and Foresight values were supplied on 2026-10-17.
 >
 > Everything about the *setup* transfers to the competition bot — SDK version, Pedro
 > integration, Panels, the OpMode structure, the toolchain. **The measured constants do
@@ -24,8 +25,8 @@ Last updated: 2026-10-10
 ### Robot configuration (`2222-Config.xml`)
 
 Forward/backward (X) odometry pod physically flipped on 2026-10-15: current Pedro
-`xPodDirection` is FORWARD, `yPodDirection` remains REVERSED. Both configured pod
-offsets are 0.0 on the competition robot. Historical test-chassis measurements below
+`xPodDirection` is FORWARD, `yPodDirection` remains REVERSED. Measured competition-robot offsets (2026-10-17) are
+`xPodOffset = 0.20296776388573837` inches and `yPodOffset = 0.2779039060036967` inches. Historical test-chassis measurements below
 do not describe this mounting. Verify with Localization Check: pushing forward increases X.
 
 Hardware names are case-sensitive. Updated from the XML on 2026-10-10:
@@ -649,8 +650,9 @@ Next:
 - [ ] Optional: rename the robot SSID and config file to the real team number; delete the
       16 MB of stale `/sdcard/FIRST/java/srcBackups/` zips
 
-On the competition robot: run AutoTune again (Mecanum → Pinpoint → Foresight → Tests) and
-paste the output. Every number in `pedro/Constants.java` belongs to the test chassis.
+Competition-robot Pinpoint and Foresight results supplied on 2026-10-17 are applied in
+`pedro/Constants.java`. Drivetrain names/directions are unchanged. Run the Tests procedure
+after deployment to validate these values on hardware.
 
 ---
 
