@@ -5,21 +5,18 @@ You are in the right place. **All of our robot code lives in this folder.** The 
 
 ## Start here
 
-Copy **`TemplateTeleOp.java`**, rename the class and the `@TeleOp(name = ...)`, and delete
-the `@Disabled` line so it shows up on the Driver Station. Driving already works, so you can
-go straight to whatever you are adding.
+Open **`FieldCentricJava.java`**. It is our real teleop, and the steps below add to it.
+Driving already works, so you can go straight to whatever you are adding.
 
 ## What is in this folder
 
 | File | What it is |
 |---|---|
-| `TemplateTeleOp.java` | Starter to copy. Disabled on purpose. |
 | `FieldCentricJava.java` | Our real teleop. A worked example of everything below. |
-| `MotorsTest.java` | Checks each motor turns the right way. Run this when driving feels wrong. |
 | `PedroAutonomous.java` | Autonomous that follows a path. Shows a state machine. |
-| `PanelsDemo.java` | Dashboard test, no hardware needed. |
+| `helpers/` | Checks to run when something seems wrong: `MotorsTest` (each motor turns the right way) and `LocalizationCheck` (the Pinpoint reads the right way). |
 | `lib/` | The framework. Read it if you are curious; you rarely need to change it. |
-| `pedroPathing/` | Pedro Pathing config and its tuning OpModes. |
+| `pedro/` | Pedro Pathing config and its AutoTune procedures. |
 
 ## How a teleop works
 

@@ -1,7 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.bylazar.configurables.annotations.Configurable;
-import com.bylazar.configurables.annotations.Sorter;
+import com.bylazar.configurables.annotations.IgnoreConfigurable;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
@@ -12,6 +12,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
 import org.firstinspires.ftc.teamcode.lib.MecanumDrive;
+import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 
 /**
@@ -39,39 +40,27 @@ import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 public class FieldCentricJava extends LinearOpMode {
 
     // Intake -- editable live in Panels.
-    @Sorter(sort = 10)
     public static double INTAKE_RPM = 700;
-    @Sorter(sort = 11)
     public static double INTAKE_P = 15;
-    @Sorter(sort = 12)
     public static double INTAKE_F = 15;
 
-    /** Turn both flywheels on or off from Panels. They start on. */
-    @Sorter(sort = 20)
+    /** Turn both flywheels on or off from Panels. They start on. A switch, not a setting. */
+    @RobotSettings.NotSaved
     public static boolean FLYWHEELS_ON = true;
-    @Sorter(sort = 21)
     public static double FLYWHEEL_F = 12;
 
     // Pollen flywheel.
-    @Sorter(sort = 22)
     public static double POLLEN_FLYWHEEL_RPM = 3400;
-    @Sorter(sort = 23)
     public static double POLLEN_FLYWHEEL_P = 100;
-    @Sorter(sort = 24)
     public static double POLLEN_FLYWHEEL_D = 0;
 
     // Nectar flywheel.
-    @Sorter(sort = 30)
     public static double NECTAR_FLYWHEEL_RPM = 3650;
-    @Sorter(sort = 31)
     public static double NECTAR_FLYWHEEL_P = 125;
-    @Sorter(sort = 33)
     public static double NECTAR_FLYWHEEL_D = 0;
 
     /** Stinger servo end points, 0 to 1. */
-    @Sorter(sort = 40)
     public static double STINGER_UP = 0;
-    @Sorter(sort = 41)
     public static double STINGER_DOWN = 0.45;
 
     // Drive and dashboard.
@@ -112,8 +101,16 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button gate            = buttons.add(() -> operate.right_bumper);
     private final Button sting           = buttons.add(() -> operate.left_bumper);
 
+    /** Classes whose public static values are saved in robot.json. Autonomous loads them too. */
+    @IgnoreConfigurable
+    public static final Class<?>[] SETTINGS = {FieldCentricJava.class, MecanumDrive.class};
+    private RobotSettings settings;
+
     @Override
     public void runOpMode() {
+        // First, before anything reads a setting: robot.json replaces the defaults above.
+        settings = new RobotSettings(SETTINGS).load();
+
         // Drive.
         chassis = new MecanumDrive(hardwareMap);
 
@@ -154,6 +151,7 @@ public class FieldCentricJava extends LinearOpMode {
             updateIntake();
             updateServos();
             updateShooter();
+            settings.update(dashboard);
             dashboard.update();
         }
     }

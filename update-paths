@@ -48,6 +48,11 @@ def main():
         subprocess.run([adb, *arguments], check=True, timeout=30)
 
     # The user connects to robot Wi-Fi; this helper never switches networks.
+    # A fresh ADB server first: after switching Wi-Fi an old one often shows "offline".
+    try:
+        subprocess.run([adb, 'kill-server'], timeout=10, capture_output=True)
+    except (subprocess.SubprocessError, OSError):
+        pass
     if ':' in args.serial:
         run('connect', args.serial)
     run('-s', args.serial, 'get-state')

@@ -27,3 +27,13 @@ android {
 dependencies {
     implementation project(':FtcRobotController')
 }
+
+// Pedro AutoTune runs a web server (port 10158) as soon as its library is in the app, and
+// that server has crashed the Robot Controller at boot. Competition builds leave it out.
+// Build with -Ptuning (./deploy-linux --tuning) to include it and the src/tuning tuners.
+if (project.hasProperty('tuning')) {
+    android.sourceSets.main.java.srcDirs += 'src/tuning/java'
+    dependencies {
+        implementation 'com.pedropathing:tuning:1.0.1'
+    }
+}

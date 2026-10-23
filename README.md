@@ -121,6 +121,10 @@ spaces, or punctuation.
 
 `-c` is also spelled `--current-wifi`, `--home-wifi` or `--return-wifi`.
 
+**To run Pedro AutoTune** (the tuning page at <http://192.168.43.1:10158>), add `--tuning`.
+Normal deploys leave AutoTune out, because its web server once crashed the robot at boot; the
+next normal deploy removes it again.
+
 **To stay on the robot's network afterwards** — for Panels, logs, or quick re-deploys — add
 `--stay` (or `-s`):
 
@@ -257,15 +261,19 @@ git add robot-config && git commit -m "Update robot config" && git push
 Autonomous paths can be edited and uploaded without rebuilding. See
 [paths/README.md](paths/README.md) for the Pedro export and JSON settings format, first setup, and `./update-paths`.
 
+Tunable numbers (RPMs, PIDF, stinger, drive speeds) can be saved on the robot from Panels and
+copied with `./robot-settings pull|push`, also without rebuilding. See
+[settings/README.md](settings/README.md). Where this is heading: [ROADMAP.md](ROADMAP.md).
+
 All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
 
 | OpMode | Driver Station name | Group | What it does |
 |---|---|---|---|
 | `FieldCentricJava` | Field Centric (Java) | Drive | Main teleop |
-| `TemplateTeleOp` | Template TeleOp | Template | `@Disabled` starter to copy |
-| `MotorsTest` | Motors Test | Diagnostics | Per-motor and robot-level direction checks |
+| `helpers.MotorsTest` | Motors Test | Diagnostics | Per-motor and robot-level direction checks |
+| `helpers.LocalizationCheck` | Localization Check | Diagnostics | Pinpoint direction and distance check |
+| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Measures flywheel F and P; A saves to `robot.json` |
 | `PedroAutonomous` | Pedro Pathing Autonomous | Autonomous | SD-card Pedro export: shoot, then park |
-| `PanelsDemo` | Panels Demo | Diagnostics | Dashboard smoke test, no hardware |
 | `pedroPathing.Tuning` | Tuning | — | Official Pedro tuning suite |
 
 ## The teleop framework
@@ -296,8 +304,7 @@ telemetry with `dashboard.addData(...)`, and add one call to the loop.
 Controller will stop the robot if the loop stops turning over, and gamepads only refresh
 between iterations. Use a state machine instead — `PedroAutonomous` is the worked example.
 
-Start from `TemplateTeleOp.java`: copy it, rename the class and the `@TeleOp` name, and
-delete `@Disabled`.
+`FieldCentricJava.java` is the worked example to add to.
 
 ## More detail
 

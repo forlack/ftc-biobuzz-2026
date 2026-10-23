@@ -102,6 +102,18 @@ class LinuxDeployTests(unittest.TestCase):
         self.assertTrue([c for c in commands if 'monkey' in c])
         self.assertEqual(bring_up.call_args_list[-1].args[0], 'Home')
 
+    def test_tuning_flag_only_when_asked(self):
+        _, commands, _ = self.deploy()
+        install = next(c for c in commands if ':TeamCode:installDebug' in c)
+        self.assertNotIn('-Ptuning', install)
+        self.assertEqual(module.tuning_flag(SimpleNamespace(tuning=True)), ['-Ptuning'])
+
+    def test_adb_server_restarted_before_connecting(self):
+        _, commands, _ = self.deploy()
+        kill = next(i for i, c in enumerate(commands) if c[1:] == ['kill-server'])
+        connect = next(i for i, c in enumerate(commands) if c[1:2] == ['connect'])
+        self.assertLess(kill, connect)
+
     def test_match_connection_ignores_case_and_punctuation(self):
         saved = ['Home', '2222-RC']
         self.assertEqual(module.match_connection('2222rc', saved), '2222-RC')

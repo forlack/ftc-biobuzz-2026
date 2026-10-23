@@ -18,6 +18,7 @@ class PathFilesTest(unittest.TestCase):
                 patch('subprocess.run') as run, contextlib.redirect_stdout(io.StringIO()):
             UPLOADER['main']()
         commands = [call.args[0][1:] for call in run.call_args_list]
+        self.assertEqual(commands[0], ['kill-server'])
         self.assertTrue(any('push' in c and c[-1] == '/sdcard/FIRST/paths/auto.java.txt.tmp' for c in commands))
         self.assertTrue(any('push' in c and c[-1] == '/sdcard/FIRST/paths/auto.json.tmp' for c in commands))
         self.assertEqual(commands[-1], ['-s', 'USB_TEST', 'shell', 'mv',

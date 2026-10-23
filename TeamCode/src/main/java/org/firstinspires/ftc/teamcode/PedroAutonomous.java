@@ -12,6 +12,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
 import org.firstinspires.ftc.teamcode.lib.AutoPathFile;
+import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
 
@@ -42,6 +43,10 @@ public class PedroAutonomous extends OpMode {
     @Override
     public void init() {
         panels = PanelsTelemetry.INSTANCE.getTelemetry();
+        // Same robot.json as teleop, so the flywheel and stinger numbers match.
+        RobotSettings settings = new RobotSettings(FieldCentricJava.SETTINGS).load();
+        panels.debug("Settings", settings.status());
+        for (String warning : settings.warnings()) panels.debug("Settings warning", warning);
 
         AutoPathFile route;
         try {
@@ -76,6 +81,8 @@ public class PedroAutonomous extends OpMode {
         stinger.setPosition(FieldCentricJava.STINGER_UP);
         shoot(false);
 
+        ///Main Sequence
+        /////////////////////////////////////////////
         auto = new AutoSequence(follower)
                 .waitSeconds(route.startupWaitSeconds)
                 .follow(route.path1)

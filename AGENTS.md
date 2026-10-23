@@ -6,6 +6,35 @@ Last updated: 2026-10-22
 
 ---
 
+## Robot settings and the no-rebuild roadmap — 2026-10-22
+
+- **Event Saturday 2026-10-24** with one autonomous (the current path-file route). Keep
+  changes before then low-risk; roadmap steps 2–4 come after.
+- **`robot.json`:** `lib/RobotSettings` saves every public static setting of
+  `FieldCentricJava.SETTINGS` (`FieldCentricJava`, `MecanumDrive`) to
+  `/sdcard/FIRST/settings/robot.json` when Panels `RobotSettings.SAVE_TO_ROBOT` is turned on
+  (teleop loop), and loads it at INIT in teleop and `PedroAutonomous`. Reloads only when the
+  file's mtime changed, so unsaved Panels edits survive re-INIT. Bad values warn and keep
+  the default; an unreadable file falls back to `robot.json.bak`, then to code defaults.
+  `@RobotSettings.NotSaved` marks live switches (`FLYWHEELS_ON`). Repo copy:
+  `settings/robot.json` via `./robot-settings pull|push`. Details: `settings/README.md`.
+- **AutoTune is opt-in.** Its NanoHTTPD server starts unconditionally whenever the
+  `tuning` library is in the APK (a Sinister `OnCreateEventLoop` hook; no off switch), and it
+  crashed the RC app at boot once. `Tuning.java` and `procedures/` moved to
+  `TeamCode/src/tuning/java`; `TeamCode/build.gradle` adds that folder and the dependency
+  only with `-Ptuning`. Deploy with `./deploy-linux --tuning` (or `./deploy --tuning`) to tune;
+  a normal deploy removes it again. Verified: normal APK has no autotune classes.
+- **Flywheel Tuner** (`helpers/FlywheelTuner`, Diagnostics): both flywheels at their
+  robot.json target RPMs. F from a two-point speed-vs-power line (0.4 and 0.8 power, no
+  encoder) solved for the power at target: F = 32767 × power / target ticks/s. P from step
+  tests (70% → 100%) at 0.25–3× the current P: fastest settle within 2% with overshoot ≤ 5%
+  and wobble ≤ 1.5%; fallback = closest to target. A applies (shared FLYWHEEL_F = average of
+  the two) and saves robot.json. Scoring checked in a desktop simulation; untested on hardware.
+- `@Sorter` annotations removed from `FieldCentricJava` (Panels order only; user found it
+  bulky).
+- **Roadmap** for autos as JSON and our own Pedro visualizer with robot actions on paths:
+  `ROADMAP.md`.
+
 ## Current desktop handoff — 2026-10-22
 
 - User confirmed the exported-path autonomous works on the robot after redeployment.
@@ -661,14 +690,13 @@ Done:
 Next:
 - [ ] **Tune the velocity motors** with F = 12 as the start (see Velocity motors below):
       check each settles at target, then trim F per motor, then P
-- [ ] Toggle-button lesson in `NEXT_STEPS.md` (opt-in `addToggle`, private state, `isOn()`)
-      — the flywheel lesson is done, as `lib/VelocityMotor`
 - [x] Re-copied upstream `PinpointTuner.java` and `ForesightTuner.java` (2026-10-14); both now
       match Quickstart master exactly. Pedro libs are still the latest (revhub 3.0.1, tuning 1.0.1)
 - [ ] Upstream **Quickstart PR #120** (opened 2026-10-14): `Tests.java` Line/Curve/Interpolation
       ignored the Distance input (a local `double distance = 48;` shadowed the field). Fixed
       locally the same way and verified on hardware; re-copy upstream once it merges
-- [ ] Delete `PanelsDemo.java` when it stops being useful
+- [x] Removed `PanelsDemo`, `TemplateTeleOp`, `TemplateAutonomous` and `NEXT_STEPS.md`;
+      moved `MotorsTest` and `LocalizationCheck` into `helpers/` (2026-10-22)
 - [ ] Optional: rename the robot SSID and config file to the real team number; delete the
       16 MB of stale `/sdcard/FIRST/java/srcBackups/` zips
 
@@ -683,10 +711,10 @@ after deployment to validate these values on hardware.
 | Class | DS name | Group | Purpose |
 |---|---|---|---|
 | `FieldCentricJava` | Field Centric (Java) | Drive | Java port of the Blocks teleop |
-| `TemplateTeleOp` | Template TeleOp | Template | `@Disabled` starter for students to copy |
-| `MotorsTest` | Motors Test | Diagnostics | Robot- and motor-level direction checks |
+| `helpers.MotorsTest` | Motors Test | Diagnostics | Robot- and motor-level direction checks |
+| `helpers.LocalizationCheck` | Localization Check | Diagnostics | Pinpoint direction and distance check |
+| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Measures flywheel F and P; A saves to `robot.json` |
 | `PedroAutonomous` | Pedro Pathing Autonomous | — | Out-and-back path, state machine |
-| `PanelsDemo` | Panels Demo | Diagnostics | Dashboard smoke test, no hardware |
 | `pedroPathing.Tuning` | Tuning | — | Official Pedro tuning suite (menu of routines) |
 
 ---
@@ -831,6 +859,7 @@ negate it.
 Other 3.x gotchas hit:
 - **Natural deceleration is POSITIVE in 3.x** (tuner: 35.6 / 56.2). The 2.x zero-power
   accelerations were negative; carrying one over made Tests throw a config error.
+- **AutoTune is only in `--tuning` builds** (see the 2026-10-22 note at the top).
 - **There is no Tuning OpMode on the Driver Station.** AutoTune is the web page at
   `http://localhost:10158` (USB, after `adb forward tcp:10158` and `tcp:12649`) or
   `http://192.168.43.1:10158` on robot Wi-Fi. It launches its own OpModes.
@@ -961,11 +990,11 @@ auto = new AutoSequence(follower)
   < `AIM_TOLERANCE_DEGREES` (2°). For aiming *while* driving use
   `Paths.line(a, b).facingPoint(GOAL)` instead — no step needed.
 - BIOBUZZ shape: intake runs the whole match (set in `start()`), so the real steps are drive,
-  aim, shoot. `TemplateAutonomous.java` is the starter.
+  aim, shoot. `PedroAutonomous.java` is the worked example.
 
 ## Velocity motors (`lib/VelocityMotor`)
 
-Written by the student 2026-10-10 — the `NEXT_STEPS` flywheel lesson, generalized. Used for
+Written by the student 2026-10-10 — a flywheel lesson, generalized. Used for
 `shooterPollen`, `shooterNectar` (28 ticks/rev, the default) and `intake` (145.1 ticks/rev).
 Each motor has its **own** PIDF, set only through `setPIDF()`; the fields are private
 (2026-10-11) because writing `shooter.P = 50` changed the number without sending it to the
@@ -997,13 +1026,8 @@ lib/VelocityMotor with RUN_USING_ENCODER and setVelocity. RPM conversion assumes
 28 ticks/revolution; confirm the actual motors. Current PIDF is P=200, I=D=F=0, applied
 in the constructor, and needs hardware tuning. setPIDF(p, i, d, f) applies new coefficients
 immediately. PIDF fields are not live Panels settings.
-Live edits reset on RC app restart; save chosen defaults in FieldCentricJava.java. Motors Test and Panels Demo are not
+Live edits reset on RC app restart; save chosen defaults in FieldCentricJava.java. Motors Test is not
 listed in Configurables. This OpMode uses a Configurable annotation directly by user preference.
-
-`TeamCode/src/main/java/org/firstinspires/ftc/teamcode/NEXT_STEPS.md` holds the next
-lessons for the student, written to be worked through *before* reading the answers. When
-helping with them, **guide rather than write the code** — the parent asked for that
-explicitly ("tell me what to do next so I can learn").
 
 ## Known issue: AutoTune's web server can crash the RC app at boot
 
@@ -1057,11 +1081,3 @@ It only speeds up the *configuration* phase. Our costs are elsewhere: a clean bu
 means editing `gradle.properties`, an upstream file, adding a merge conflict for half a
 second — and it is still `[Incubating]`, failing in confusing serialization errors that a
 student has no way to interpret. Use `./gradlew --configuration-cache` ad hoc if ever needed.
-
----
-
-## Scratch files
-
-`TeamCode/src/main/java/org/firstinspires/ftc/teamcode/PanelsDemo.java` — hardware-free
-smoke test. Orbits a circle on the field view and streams telemetry. Its radius,
-orbit radius and speed are source defaults, not exposed in Configurables. Safe to delete.

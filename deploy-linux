@@ -151,7 +151,18 @@ def restart_robot_controller(adb, target):
          '-c', 'android.intent.category.LAUNCHER', '1'], timeout=15)
 
 
+def tuning_flag(args):
+    """Gradle flag that adds Pedro AutoTune to the app; left out of competition builds."""
+    return ['-Ptuning'] if getattr(args, 'tuning', False) else []
+
+
 def connect_adb(adb, target):
+    # Start every connection with a fresh ADB server. After switching Wi-Fi, an old server
+    # often keeps a dead transport and reports the robot "offline" until it is killed.
+    try:
+        run([adb, 'kill-server'], timeout=10)
+    except (subprocess.SubprocessError, OSError):
+        pass  # No server running is fine.
     for attempt in range(10):
         if attempt == 3:
             # A wedged transport makes `adb connect` answer "already connected" forever
@@ -198,7 +209,7 @@ def deploy(args, previous, adb, env):
             restart_robot_controller(adb, target)
         else:
             push_paths(adb, target)
-            run([str(ROOT / 'gradlew'), '--offline', ':TeamCode:installDebug',
+            run([str(ROOT / 'gradlew'), '--offline', *tuning_flag(args), ':TeamCode:installDebug',
                  '--console=auto'], timeout=300, capture=False, env=deploy_env)
     except BaseException as exc:
         error = exc
@@ -248,6 +259,8 @@ def main():
                         help='also upload robot-config/*.xml to the hub (restart applies it)')
     parser.add_argument('--map-only', action='store_true',
                         help='only upload robot-config/*.xml and restart the app; no build')
+    parser.add_argument('--tuning', action='store_true',
+                        help='include Pedro AutoTune (web page on port 10158); off for matches')
     parser.add_argument('--check', action='store_true',
                         help='check setup without building or changing networks')
     args = parser.parse_args()
@@ -296,7 +309,7 @@ def main():
     env = dict(os.environ)
     if not args.map_only:
         print('Building before switching Wi-Fi…', flush=True)
-        run([str(ROOT / 'gradlew'), ':TeamCode:assembleDebug', '--console=auto'],
+        run([str(ROOT / 'gradlew'), *tuning_flag(args), ':TeamCode:assembleDebug', '--console=auto'],
             timeout=600, capture=False, env=env)
     deploy(args, previous, adb, env)
     print('Deployment complete.')
