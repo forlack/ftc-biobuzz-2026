@@ -121,6 +121,28 @@ def push_hardware_map(adb, target):
         run([adb, '-s', target, 'push', str(file), HUB_CONFIG_DIR + '/'], timeout=30)
 
 
+def reject_json_constant(value):
+    raise ValueError(f'Invalid JSON number: {value}')
+
+
+def push_paths(adb, target):
+    """Replace the SD-card route before installing the app."""
+    file = ROOT / 'paths' / 'auto.json'
+    # Refuse malformed JSON before replacing the hub's current route.
+    json.loads(file.read_text(), parse_constant=reject_json_constant)
+    export = file.with_name('auto.java.txt')
+    if not export.read_text().strip():
+        raise RuntimeError('Pedro path export is empty.')
+    print('Uploading autonomous paths…', flush=True)
+    run([adb, '-s', target, 'shell', 'mkdir', '-p', '/sdcard/FIRST/paths'], timeout=30)
+    files = [export, file]
+    for source in files:
+        run([adb, '-s', target, 'push', str(source), '/sdcard/FIRST/paths/' + source.name + '.tmp'], timeout=30)
+    for source in files:
+        destination = '/sdcard/FIRST/paths/' + source.name
+        run([adb, '-s', target, 'shell', 'mv', destination + '.tmp', destination], timeout=30)
+
+
 def restart_robot_controller(adb, target):
     """Relaunch the Robot Controller app so it reads the uploaded hardware map."""
     print('Restarting the Robot Controller app…', flush=True)
@@ -175,8 +197,9 @@ def deploy(args, previous, adb, env):
         if getattr(args, 'map_only', False):
             restart_robot_controller(adb, target)
         else:
+            push_paths(adb, target)
             run([str(ROOT / 'gradlew'), '--offline', ':TeamCode:installDebug',
-                 '--console=plain'], timeout=300, capture=False, env=deploy_env)
+                 '--console=auto'], timeout=300, capture=False, env=deploy_env)
     except BaseException as exc:
         error = exc
     finally:
@@ -273,7 +296,7 @@ def main():
     env = dict(os.environ)
     if not args.map_only:
         print('Building before switching Wi-Fi…', flush=True)
-        run([str(ROOT / 'gradlew'), ':TeamCode:assembleDebug', '--console=plain'],
+        run([str(ROOT / 'gradlew'), ':TeamCode:assembleDebug', '--console=auto'],
             timeout=600, capture=False, env=env)
     deploy(args, previous, adb, env)
     print('Deployment complete.')

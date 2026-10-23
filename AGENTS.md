@@ -2,9 +2,36 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-17
+Last updated: 2026-10-22
 
 ---
+
+## Current desktop handoff — 2026-10-22
+
+- User confirmed the exported-path autonomous works on the robot after redeployment.
+- Pull main on the desktop before edits. Mac/Linux helpers both upload
+  `paths/auto.java.txt` and `paths/auto.json` before APK install. `./update-paths`
+  uploads both without restarting; stop first, then INIT to read new files.
+- Geometry is the user's exact Pedro Java export (not executed/compiled at INIT).
+  JSON contains version 1, startupWaitSeconds=1, shootSeconds=3.5, speedLimits={}.
+  Current sequence: path1, shoot, path2 to park; stinger stays up. Start (56,8,270°),
+  path1 end (60,16,270°), path2 control (15.6919,29.3313), end (13.2008,96.0738,180°).
+  Any number of named paths can be parsed, but adding actions requires Java sequence edits.
+- Intake default 700 RPM. TeleOp auto-queue targets Field Centric (Java); DS setting
+  and timed run required. All current mechanism tuning remains in FieldCentricJava.
+- Current competition hub is reported by install logs as Control Hub v1.0 / Android
+  7.1.2; older hardware table below describes prior devices. FileInputStream fixes
+  the Android 7 INIT crash caused by java.nio.file.Files (Android 8+).
+- Linux desktop: save robot Wi-Fi in NetworkManager, use
+  `./deploy-linux -r 24621-RC --stay` from the user's terminal, never an agent session.
+  Gradle output now uses --console=auto (colors/progress when attached to a terminal).
+- Both path files and robot-config/2222-Config.xml are tracked. The latter includes
+  stinger on Expansion Hub servo port 2; hub was not connected for a fresh XML pull
+  at this handoff. Never invent hardware changes. Private Wi-Fi settings and passwords
+  stay outside Git and need separate setup on each computer.
+- Validation: Android assembleDebug, 35 Python tests, standalone real-Pedro parser
+  check (tests/java/PedroPathExportCheck.java): exact geometry, six named paths,
+  cubic curve, constant heading, invalid/unsupported exports rejected.
 
 ## Hardware
 
@@ -44,6 +71,7 @@ Hardware names are case-sensitive. Updated from the XML on 2026-10-10:
 | Motor | `shooterPollen` | Expansion Hub 2 (2) | 2 | goBILDA 5202 |
 | CR servo | `transportPollen` | Expansion Hub 2 (2) | 0 | continuous rotation |
 | CR servo | `triggerPollen` | Expansion Hub 2 (2) | 1 | continuous rotation |
+| Servo | `stinger` | Expansion Hub 2 (2) | 2 | positional |
 | Odometry | `pinpoint` | Control Hub (173) | I2C bus 0 (shares it with the IMU; DS slot 1) | goBILDA Pinpoint |
 | IMU | `imu` | Control Hub (173) | I2C bus 0, port 0 | Control Hub BHI260AP |
 
@@ -139,15 +167,9 @@ dy_arc = ( dForward*(1 - cos(dTheta)) + dStrafe*sin(dTheta) ) / dTheta
 The two agree to many decimals at small `dTheta`; the difference shows up in fast tight
 turns, where the chord cuts the corner and the error accumulates across a whole auto.
 
-**Robot network:** The SSID is kept in the private deploy configuration outside Git.
-The Control Hub is the AP at **192.168.43.1**; Driver Hub associates at
-192.168.43.13. Team is **24620**.
-
-> **Naming mismatch (low priority):** the config and robot SSID both carry an old
-> team number. **This is a TEST PLATFORM, not the
-> competition robot**, so there's no inspection concern. Rename to `24620-RC` whenever
-> convenient (Control Hub network settings); code doesn't care, since OpModes reference
-> device names, not the filename.
+**Robot network:** competition SSID is `24621-RC`, team **24621**. The Control Hub
+is the AP at **192.168.43.1**. Credentials remain outside Git in private deploy settings.
+The historical filename `2222-Config.xml` does not determine the Wi-Fi or team name.
 
 The laptop's normal WiFi (10.0.0.x) **cannot reach the robot**. To talk to the
 Control Hub, either plug in USB (preferred — keeps internet) or join its Wi-Fi.
@@ -899,6 +921,25 @@ whole classpath for `@Configurable`, it does not look only inside OpModes (verif
 ---
 
 ## Autonomous framework (`lib/AutoSequence`)
+
+### SD-card path data (2026-10-22)
+
+`PedroAutonomous` loads `/sdcard/FIRST/paths/auto.json` settings and
+`auto.java.txt` Pedro export at each INIT through `lib/AutoPathFile` and
+`lib/PedroPathExport`. Paste only the exported Java snippet into
+`paths/auto.java.txt`; no importer or on-robot Java compilation. The reader accepts
+named poses, lines, multi-control curves, linear/constant headings and rejects
+unsupported text. JSON holds version 1, startup/shoot waits and optional named
+`speedLimits` in inches/second. Both deploy helpers upload both files before
+installing the app. `./update-paths` uploads without network switching or restart;
+upload while stopped, then re-INIT. Missing/invalid files stop initialization.
+Deploy logs identify the current hub as Android 7.1.2: use FileInputStream,
+not java.nio.file.Files (Android 8+), for runtime file loading.
+Any number of named paths can be read; action order remains Java: path1, shoot,
+path2 to park, optional path3. Additional paths need sequence edits to execute.
+Stinger stays up. Current route ends at (13.2008, 96.0738, 180 degrees).
+Autonomous preselects Field Centric (Java); DS OpMode Auto Queue must be enabled.
+Intake target default is 700 RPM. See paths/README.md.
 
 Built 2026-10-03 for Pedro 3. Same rule as teleop: **never block** — `update()` once per loop
 advances when the current step finishes.

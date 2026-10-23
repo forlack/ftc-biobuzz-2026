@@ -79,9 +79,18 @@ class LinuxDeployTests(unittest.TestCase):
         self.assertTrue(all(i < install for i in pushes))
         self.assertEqual(commands[pushes[0]][-1], '/sdcard/FIRST/')
 
+    def test_paths_replaced_before_install(self):
+        _, commands, error = self.deploy()
+        self.assertIsNone(error)
+        push = next(i for i, c in enumerate(commands) if 'push' in c and c[-1].endswith('auto.json.tmp'))
+        rename = next(i for i, c in enumerate(commands) if 'mv' in c)
+        install = next(i for i, c in enumerate(commands) if ':TeamCode:installDebug' in c)
+        self.assertLess(push, rename)
+        self.assertLess(rename, install)
+
     def test_no_hardware_map_without_flag(self):
         _, commands, _ = self.deploy()
-        self.assertFalse([c for c in commands if 'push' in c])
+        self.assertFalse([c for c in commands if 'push' in c and c[-1] == '/sdcard/FIRST/'])
 
     def test_map_only_restarts_app_without_install(self):
         bring_up, commands, error = self.deploy(map_only=True)

@@ -42,8 +42,16 @@ class HardwareMapTests(unittest.TestCase):
         self.assertTrue([c for c in commands if 'push' in c])
         self.assertTrue([c for c in commands if 'force-stop' in c])
 
+    def test_paths_replaced_before_install(self):
+        commands = self.commands(False)
+        push = next(i for i, c in enumerate(commands) if 'push' in c and c[-1].endswith('auto.json.tmp'))
+        rename = next(i for i, c in enumerate(commands) if 'mv' in c)
+        install = next(i for i, c in enumerate(commands) if ':TeamCode:installDebug' in c)
+        self.assertLess(push, rename)
+        self.assertLess(rename, install)
+
     def test_no_hardware_map_without_flag(self):
-        self.assertFalse([c for c in self.commands(False) if 'push' in c])
+        self.assertFalse([c for c in self.commands(False) if 'push' in c and c[-1] == '/sdcard/FIRST/'])
 
 
 class RestoreTests(unittest.TestCase):

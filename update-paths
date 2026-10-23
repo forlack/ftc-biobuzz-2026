@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""Upload Pedro export and autonomous JSON without rebuilding or restarting the Robot Controller."""
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+
+ROOT = Path(__file__).resolve().parent
+DESTINATION = '/sdcard/FIRST/paths/auto.json'
+
+
+def reject_constant(value):
+    raise ValueError(f'Non-finite JSON number: {value}')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('file', nargs='?', type=Path, default=ROOT / 'paths/auto.json')
+    parser.add_argument('-s', '--serial', default=os.environ.get('ANDROID_SERIAL', '192.168.43.1:5555'),
+                        help='ADB device serial; defaults to the robot Wi-Fi address')
+    args = parser.parse_args()
+    file = args.file.resolve()
+    try:
+        with file.open() as stream:
+            json.load(stream, parse_constant=reject_constant)
+    except (OSError, ValueError) as error:
+        parser.error(f'Cannot read valid JSON: {error}')
+
+    export = file.with_name('auto.java.txt')
+    if not export.is_file() or not export.read_text().strip():
+        parser.error('Missing or empty auto.java.txt beside the JSON settings file.')
+
+    adb = None
+    properties = ROOT / 'local.properties'
+    if properties.exists():
+        for line in properties.read_text().splitlines():
+            if line.startswith('sdk.dir='):
+                candidate = Path(line.split('=', 1)[1]) / 'platform-tools/adb'
+                if candidate.is_file():
+                    adb = str(candidate)
+    adb = adb or shutil.which('adb')
+    if not adb:
+        parser.error('ADB not found. Set up the Android SDK first.')
+
+    def run(*arguments):
+        subprocess.run([adb, *arguments], check=True, timeout=30)
+
+    # The user connects to robot Wi-Fi; this helper never switches networks.
+    if ':' in args.serial:
+        run('connect', args.serial)
+    run('-s', args.serial, 'get-state')
+    run('-s', args.serial, 'shell', 'mkdir', '-p', '/sdcard/FIRST/paths')
+    for source in (export, file):
+        destination = '/sdcard/FIRST/paths/' + source.name
+        run('-s', args.serial, 'push', str(source), destination + '.tmp')
+    for source in (export, file):
+        destination = '/sdcard/FIRST/paths/' + source.name
+        run('-s', args.serial, 'shell', 'mv', destination + '.tmp', destination)
+    print('Uploaded auto.java.txt and JSON settings. Press INIT again to reload.')
+
+
+if __name__ == '__main__':
+    main()

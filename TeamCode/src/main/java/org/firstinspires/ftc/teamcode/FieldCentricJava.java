@@ -40,7 +40,7 @@ public class FieldCentricJava extends LinearOpMode {
 
     // Intake -- editable live in Panels.
     @Sorter(sort = 10)
-    public static double INTAKE_RPM = 600;
+    public static double INTAKE_RPM = 700;
     @Sorter(sort = 11)
     public static double INTAKE_P = 15;
     @Sorter(sort = 12)

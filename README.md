@@ -1,6 +1,6 @@
-# BioBuzz — FTC Team 24620
+# BioBuzz — Team 24621 Total Chaos
 
-Robot code for FIRST Tech Challenge team 24620.
+Robot code for FIRST Tech Challenge team 24621, Total Chaos.
 
 This is a **fork of the official [FTC Robot Controller SDK](https://github.com/FIRST-Tech-Challenge/FtcRobotController)**.
 Everything outside `TeamCode/` is FIRST's code, unmodified except for two build files
@@ -10,10 +10,10 @@ Everything outside `TeamCode/` is FIRST's code, unmodified except for two build 
 |---|---|
 | FTC SDK | 12.0 (BIOBUZZ, 2026-2027) |
 | Android Studio | Narwhal 3 Feature Drop or later |
-| Pedro Pathing | 2.1.2 |
+| Pedro Pathing | revhub 3.0.1 / tuning 1.0.1 |
 | Gradle / AGP | 9.1.0 / 8.13.2 |
-| Panels dashboard | 1.0.13 |
-| JDK | 17 |
+| Panels dashboard | 1.0.17 |
+| JDK | Android Studio Embedded JDK (17+; JBR 25 verified) |
 
 For FIRST's own documentation and SDK release notes, go to the source rather than a stale
 copy here:
@@ -22,17 +22,45 @@ copy here:
 - [SDK releases and changelogs](https://github.com/FIRST-Tech-Challenge/FtcRobotController/releases)
 - [FTC documentation](https://ftc-docs.firstinspires.org/)
 
-> **This repo is tuned for a TEST PLATFORM, not a competition robot.** Pod offsets, measured
-> velocities, braking constants and `mass` all belong to that specific chassis. The structure
-> carries over to a new robot; the numbers do not.
+Current tuning targets the competition robot. Historical test-platform measurements
+in AGENTS.md must not replace the current values in `pedro/Constants.java`.
+
+## Desktop handoff — 2026-10-22
+
+The SD-card autonomous reader is **tested on the robot**. Pull `main` on the desktop
+before editing. Paste Pedro's complete Java export into `paths/auto.java.txt`;
+`paths/auto.json` keeps timing and named speed limits. Both files are versioned.
+See [the path workflow](paths/README.md) for supported syntax and upload instructions.
+
+Current autonomous starts at **(56, 8, 270°)**, drives to **(60, 16, 270°)**,
+shoots for **3.5 seconds**, then follows the curve to **(13.2008, 96.0738, 180°)**
+to park. Startup wait is 1 second. The stinger stays up; intake defaults to 700 RPM.
+TeleOp auto-selection requires Driver Station **OpMode Auto Queue** and the timed auto run.
+
+On the Linux desktop, save the robot Wi-Fi connection in NetworkManager once, then
+run `./deploy-linux -r 24621-RC --stay` from your terminal. Deploy uploads both path
+files automatically; `-m` additionally uploads the versioned hardware XML.
+For path-only edits, join robot Wi-Fi and run `./update-paths`, then re-INIT.
+No rebuild or app restart is needed. Both deploy helpers preserve Gradle colors and
+live progress in a terminal. Normal full deploy starts on internet Wi-Fi to build first.
+
+Wi-Fi credentials remain in each machine's private configuration outside Git and
+must be set up separately. `local.properties` and Android Studio settings are also
+local. The robot identifies as **Control Hub v1.0, Android 7.1.2** in install logs;
+file loading uses FileInputStream for compatibility. Do not replace it with
+`java.nio.file.Files`, which needs Android 8.
+
+Hardware config remains `robot-config/2222-Config.xml` (including `stinger` on
+Expansion Hub servo port 2). No fresh hub XML was available during this handoff;
+pull it after any Driver Station hardware configuration changes.
 
 ## Getting started
 
 1. Install **Android Studio** and let it install the Android SDK.
 2. Clone this repo and open the **`FtcRobotController/`** folder — the one with
    `settings.gradle`, not its parent.
-3. **Set the Gradle JDK to 17 before the first sync** (Settings → Build Tools → Gradle).
-   This is the step everyone misses; see [AGENTS.md](AGENTS.md) for why.
+3. **Select Android Studio’s Embedded JDK before the first sync** (Settings → Build Tools → Gradle).
+   See [AGENTS.md](AGENTS.md) for why.
 4. Sync. Gradle, the FTC SDK and Pedro download automatically.
 
 ### Deploy over USB
@@ -226,6 +254,9 @@ git add robot-config && git commit -m "Update robot config" && git push
 
 ## What's here
 
+Autonomous paths can be edited and uploaded without rebuilding. See
+[paths/README.md](paths/README.md) for the Pedro export and JSON settings format, first setup, and `./update-paths`.
+
 All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
 
 | OpMode | Driver Station name | Group | What it does |
@@ -233,7 +264,7 @@ All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
 | `FieldCentricJava` | Field Centric (Java) | Drive | Main teleop |
 | `TemplateTeleOp` | Template TeleOp | Template | `@Disabled` starter to copy |
 | `MotorsTest` | Motors Test | Diagnostics | Per-motor and robot-level direction checks |
-| `PedroAutonomous` | Pedro Pathing Autonomous | — | Out-and-back path |
+| `PedroAutonomous` | Pedro Pathing Autonomous | Autonomous | SD-card Pedro export: shoot, then park |
 | `PanelsDemo` | Panels Demo | Diagnostics | Dashboard smoke test, no hardware |
 | `pedroPathing.Tuning` | Tuning | — | Official Pedro tuning suite |
 
