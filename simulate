@@ -4,5 +4,10 @@
 #   ./simulate --init "Pedro Pathing Autonomous" --start      ./simulate --idle
 cd "$(dirname "$0")" || exit 1
 ./gradlew -q -p sim installDist || exit 1
+# Run from a private copy, so rebuilding the simulator never changes one that is running.
+RUN="sim/build/running-$$"
+rm -rf "$RUN"
+cp -r sim/build/install/biobuzz-sim "$RUN" || exit 1
+trap 'rm -rf "$RUN"' EXIT INT TERM
 cd sim || exit 1
-exec build/install/biobuzz-sim/bin/biobuzz-sim "$@"
+"../$RUN/bin/biobuzz-sim" "$@"

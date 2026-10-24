@@ -19,7 +19,10 @@ export class TuneTab {
 
   show(data) {
     this.items = data.items;
-    this.status(data.status, data.status.startsWith('SAVE FAILED') ? 'bad' : '');
+    const unsaved = this.items.filter((i) => i.saved && !inSync(i)).length;
+    const status = unsaved ? `${unsaved} change${unsaved === 1 ? '' : 's'} not saved · ${data.status}` : `all saved · ${data.status}`;
+    this.status(status, data.status.startsWith('SAVE FAILED') ? 'bad' : unsaved ? 'warn' : 'ok');
+    document.getElementById('settings-save').classList.toggle('pulse', unsaved > 0);
     document.getElementById('settings-warnings').innerHTML = (data.warnings || [])
       .map((w) => `<div class="warning">${escapeHtml(w)}</div>`).join('');
     const groups = new Map();
@@ -47,12 +50,14 @@ export class TuneTab {
     const row = document.createElement('div');
     row.className = 'setting-row';
     const key = `${item.group}.${item.name}`;
-    const unsaved = item.saved && item.inFile !== null && !same(item.value, item.inFile);
-    const neverSaved = item.saved && item.inFile === null;
     let tag = '';
-    if (!item.saved) tag = '<span class="tag live" title="A live switch: changes now, never saved">live</span>';
-    else if (unsaved || neverSaved) tag = '<span class="tag unsaved" title="Not in robot.json yet: press Save to robot">unsaved</span>';
-    else tag = '<span class="tag saved" title="Matches robot.json">saved</span>';
+    if (!item.saved) {
+      tag = '<span class="tag live" title="A live switch: changes now, never saved">live</span>';
+    } else if (inSync(item)) {
+      tag = `<span class="dot synced" title="${item.inFile === null ? 'Same as the code: nothing to save' : 'Same as robot.json on the robot'}"></span>`;
+    } else {
+      tag = '<span class="dot unsaved" title="Changed on the robot but not saved: press Save to robot to keep it"></span>';
+    }
     const notDefault = item.default !== null && !same(item.value, item.default);
     row.innerHTML = `<div class="setting-name" title="${escapeHtml(key)}">${escapeHtml(item.name)}
         <small>default ${escapeHtml(format(item.default))}${notDefault ? ' · changed' : ''}</small></div>
@@ -129,6 +134,14 @@ export class TuneTab {
     element.textContent = text;
     element.className = `status ${kind}`;
   }
+}
+
+/**
+ * In sync: the robot is running what robot.json says. With no robot.json yet (or a setting
+ * missing from it) the robot runs the code's value, so matching the default counts as in sync.
+ */
+function inSync(item) {
+  return same(item.value, item.inFile !== null ? item.inFile : item.default);
 }
 
 function same(a, b) {

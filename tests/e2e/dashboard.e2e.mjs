@@ -79,12 +79,36 @@ try {
   check(rate >= 50, `charts receive every loop: ${rate} samples/s`);
   const table = await b.eval(`document.querySelector('#telemetry').innerText`);
   check(table.includes('Battery V') && table.includes('Shots'), 'telemetry table lists the robot values');
+  // Add a chart of our own from the telemetry the robot is sending.
+  await b.eval(`document.querySelector('#add-chart').click()`);
+  await b.waitFor(`document.querySelector('#chart-dialog').open && document.querySelectorAll('#chart-keys input').length > 5`);
+  const offered = await b.eval(`[...document.querySelectorAll('#chart-keys input')].map((i) => i.value)`);
+  check(offered.includes('Shots') && offered.includes('Pollen power') && !offered.includes('Intake'),
+    `Add chart offers the numbers the robot sends (${offered.length} of them), not text`);
+  await b.eval(`(() => {
+    for (const key of ['Pollen power', 'Nectar power']) document.querySelector('#chart-keys input[value="' + key + '"]').checked = true;
+    document.querySelector('#chart-title').value = 'Motor power';
+    document.querySelector('#chart-create').click();
+  })()`);
+  await b.waitFor(`[...document.querySelectorAll('.chart h3')].some((h) => h.textContent === 'Motor power')`);
+  await sleep(1200);
+  const custom = await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent === 'Motor power').querySelector('.legend').innerText`);
+  check(/Pollen power\s+0\.\d+/.test(custom) && /Nectar power\s+0\.\d+/.test(custom), `the new chart plots live values (${custom.replace(/\s+/g, ' ')})`);
+  await b.goto(URL);
+  await b.waitFor(`[...document.querySelectorAll('.chart h3')].some((h) => h.textContent === 'Motor power')`);
+  check(true, 'the added chart is still there after reloading the page');
+  const scrolls = await b.eval(`(() => { const t = document.querySelector('.side .grow'); return getComputedStyle(t).overflowY === 'auto' && t.scrollHeight > t.clientHeight && t.getBoundingClientRect().bottom <= innerHeight + 1; })()`);
+  check(scrolls, 'the telemetry list scrolls inside the page instead of running off the bottom');
   await b.screenshot(join(OUT, '1-live.png'));
+  await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent === 'Motor power').querySelector('.remove').click()`);
+  check(await b.eval(`![...document.querySelectorAll('.chart h3')].some((h) => h.textContent === 'Motor power')`), 'and ✕ removes it');
 
   // ---- 2. Tune a setting, save it, sync it into Git ---------------------------------------------
   console.log('Tune tab');
   await b.eval(`document.querySelector('[data-tab="tune"]').click()`);
   await b.waitFor(`document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]')`);
+  check(await b.eval(`document.querySelectorAll('#settings .dot.unsaved').length === 0 && document.querySelectorAll('#settings .dot.synced').length > 20`),
+    'freshly loaded settings all show a green (in sync) dot');
   await b.eval(`(() => {
     const input = document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]');
     input.value = '3000';
@@ -94,8 +118,8 @@ try {
   let settings = (await api('/api/settings')).data;
   const rpm = settings.items.find((i) => i.name === 'POLLEN_FLYWHEEL_RPM');
   check(rpm.value === 3000 && rpm.default === 3400, 'editing the box changes the setting on the robot right away');
-  const row = await b.eval(`document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]').closest('.setting-row').innerText`);
-  check(row.includes('unsaved'), 'it is marked unsaved');
+  check(await b.eval(`!!document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]').closest('.setting-row').querySelector('.dot.unsaved')`)
+    && await b.eval(`document.querySelectorAll('#settings .dot.unsaved').length === 1`), 'only the changed setting turns yellow (changed, not saved)');
   await sleep(1500);
   const target = await b.eval(`(() => { document.querySelector('[data-tab="live"]').click(); return true; })()`);
   await sleep(800);
@@ -104,9 +128,11 @@ try {
   await b.eval(`document.querySelector('[data-tab="tune"]').click()`);
   await b.waitFor(`document.querySelector('#settings-save')`);
   await b.eval(`document.querySelector('#settings-save').click()`);
-  await b.waitFor(`document.querySelector('#settings-status').textContent.startsWith('saved')`);
+  await b.waitFor(`document.querySelector('#settings-status').textContent.startsWith('all saved')`);
   const saved = (await api('/api/file?path=settings/robot.json')).data;
   check(saved.FieldCentricJava.POLLEN_FLYWHEEL_RPM === 3000 && saved.version === 1, 'Save writes robot.json on the robot');
+  await b.waitFor(`document.querySelectorAll('#settings .dot.unsaved').length === 0`);
+  check(true, 'after Save to robot every dot is green again');
   check(!('FLYWHEELS_ON' in saved.FieldCentricJava) && !('Simulator' in saved), 'live switches are not saved');
   await b.screenshot(join(OUT, '2-tune.png'));
 

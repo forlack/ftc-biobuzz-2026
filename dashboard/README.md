@@ -7,8 +7,8 @@ Controller app** or **in the desktop simulator**. Same page, same server code, s
 
 | Tab | What it does |
 |---|---|
-| **Live** | Charts of every loop (flywheel RPM vs target, % error, intake, battery, loop time), the field with the robot's trail, and every telemetry value. Pause, drag to zoom, double click to resume, Export CSV. |
-| **Tune** | Every setting in `robot.json`, grouped by class, with its code default and whether it is saved. Changes apply on the robot at once; **Save to robot** keeps them. `live` switches (like `FLYWHEELS_ON`) are never saved. |
+| **Live** | Charts of every loop (flywheel RPM vs target, % error, intake, battery, loop time), the field with the robot's trail, and every telemetry value. Pause, drag to zoom, double click to resume, Export CSV. **+ Add chart** plots any numbers the robot sends (remembered in that browser; ✕ removes). |
+| **Tune** | Every setting in `robot.json`, grouped by class, with its code default and whether it is saved. Changes apply on the robot at once. A green dot means the robot runs what robot.json (or the code) says; yellow means changed but not saved yet. **Save to robot** keeps changes and turns every dot green. `live` switches (like `FLYWHEELS_ON`) are never saved. |
 | **Paths** | Our fork of the Pedro Pathing visualizer. Draw paths, then build the **Auton Sequence**. The **Sequence** lists every step, with each path's on-path functions under it in the order they fire. **Add to the sequence**: a **Function** (shoot, wait, turn to…, placed after any step) or a **Function on a path** (pick the path, the function and % along; shown as ◆ on the field). **Save** writes `autos/<name>.json`; **Save as new…** makes another auton file. One file holds the whole auton: start, paths and every step. |
 | **Robot** | The hardware map as a form (checked against the names the code needs), and every robot file to view, edit or download. |
 
@@ -95,7 +95,7 @@ node tests/e2e/dashboard.e2e.mjs          # the whole thing in a headless browse
 ```
 
 The end-to-end test starts its own simulator on port 8687 and a scratch SD card, then checks
-40 things: live charts at loop rate, OpMode control, editing and saving a setting, syncing it
+47 things: live charts at loop rate, OpMode control, editing and saving a setting, syncing it
 into a scratch repo, the hardware map checks, building a route with actions in the path editor, Save as new,
 the robot refusing a broken route, and running the route as the autonomous until Pedro parks
 the simulated robot. Screenshots go to `tests/e2e/out/`.

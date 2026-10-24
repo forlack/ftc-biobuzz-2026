@@ -49,6 +49,7 @@
         </div>
         <button class="btn" id="pause">Pause</button>
         <button class="btn" id="export-csv">Export CSV</button>
+        <button class="btn primary" id="add-chart">+ Add chart</button>
         <span class="muted" id="rate"></span>
       </div>
       <div class="live-grid">
@@ -78,7 +79,9 @@
         <span class="status" id="settings-status"></span>
       </div>
       <div id="settings-warnings"></div>
-      <p class="hint">Changes apply on the robot right away. <b>Save to robot</b> keeps them after a restart;
+      <p class="hint">Changes apply on the robot right away.
+        <span class="dot synced" style="display:inline-block"></span> saved &nbsp;
+        <span class="dot unsaved" style="display:inline-block"></span> changed, not saved yet: <b>Save to robot</b> keeps it after a restart.
         <code>./robot-sync pull</code> then copies robot.json into Git.</p>
       <div class="settings" id="settings"></div>
     </section>
@@ -115,6 +118,20 @@
       </div>
     </section>
   </main>
+
+  <dialog id="chart-dialog">
+    <form method="dialog" class="chart-form">
+      <h3>Add a chart</h3>
+      <label>Title <input id="chart-title" placeholder="My chart"></label>
+      <input id="chart-filter" placeholder="Filter telemetry" aria-label="Filter telemetry">
+      <div class="chart-keys" id="chart-keys"></div>
+      <div class="muted" id="chart-hint">Pick one or more values. Only numbers the robot is sending now are listed.</div>
+      <div class="chart-actions">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" id="chart-create" value="create">Add chart</button>
+      </div>
+    </form>
+  </dialog>
 
   <div class="toast" id="toast" hidden></div>
   <script src="vendor/uPlot.iife.min.js"></script>

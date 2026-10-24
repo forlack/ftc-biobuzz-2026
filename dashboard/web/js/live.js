@@ -59,6 +59,8 @@ export class LiveTab {
     this.rateStart = performance.now();
     this.dirty = false;
     this.charts = CHARTS.map((spec) => this.makeChart(spec));
+    for (const spec of loadCustomCharts()) this.charts.push(this.makeChart(spec));
+    this.bindChartDialog();
     this.field = document.getElementById('field');
     this.fieldImage = new Image();
     this.fieldImage.src = 'visualizer/fields/biobuzz.webp';
@@ -71,7 +73,8 @@ export class LiveTab {
   makeChart(spec) {
     const card = document.createElement('div');
     card.className = 'card chart';
-    card.innerHTML = `<div class="card-head"><h3>${escapeHtml(spec.title)}</h3><span class="muted">${escapeHtml(spec.unit)}</span></div>
+    card.innerHTML = `<div class="card-head"><h3>${escapeHtml(spec.title)}</h3><span class="muted">${escapeHtml(spec.unit)}${
+      spec.custom ? ' <button class="remove" title="Remove this chart">✕</button>' : ''}</span></div>
       <div class="legend"></div><div class="plot"></div>`;
     document.getElementById('charts').appendChild(card);
     const legend = card.querySelector('.legend');
@@ -85,7 +88,8 @@ export class LiveTab {
       scales.ms = { auto: true };
       axes.push({ ...axis, scale: 'ms', side: 1, grid: { show: false }, size: 44 });
     }
-    const chart = { spec, legend, holder, plot: null };
+    const chart = { spec, legend, holder, card, plot: null };
+    if (spec.custom) card.querySelector('.remove').addEventListener('click', () => this.removeChart(chart));
     const options = {
       width: holder.clientWidth || 600,
       height: 220,
@@ -107,6 +111,55 @@ export class LiveTab {
     holder.addEventListener('mousedown', () => { this.setPaused(true); });
     holder.addEventListener('dblclick', () => { this.setPaused(false); });
     return chart;
+  }
+
+  // ---- Custom charts ----------------------------------------------------------
+
+  bindChartDialog() {
+    const dialog = document.getElementById('chart-dialog');
+    document.getElementById('add-chart').addEventListener('click', () => {
+      document.getElementById('chart-title').value = '';
+      document.getElementById('chart-filter').value = '';
+      this.fillChartKeys();
+      dialog.showModal();
+    });
+    document.getElementById('chart-filter').addEventListener('input', () => this.fillChartKeys());
+    dialog.addEventListener('close', () => {
+      if (dialog.returnValue !== 'create') return;
+      const keys = [...document.querySelectorAll('#chart-keys input:checked')].map((i) => i.value);
+      if (!keys.length) return;
+      this.addChart(document.getElementById('chart-title').value.trim() || keys.join(', '), keys);
+    });
+  }
+
+  /** Every number the robot is sending now, with its latest value. */
+  fillChartKeys() {
+    const filter = document.getElementById('chart-filter').value.toLowerCase();
+    const checked = new Set([...document.querySelectorAll('#chart-keys input:checked')].map((i) => i.value));
+    const keys = Object.keys(this.latest).sort((a, b) => a.localeCompare(b))
+      .filter((k) => !filter || k.toLowerCase().includes(filter) || checked.has(k));
+    document.getElementById('chart-keys').innerHTML = keys.length
+      ? keys.map((k) => `<label><input type="checkbox" value="${escapeHtml(k)}" ${checked.has(k) ? 'checked' : ''}>
+          ${escapeHtml(k)}<span class="value">${escapeHtml(formatNumber(this.latest[k]))}</span></label>`).join('')
+      : '<div class="muted" style="padding:6px">Nothing to chart yet: start an OpMode.</div>';
+  }
+
+  addChart(title, keys) {
+    const spec = {
+      id: `c${Date.now().toString(36)}`, custom: true, title, unit: '',
+      series: keys.map((key, i) => ({ label: key, key, color: COLORS[i % COLORS.length], width: 1.5 })),
+    };
+    this.charts.push(this.makeChart(spec));
+    saveCustomCharts(this.charts);
+    this.dirty = true;
+    return spec;
+  }
+
+  removeChart(chart) {
+    chart.plot.destroy();
+    chart.card.remove();
+    this.charts = this.charts.filter((c) => c !== chart);
+    saveCustomCharts(this.charts);
   }
 
   bindToolbar() {
@@ -271,6 +324,17 @@ export class LiveTab {
     link.download = `telemetry-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
     link.click();
   }
+}
+
+// Custom charts are remembered in this browser only.
+function loadCustomCharts() {
+  try { return JSON.parse(localStorage.getItem('biobuzz.charts') || '[]'); } catch { return []; }
+}
+
+function saveCustomCharts(charts) {
+  try {
+    localStorage.setItem('biobuzz.charts', JSON.stringify(charts.filter((c) => c.spec.custom).map((c) => c.spec)));
+  } catch { /* private window: charts last until the page closes */ }
 }
 
 function drawBand(u, percent) {
