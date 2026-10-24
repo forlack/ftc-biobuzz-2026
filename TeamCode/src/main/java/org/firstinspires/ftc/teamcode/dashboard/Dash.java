@@ -19,8 +19,11 @@ import java.util.Map;
 public final class Dash {
     private Dash() { }
 
-    /** About 20 s at 200 loops per second. */
-    private static final int CAPACITY = 4000;
+    /**
+     * About 10 s at 100 loops per second, in RAM (~2 MB; the Control Hub has 1 GB in all).
+     * Browsers keep their own chart history; the server only ever sends a viewer the last 400.
+     */
+    private static final int CAPACITY = 1000;
     private static final long START = System.nanoTime();
 
     private static final Object LOCK = new Object();

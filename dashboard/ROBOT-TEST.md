@@ -64,6 +64,9 @@ Load measurement for check 9 (Field Centric running, robot on blocks or driven g
 ./dashboard-load --seconds 30        # twice: differences under ~0.2 ms are noise
 ```
 
+Also note the app's memory limit (once per hub):
+`adb shell getprop dalvik.vm.heapgrowthlimit` — the dashboard's telemetry buffer uses ~2 MB of it.
+
 Copy both tables into the log. If **+ loop** is 1 ms or more: Tune tab →
 `DashboardConfig.MAX_SAMPLES_PER_SECOND` = 50, Save, measure again; then 25.
 

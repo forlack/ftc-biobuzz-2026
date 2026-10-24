@@ -28,6 +28,10 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   `Loop ms`). Names match PedroAutonomous and the sim. Next idea after the first robot
   baseline: `LynxModule` bulk caching (AUTO) to cut hub reads further; compare with
   `./dashboard-load`.
+- **Memory:** `Dash` ring buffer is 1,000 frames (~2 MB measured on the JVM with the teleop's
+  ~23 values; it was 4,000 / 7-10 MB). Control Hub: RK3328 quad Cortex-A53, **1 GB RAM**
+  shared with Android. Each loop still allocates two small maps (~2 KB of garbage per loop,
+  ~200 KB/s at 100 Hz, even with no viewer); if robot loop times show GC spikes, reuse maps.
 - Flywheel Tuner on this branch also feeds the Live tab's Flywheels chart (RPM only, no target
   lines); results still applied with A and saved to robot.json.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,

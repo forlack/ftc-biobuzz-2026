@@ -100,7 +100,7 @@ have.
   scanning on the robot. The simulator's build makes the same list from the same sources.
 - **Telemetry:** `DashboardTelemetry` implements the SDK's `Telemetry` and passes everything to
   the Driver Station unchanged; `addData` also calls `Dash.put`, and `update` calls
-  `Dash.frame`. `Dash` keeps the last ~20 s of loops; the server streams them to browsers on
+  `Dash.frame`. `Dash` keeps the last 1,000 loops in RAM (~2 MB); the server streams them to browsers on
   the Live tab (built once for all viewers, names sent once, then numbers).
 - **Server:** plain Java, port 8686, in the Robot Controller app and in the simulator.
   API list at the top of `TeamCode/.../dashboard/DashboardServer.java`.
