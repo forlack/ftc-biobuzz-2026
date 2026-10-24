@@ -340,17 +340,22 @@ try {
   // Simple lock: watch, but no changes, until the PIN.
   check(await b.eval(`document.querySelector('#lock').innerText.trim() === 'Unlocked' && !!document.querySelector('#lock svg')`),
     'the lock button shows an open lock and says Unlocked');
-  await b.eval(`(() => { const answers = ['2462', '2462']; window.prompt = () => answers.shift(); document.querySelector('#lock').click(); })()`);
+  const enterPin = (pin) => b.eval(`(() => {
+    document.querySelector('#lock').click();
+    document.querySelector('#lock-pin').value = '${pin}';
+    document.querySelector('#lock-ok').click();
+  })()`);
+  await enterPin('2462');
   await b.waitFor(`document.body.classList.contains('locked') && !document.querySelector('#locked-banner').hidden`);
-  check(await b.eval(`document.querySelector('#lock').innerText.trim() === 'Locked'`), 'Lock asks for a PIN twice, then says Locked and the dashboard is view only');
+  check(await b.eval(`document.querySelector('#lock').innerText.trim() === 'Locked'`), 'Lock asks for the PIN once (shown as typed), then says Locked and is view only');
   const refused = await api('/api/settings/save', { method: 'POST' });
   check(refused.status === 423, 'while locked the robot refuses changes, even straight to the API');
   check((await api('/api/opmode', { method: 'POST', body: { action: 'stop' } })).status === 423, 'and OpMode control');
   check((await api('/api/settings')).status === 200, 'but watching still works');
-  await b.eval(`(() => { window.prompt = () => '1111'; document.querySelector('#lock').click(); })()`);
+  await enterPin('1111');
   await b.waitFor(`document.querySelector('#toast').textContent.includes('Wrong PIN')`, 8000);
   check(await b.eval(`document.body.classList.contains('locked')`), 'a wrong PIN keeps it locked');
-  await b.eval(`(() => { window.prompt = () => '2462'; document.querySelector('#lock').click(); })()`);
+  await enterPin('2462');
   await b.waitFor(`!document.body.classList.contains('locked')`, 8000);
   check((await api('/api/settings/save', { method: 'POST' })).status === 200, 'the right PIN unlocks it');
 

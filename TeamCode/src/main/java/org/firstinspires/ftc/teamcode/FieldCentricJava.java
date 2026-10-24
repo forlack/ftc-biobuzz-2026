@@ -106,7 +106,8 @@ public class FieldCentricJava extends LinearOpMode {
     @IgnoreConfigurable
     public static final Class<?>[] SETTINGS = {FieldCentricJava.class, MecanumDrive.class, PedroAutonomous.class};
     private RobotSettings settings;
-    private long lastLoop;
+    private long lastLoop, lastBatteryRead;
+    private double batteryVolts;
 
     @Override
     public void runOpMode() {
@@ -255,8 +256,13 @@ public class FieldCentricJava extends LinearOpMode {
         Dash.put("Pollen target", shooterPollen.getTargetRPM());
         Dash.put("Nectar RPM", shooterNectar.getRPM());
         Dash.put("Nectar target", shooterNectar.getTargetRPM());
-        Dash.put("Battery V", hardwareMap.voltageSensor.iterator().next().getVoltage());
         long now = System.nanoTime();
+        // Reading the battery is a call to the hub that takes a few ms, so only 4 times a second.
+        if (now - lastBatteryRead > 250_000_000L) {
+            lastBatteryRead = now;
+            batteryVolts = hardwareMap.voltageSensor.iterator().next().getVoltage();
+        }
+        Dash.put("Battery V", batteryVolts);
         if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
         lastLoop = now;
     }

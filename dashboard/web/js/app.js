@@ -89,20 +89,31 @@ function showLock(value) {
 }
 showLock(false);
 
-document.getElementById('lock').addEventListener('click', async () => {
+// One PIN box, shown as you type, so there is nothing to type twice.
+const lockDialog = document.getElementById('lock-dialog');
+const pinInput = document.getElementById('lock-pin');
+
+document.getElementById('lock').addEventListener('click', () => {
+  document.getElementById('lock-title').textContent = locked ? 'Unlock the dashboard' : 'Lock the dashboard';
+  document.getElementById('lock-hint').textContent = locked
+    ? 'Enter the PIN to allow changes again.'
+    : 'Anyone can still watch. Changing anything will need this PIN.';
+  document.getElementById('lock-ok').textContent = locked ? 'Unlock' : 'Lock';
+  document.getElementById('lock-error').textContent = '';
+  pinInput.value = '';
+  lockDialog.showModal();
+  pinInput.focus();
+});
+
+pinInput.addEventListener('input', () => { pinInput.value = pinInput.value.replace(/\D/g, ''); });
+
+lockDialog.addEventListener('close', async () => {
+  if (lockDialog.returnValue !== 'ok') return;
+  const pin = pinInput.value;
   try {
-    if (locked) {
-      const pin = prompt('PIN to unlock:');
-      if (pin === null) return;
-      showLock((await api('/api/lock', { method: 'POST', body: { action: 'unlock', pin } })).locked);
-      toast('Unlocked: changes allowed');
-    } else {
-      const pin = prompt('Choose a PIN (4 to 12 digits). Anyone can still watch; changes need this PIN.');
-      if (pin === null) return;
-      if (prompt('Type the PIN again:') !== pin) { toast('The PINs did not match', true); return; }
-      showLock((await api('/api/lock', { method: 'POST', body: { action: 'lock', pin } })).locked);
-      toast('Locked: view only');
-    }
+    const result = await api('/api/lock', { method: 'POST', body: { action: locked ? 'unlock' : 'lock', pin } });
+    showLock(result.locked);
+    toast(result.locked ? `Locked with PIN ${pin}: view only` : 'Unlocked: changes allowed');
   } catch (error) {
     toast(error.message, true);
   }
