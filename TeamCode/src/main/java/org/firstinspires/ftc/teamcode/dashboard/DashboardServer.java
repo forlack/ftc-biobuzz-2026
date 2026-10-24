@@ -90,6 +90,12 @@ public class DashboardServer {
     private volatile String lastError = "";
     private final DashboardLock lock;
 
+    // Load measurement: what the dashboard costs the robot.
+    private final java.util.concurrent.atomic.AtomicLong busyNanos = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong bytesSent = new java.util.concurrent.atomic.AtomicLong();
+    private final AtomicInteger viewers = new AtomicInteger();
+    private volatile JSONObject load = new JSONObject();
+
     public DashboardServer(RobotHost host, int port) {
         this.host = host;
         this.port = port;
@@ -103,6 +109,66 @@ public class DashboardServer {
         Thread acceptor = new Thread(this::acceptLoop, "dashboard-accept");
         acceptor.setDaemon(true);
         acceptor.start();
+        Thread meter = new Thread(this::measureLoad, "dashboard-load");
+        meter.setDaemon(true);
+        meter.start();
+    }
+
+    /**
+     * Once a second: CPU used by the dashboard's own work (preparing and sending data to
+     * browsers), CPU used by the whole app (from /proc/self/stat, like top), viewers, Wi-Fi
+     * traffic, and the OpMode's loop time and rate.
+     */
+    private void measureLoad() {
+        long lastWall = System.nanoTime(), lastBusy = busyNanos.get(), lastBytes = bytesSent.get();
+        long lastTicks = cpuTicks(), lastSeq = Dash.latestSeq();
+        while (running) {
+            sleepQuietly(1000);
+            try {
+                long wall = System.nanoTime(), busy = busyNanos.get(), bytes = bytesSent.get(), ticks = cpuTicks();
+                double seconds = (wall - lastWall) / 1e9;
+                List<Dash.Frame> frames = Dash.since(lastSeq, 100000);
+                double loopSum = 0;
+                int loopCount = 0;
+                for (Dash.Frame frame : frames) {
+                    Double ms = frame.numbers.get("Loop ms");
+                    if (ms != null) {
+                        loopSum += ms;
+                        loopCount++;
+                    }
+                }
+                if (!frames.isEmpty()) lastSeq = frames.get(frames.size() - 1).seq;
+                JSONObject json = new JSONObject();
+                json.put("viewers", viewers.get());
+                json.put("dashboardCpu", round((busy - lastBusy) / 1e9 / seconds * 100, 1));
+                json.put("appCpu", ticks < 0 || lastTicks < 0 ? JSONObject.NULL
+                        : (Object) round((ticks - lastTicks) / 100.0 / seconds * 100, 1));
+                json.put("cores", Runtime.getRuntime().availableProcessors());
+                json.put("kbPerSecond", round((bytes - lastBytes) / 1024.0 / seconds, 1));
+                json.put("loopsPerSecond", round(frames.size() / seconds, 1));
+                json.put("loopMs", loopCount == 0 ? JSONObject.NULL : (Object) round(loopSum / loopCount, 2));
+                json.put("updatesPerSecond", DashboardConfig.UPDATES_PER_SECOND);
+                json.put("chartSamplesPerSecond", DashboardConfig.CHART_SAMPLES_PER_SECOND);
+                load = json;
+                lastWall = wall;
+                lastBusy = busy;
+                lastBytes = bytes;
+                lastTicks = ticks;
+            } catch (Throwable ignored) {
+                // Measuring must never break the dashboard.
+            }
+        }
+    }
+
+    /** User + system CPU time of this whole process in clock ticks (100 a second), or -1. */
+    private static long cpuTicks() {
+        try {
+            String stat = new String(RobotFiles.readBytes(new File("/proc/self/stat")), StandardCharsets.US_ASCII);
+            String[] fields = stat.substring(stat.lastIndexOf(')') + 2).split(" ");
+            return Long.parseLong(fields[11]) + Long.parseLong(fields[12]);   // utime, stime
+        } catch (Throwable error) {
+            return -1;   // not Linux or Android
+        }
     }
 
     public synchronized void stop() {
@@ -363,6 +429,7 @@ public class DashboardServer {
         json.put("hardwareMap", host.activeHardwareMap());
         json.put("settingsStatus", host.settings().status());
         json.put("locked", lock.locked());
+        json.put("load", load);
         json.put("time", Dash.now());
         return json;
     }
@@ -665,23 +732,47 @@ public class DashboardServer {
 
         long cursor = Math.max(0, Dash.latestSeq() - 400);   // start with ~2 s of history
         long lastState = 0;
-        while (open[0] && running) {
-            List<Dash.Frame> frames = Dash.since(cursor, 600);
-            if (!frames.isEmpty()) {
-                cursor = frames.get(frames.size() - 1).seq;
-                JSONObject message = new JSONObject();
-                message.put("type", "frames");
-                message.put("frames", framesJson(frames));
-                sendText(output, message.toString());
+        double lastSample = -1e9;
+        viewers.incrementAndGet();
+        try {
+            while (open[0] && running) {
+                long started = System.nanoTime();
+                List<Dash.Frame> frames = Dash.since(cursor, 600);
+                if (!frames.isEmpty()) {
+                    cursor = frames.get(frames.size() - 1).seq;
+                    // CHART_SAMPLES_PER_SECOND > 0 skips loops so each browser gets at most that many.
+                    int cap = DashboardConfig.CHART_SAMPLES_PER_SECOND;
+                    if (cap > 0) {
+                        List<Dash.Frame> kept = new ArrayList<>();
+                        for (Dash.Frame frame : frames) {
+                            if (frame.t - lastSample >= 1.0 / cap) {
+                                kept.add(frame);
+                                lastSample = frame.t;
+                            }
+                        }
+                        frames = kept;
+                    }
+                }
+                if (!frames.isEmpty()) {
+                    JSONObject message = new JSONObject();
+                    message.put("type", "frames");
+                    message.put("frames", framesJson(frames));
+                    bytesSent.addAndGet(sendText(output, message.toString()));
+                }
+                long now = System.currentTimeMillis();
+                if (now - lastState > 500) {
+                    lastState = now;
+                    JSONObject message = state();
+                    message.put("type", "state");
+                    bytesSent.addAndGet(sendText(output, message.toString()));
+                }
+                long spent = System.nanoTime() - started;
+                busyNanos.addAndGet(spent);
+                int rate = Math.max(1, Math.min(50, DashboardConfig.UPDATES_PER_SECOND));
+                sleepQuietly(Math.max(1, 1000 / rate - spent / 1000000));
             }
-            long now = System.currentTimeMillis();
-            if (now - lastState > 500) {
-                lastState = now;
-                JSONObject message = state();
-                message.put("type", "state");
-                sendText(output, message.toString());
-            }
-            sleepQuietly(50);
+        } finally {
+            viewers.decrementAndGet();
         }
         try {
             output.write(new byte[]{(byte) 0x88, 0});
@@ -717,7 +808,8 @@ public class DashboardServer {
         return list;
     }
 
-    private static void sendText(OutputStream output, String text) throws IOException {
+    /** Sends one websocket text message and returns its size in bytes. */
+    private static int sendText(OutputStream output, String text) throws IOException {
         byte[] payload = text.getBytes(StandardCharsets.UTF_8);
         ByteArrayOutputStream frame = new ByteArrayOutputStream(payload.length + 10);
         frame.write(0x81);
@@ -734,10 +826,12 @@ public class DashboardServer {
             }
         }
         frame.write(payload);
+        byte[] bytes = frame.toByteArray();
         synchronized (output) {
-            output.write(frame.toByteArray());
+            output.write(bytes);
             output.flush();
         }
+        return bytes.length;
     }
 
     /** Reads and discards one client frame. Returns its opcode, or -1 at end of stream. */

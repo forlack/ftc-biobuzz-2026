@@ -26,7 +26,8 @@ public final class SimOpModes {
     private SimOpModes() { }
 
     /** Settings groups, in the same order as FieldCentricJava.SETTINGS, plus the simulator's own. */
-    public static final Class<?>[] SETTINGS = {FieldCentricJava.class, MecanumDrive.class, PedroAutonomous.class, Simulator.class};
+    public static final Class<?>[] SETTINGS = {FieldCentricJava.class, MecanumDrive.class, PedroAutonomous.class,
+            org.firstinspires.ftc.teamcode.dashboard.DashboardConfig.class, Simulator.class};
 
     /** Like the SDK's OpMode, cut down to what the simulator needs. */
     public abstract static class SimOpMode {

@@ -44,6 +44,20 @@ The dashboard is only in builds made with `--dashboard`, until it has proven its
 It starts 5 seconds after the Robot Controller app, and every error inside it is caught, so a
 problem means "no dashboard", never "no robot".
 
+### What it costs the robot
+
+The Robot tab's **Load** card shows, every second: viewers, the dashboard's own CPU, the whole
+app's CPU (like `top`), Wi-Fi traffic and the OpMode's loop time. To compare, start Field
+Centric and run (with other dashboard tabs closed):
+
+```bash
+./dashboard-load                 # 0, then 1, then 2 viewers; prints a table
+```
+
+If the loop gets slower with viewers, turn down `DashboardConfig` on the Tune tab:
+`CHART_SAMPLES_PER_SECOND = 50` (or 25) sends fewer points per second for the charts, and
+`UPDATES_PER_SECOND = 10` sends bigger, less frequent batches. Save to keep them.
+
 ## Keeping the robot and Git in step
 
 The robot holds the live files; Git holds the history.
@@ -71,6 +85,10 @@ setting `PedroAutonomous.ROUTE` picks the file; D-pad up/down during INIT picks 
 Without the file, INIT shows what is missing. The format
 is documented in `TeamCode/.../lib/AutoRoute.java`. The robot refuses to save a route with an
 unknown action or a bad path, so a typo never reaches INIT.
+
+Each route also saves the robot size and safety margin it was drawn with (`"robot":
+{width, length, safetyMargin}`, inches); opening the route in the path editor puts them back.
+The robot ignores them.
 
 ## For programmers
 

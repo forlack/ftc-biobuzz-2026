@@ -103,6 +103,38 @@ try {
   await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent.includes('Motor power')).querySelector('.remove').click()`);
   check(await b.eval(`![...document.querySelectorAll('.chart h3')].some((h) => h.textContent.includes('Motor power'))`), 'and ✕ removes it');
 
+  // Full size: a chart fills the Live area under the toolbar, and Esc puts it back.
+  await b.eval(`document.querySelector('.chart .expand').click()`);
+  await sleep(400);
+  const big = await b.eval(`(() => {
+    const card = document.querySelector('.chart.expanded');
+    const bar = document.querySelector('#tab-live .toolbar').getBoundingClientRect();
+    const box = card.getBoundingClientRect();
+    return { top: box.top > bar.bottom, wide: box.width > innerWidth * 0.9, tall: box.height > (innerHeight - bar.bottom) * 0.85,
+             plot: card.querySelector('canvas').getBoundingClientRect().height,
+             closeHidden: getComputedStyle(card.querySelector('.remove')).display === 'none',
+             label: card.querySelector('.expand').textContent.trim() };
+  })()`);
+  check(big.closeHidden && big.label === 'Exit full size', 'at full size the ✕ is hidden and the button says "Exit full size"');
+  check(big.top && big.wide && big.tall && big.plot > 400, `the expand button makes a chart fill the Live area below the toolbar (plot ${Math.round(big.plot)} px tall)`);
+  await b.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await sleep(300);
+  check(await b.eval(`!document.querySelector('.chart.expanded')`), 'Esc puts it back');
+
+  // Pause on a chart freezes all charts; hovering then reads exact values and their time.
+  await b.eval(`document.querySelector('.chart .pause-chart').click()`);
+  check(await b.eval(`document.getElementById('charts').classList.contains('paused') && document.getElementById('pause').textContent === 'Resume'`),
+    'the pause button on a chart pauses the charts');
+  const box = await b.eval(`(() => { const r = document.querySelector('.chart canvas').getBoundingClientRect(); return { x: r.left + r.width * 0.6, y: r.top + r.height / 2 }; })()`);
+  await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y });
+  await sleep(200);
+  const hover = await b.eval(`document.querySelector('.chart .legend .at').textContent`);
+  check(/^at -\d+\.\d\d s$/.test(hover), `hovering a paused chart shows the exact values and when: "${hover}"`);
+  await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 5 });
+  await b.send('Input.dispatchKeyEvent', { type: 'keyDown', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
+  await sleep(200);
+  check(await b.eval(`!document.getElementById('charts').classList.contains('paused')`), 'Space resumes them');
+
   // Standard charts can be closed and moved too; each browser remembers its own layout.
   const titles = () => b.eval(`[...document.querySelectorAll('#charts .chart h3')].map((h) => h.textContent.replace('⠿', '').trim())`);
   await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent.includes('Battery & loop')).querySelector('.remove').click()`);
@@ -201,6 +233,10 @@ try {
   const inFile = (readFileSync(join(REPO, 'robot-config/2222-Config.xml'), 'utf8').match(/<(?!Lynx)\w+ name="[^"]+" port=/g) || []).length;
   check(devices === inFile, `hardware map shows all ${devices} devices on both hubs`);
   check(await b.eval(`document.querySelector('#hw-problems').children.length === 0`), 'the real map has no problems');
+  await b.waitFor(`document.querySelector('#load').innerText.includes('Viewers')`);
+  const load = (await api('/api/state')).data.load;
+  check(load.viewers >= 1 && load.dashboardCpu >= 0 && load.kbPerSecond > 1 && load.loopMs > 0,
+    `the Load card measures the dashboard: ${load.viewers} viewer, ${load.dashboardCpu} % CPU, ${load.kbPerSecond} KB/s, loop ${load.loopMs} ms`);
   await b.eval(`(() => {
     const input = [...document.querySelectorAll('table.devices input[data-field="name"]')].find((i) => i.value === 'stinger');
     input.value = 'stingr';
@@ -297,6 +333,8 @@ try {
   check(route.steps[0].action === 'wait' && route.steps[0].params.seconds === 0.5, 'and the edited wait of 0.5 s');
   check(route.steps[route.steps.length - 1].action === 'stowStinger', 'and "stinger up" as the last step');
   check(route.paths[1].points.length === 3 && route.start.heading === 270, 'geometry and start pose survive the round trip');
+  check(route.robot && route.robot.width > 0 && route.robot.length > 0 && route.robot.safetyMargin >= 0,
+    `the route saves the robot size and safety margin: ${JSON.stringify(route.robot)}`);
 
   // Save as new: a second auton file, leaving the first one as it was.
   check((await b.eval(`${frame}.querySelector('[data-testid=robot-panel]').innerText`)).includes('Auton Sequence'),

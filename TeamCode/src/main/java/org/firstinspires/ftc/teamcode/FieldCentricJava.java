@@ -10,6 +10,7 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
+import org.firstinspires.ftc.teamcode.dashboard.DashboardConfig;
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
 import org.firstinspires.ftc.teamcode.lib.MecanumDrive;
@@ -104,7 +105,8 @@ public class FieldCentricJava extends LinearOpMode {
 
     /** Classes whose public static values are saved in robot.json. Autonomous loads them too. */
     @IgnoreConfigurable
-    public static final Class<?>[] SETTINGS = {FieldCentricJava.class, MecanumDrive.class, PedroAutonomous.class};
+    public static final Class<?>[] SETTINGS = {FieldCentricJava.class, MecanumDrive.class, PedroAutonomous.class,
+            DashboardConfig.class};
     private RobotSettings settings;
     private long lastLoop, lastBatteryRead;
     private double batteryVolts;

@@ -52,9 +52,24 @@ function showState(next) {
   battery.textContent = next.battery == null ? '— V' : `${next.battery.toFixed(2)} V`;
   battery.classList.toggle('low', next.battery != null && next.battery < 12.2);
   showLock(next.locked);
+  showLoad(next.load);
   document.getElementById('op-start').disabled = next.state !== 'init';
   document.getElementById('op-stop').disabled = next.state === 'stopped';
   if (first && tab === 'robot') robot.refresh(next.hardwareMap);
+}
+
+function showLoad(load) {
+  if (!load || load.viewers == null) return;
+  const value = (v, unit) => (v == null ? '—' : `${v}${unit}`);
+  const rows = [
+    ['Viewers', load.viewers],
+    ['Dashboard CPU', value(load.dashboardCpu, ' %')],
+    ['Whole app CPU', value(load.appCpu, ' %')],
+    ['Wi-Fi sent', value(load.kbPerSecond, ' KB/s')],
+    ['OpMode loop', load.loopMs == null ? 'no OpMode running' : `${load.loopMs} ms (${load.loopsPerSecond}/s)`],
+    ['Updates / chart samples', `${load.updatesPerSecond}/s, ${load.chartSamplesPerSecond ? `${load.chartSamplesPerSecond}/s` : 'every loop'}`],
+  ];
+  document.getElementById('load').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${escapeHtml(String(v))}</td></tr>`).join('');
 }
 
 async function opMode(action) {

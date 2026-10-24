@@ -41,15 +41,16 @@ Full guide: `dashboard/README.md`. Key facts for agents:
   sequence wait items, service worker removed (it cached the dashboard's `/`). Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (31
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (76
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
 - Not yet done on hardware: everything above. First robot test: deploy with `--dashboard`,
   check Panels still loads at :8001, then the checklist in dashboard/README.md.
-- **Robot cost is unmeasured.** Sim on the desktop: 1% of a core idle, 2% with one browser
-  (~40 KB/s, ~400 B per loop at 100 loops/s). Control Hub guess: 5-10% of one A53 core per
-  watching browser. Measure on the hub: Loop ms chart with 0/1/2 browsers, and
-  `adb shell top -p $(pidof com.qualcomm.ftcrobotcontroller)`. Knobs if needed: the 50 ms send
-  period in DashboardServer.webSocket, fewer Dash.put values. Teleop battery read throttled to
+- **Robot cost: measured by the dashboard itself.** `/api/state` "load" (Robot tab Load card):
+  viewers, dashboard CPU (time in the websocket send loops, % of one core), whole-app CPU
+  (/proc/self/stat), KB/s, Loop ms. `./dashboard-load [--url ...]` prints 0/1/2 viewers. Sim on
+  the desktop: 0.5% of a core and 40 KB/s per viewer, no loop-time change. Not yet measured on
+  the Control Hub. Knobs (settings, Tune tab): `DashboardConfig.UPDATES_PER_SECOND` (20),
+  `CHART_SAMPLES_PER_SECOND` (0 = every loop; 25 cut 40 to 11 KB/s in the sim). Teleop battery read throttled to
   4 Hz (a voltage read is a hub transaction).
 
 ## Robot settings and the no-rebuild roadmap — 2026-10-22

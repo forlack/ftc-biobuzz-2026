@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Measures what the BioBuzz dashboard costs the robot, with 0, 1 and 2 viewers.
+
+  ./dashboard-load                      the robot (on its Wi-Fi), http://192.168.43.1:8686
+  ./dashboard-load --url http://localhost:8686    the simulator
+  ./dashboard-load --seconds 20         longer runs for steadier numbers
+
+Start an OpMode first (Field Centric) so the loop time is measured too, and close other
+dashboard tabs: they count as viewers. Each viewer here is a real websocket that receives
+everything a browser would, so the numbers match a browser watching the Live tab (without
+the drawing, which happens on the laptop anyway).
+"""
+import argparse
+import json
+import os
+import sys
+import threading
+import time
+import urllib.parse
+import urllib.request
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tests'))
+from wsclient import WebSocket  # noqa: E402
+
+
+def state(url):
+    with urllib.request.urlopen(url + '/api/state', timeout=5) as response:
+        return json.load(response)
+
+
+class Viewer:
+    """Reads and throws away everything the dashboard sends, like an open browser tab."""
+
+    def __init__(self, url):
+        address = urllib.parse.urlparse(url)
+        self.socket = WebSocket(address.hostname, address.port or 80, timeout=10)
+        self.running = True
+        threading.Thread(target=self.run, daemon=True).start()
+
+    def run(self):
+        try:
+            while self.running:
+                self.socket.receive()
+        except Exception:
+            pass
+
+    def close(self):
+        self.running = False
+        try:
+            self.socket.close()
+        except Exception:
+            pass
+
+
+def measure(url, seconds):
+    time.sleep(2.5)   # let the 1-second readings settle after viewers change
+    samples = []
+    for _ in range(seconds):
+        samples.append(state(url).get('load') or {})
+        time.sleep(1)
+
+    def average(key):
+        values = [s[key] for s in samples if isinstance(s.get(key), (int, float))]
+        return sum(values) / len(values) if values else None
+
+    keys = ('viewers', 'dashboardCpu', 'appCpu', 'kbPerSecond', 'loopMs', 'loopsPerSecond')
+    return {key: average(key) for key in keys}
+
+
+def show(value, places=1, unit=''):
+    return '—' if value is None else f'{value:.{places}f}{unit}'
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--url', default='http://192.168.43.1:8686')
+    parser.add_argument('--seconds', type=int, default=10, help='seconds measured for each row (default 10)')
+    parser.add_argument('--max-viewers', type=int, default=2)
+    args = parser.parse_args()
+    url = args.url.rstrip('/')
+
+    try:
+        first = state(url)
+    except Exception as error:
+        sys.exit(f'Cannot reach the dashboard at {url}: {error}')
+    load = first.get('load')
+    if load is None:
+        sys.exit('This dashboard does not measure its load yet; deploy the latest dashboard branch.')
+    print(f"{first.get('robot')}: "
+          f"{first.get('active') or 'no OpMode'} {first.get('state', '')}; "
+          f"updates {load.get('updatesPerSecond')}/s, chart samples "
+          f"{load.get('chartSamplesPerSecond') or 'every loop'}")
+    if not first.get('active') or first.get('state') != 'running':
+        print('Tip: start an OpMode so the loop time is measured too.')
+    if load.get('viewers'):
+        print(f"Note: {load['viewers']} browser tab(s) already open; they are counted in every row.")
+
+    rows, viewers = [], []
+    try:
+        for count in range(args.max_viewers + 1):
+            while len(viewers) < count:
+                viewers.append(Viewer(url))
+            print(f'Measuring with {count} viewer(s) for {args.seconds} s...', flush=True)
+            rows.append((count, measure(url, args.seconds)))
+    finally:
+        for viewer in viewers:
+            viewer.close()
+
+    base = rows[0][1]
+    print()
+    print(f"{'viewers':>7}  {'dashboard CPU':>13}  {'app CPU':>8}  {'+ app':>6}  {'Wi-Fi':>9}  {'loop':>8}  {'+ loop':>7}  {'loops/s':>7}")
+    for count, row in rows:
+        extra_app = None if row['appCpu'] is None or base['appCpu'] is None else row['appCpu'] - base['appCpu']
+        extra_loop = None if row['loopMs'] is None or base['loopMs'] is None else row['loopMs'] - base['loopMs']
+        print(f"{count:>7}  {show(row['dashboardCpu'], 1, ' %'):>13}  {show(row['appCpu'], 0, ' %'):>8}  "
+              f"{show(extra_app, 0, ' %'):>6}  {show(row['kbPerSecond'], 0, ' KB/s'):>9}  "
+              f"{show(row['loopMs'], 2, ' ms'):>8}  {show(extra_loop, 2):>7}  {show(row['loopsPerSecond'], 0):>7}")
+    print()
+    print('CPU is % of one core (the Control Hub has 4). "+ app" and "+ loop" are the extra')
+    print('over 0 viewers. If "+ loop" is more than about 1 ms, lower DashboardConfig on the Tune tab:')
+    print('CHART_SAMPLES_PER_SECOND = 50 halves the data; UPDATES_PER_SECOND = 10 batches it more.')
+
+
+if __name__ == '__main__':
+    main()

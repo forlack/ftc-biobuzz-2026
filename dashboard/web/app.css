@@ -220,3 +220,18 @@ body.locked [data-remove], body.locked [data-add] { opacity: .4; pointer-events:
 .chart.dragging { opacity: .45; outline: 2px dashed var(--honey); }
 .route-select { width: 100%; font-family: var(--mono); font-size: 13px; }
 #lock-pin { font-family: var(--mono); font-size: 22px; letter-spacing: 6px; text-align: center; }
+
+/* Chart full size: fills the Live area under its toolbar. */
+.chart .expand { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 2px; vertical-align: middle; }
+.chart .expand svg { width: 15px; height: 15px; }
+.chart .expand:hover { color: var(--honey); }
+.chart .pause-chart { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 2px; vertical-align: middle; }
+.chart .pause-chart svg { width: 14px; height: 14px; }
+.chart .pause-chart:hover, #charts.paused .pause-chart { color: var(--honey); }
+#charts.paused .chart { outline: 1px dashed #f5b30166; }
+.chart .legend .at { margin-left: auto; color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
+.chart.expanded { position: fixed; left: 18px; right: 18px; bottom: 18px; z-index: 20; box-shadow: 0 6px 18px #0009; contain: layout paint; }
+.chart.expanded .grip, .chart.expanded .remove { display: none; }
+.chart.expanded .expand { border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; color: var(--text); font: inherit; font-size: 13px; }
+.chart.expanded .expand span { margin-left: 6px; vertical-align: middle; }
+body.chart-expanded #tab-live .live-grid::after { content: ""; position: fixed; inset: 0; background: #0009; z-index: 19; }

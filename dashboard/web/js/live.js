@@ -44,6 +44,11 @@ const CHARTS = [
   },
 ];
 
+const EXPAND_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const PAUSE_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+const PLAY_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4l10 6-10 6z" fill="currentColor"/></svg>';
+const SHRINK_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 3v5H3M12 3v5h5M8 17v-5H3M12 17v-5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 const MAX_POINTS = 60 * 250;   // a minute at 250 loops per second
 
 export class LiveTab {
@@ -67,6 +72,15 @@ export class LiveTab {
     this.fieldImage.onload = () => this.drawField();
     this.bindToolbar();
     window.addEventListener('resize', () => this.resize());
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && this.expanded) this.toggleExpand(this.expanded);
+      // Space pauses and resumes the charts (not while typing in a box).
+      if (event.key === ' ' && !event.target.closest('input, textarea, select, button')
+          && document.getElementById('tab-live').classList.contains('active')) {
+        event.preventDefault();
+        this.setPaused(!this.paused);
+      }
+    });
     requestAnimationFrame(() => this.tick());
   }
 
@@ -74,12 +88,15 @@ export class LiveTab {
     const card = document.createElement('div');
     card.className = 'card chart';
     card.innerHTML = `<div class="card-head"><h3><span class="grip" draggable="true" title="Drag to move this chart">⠿</span>${escapeHtml(spec.title)}</h3>
-      <span class="muted">${escapeHtml(spec.unit)} <button class="remove" title="Close this chart (Reset charts brings it back)">✕</button></span></div>
+      <span class="muted">${escapeHtml(spec.unit)}
+        <button class="pause-chart" title="Pause to hover over points and read exact values (Space)">${this.paused ? PLAY_ICON : PAUSE_ICON}</button>
+        <button class="expand" title="Full size (Esc to go back)">${EXPAND_ICON}</button>
+        <button class="remove" title="Close this chart (Reset charts brings it back)">✕</button></span></div>
       <div class="legend"></div><div class="plot"></div>`;
     document.getElementById('charts').appendChild(card);
     const legend = card.querySelector('.legend');
     legend.innerHTML = spec.series.map((s) =>
-      `<span><i style="background:${s.color}"></i>${escapeHtml(s.label)} <b>—</b></span>`).join('');
+      `<span><i style="background:${s.color}"></i>${escapeHtml(s.label)} <b>—</b></span>`).join('') + '<em class="at"></em>';
     const holder = card.querySelector('.plot');
     const axis = { stroke: '#8b98a8', grid: { stroke: '#222a35', width: 1 }, ticks: { stroke: '#2a3340' }, font: '11px system-ui' };
     const scales = { x: { time: false } };
@@ -90,6 +107,8 @@ export class LiveTab {
     }
     const chart = { spec, legend, holder, card, plot: null };
     card.querySelector('.remove').addEventListener('click', () => this.removeChart(chart));
+    card.querySelector('.expand').addEventListener('click', () => this.toggleExpand(chart));
+    card.querySelector('.pause-chart').addEventListener('click', () => this.setPaused(!this.paused));
     card.querySelector('.grip').addEventListener('dragstart', (event) => {
       this.dragging = chart;
       card.classList.add('dragging');
@@ -164,6 +183,7 @@ export class LiveTab {
   }
 
   removeChart(chart) {
+    if (this.expanded === chart) this.toggleExpand(chart);
     chart.plot.destroy();
     chart.card.remove();
     this.charts = this.charts.filter((c) => c !== chart);
@@ -172,6 +192,7 @@ export class LiveTab {
 
   /** Back to the four standard charts, in this browser. */
   resetCharts() {
+    if (this.expanded) this.toggleExpand(this.expanded);
     for (const chart of this.charts) { chart.plot.destroy(); chart.card.remove(); }
     try { localStorage.removeItem(LAYOUT_KEY); } catch { /* private window */ }
     this.charts = CHARTS.map((spec) => this.makeChart(spec));
@@ -223,6 +244,12 @@ export class LiveTab {
   setPaused(paused) {
     this.paused = paused;
     document.getElementById('pause').textContent = paused ? 'Resume' : 'Pause';
+    document.getElementById('charts').classList.toggle('paused', paused);
+    for (const chart of this.charts) {
+      const button = chart.card.querySelector('.pause-chart');
+      button.innerHTML = paused ? PLAY_ICON : PAUSE_ICON;
+      button.title = paused ? 'Resume live charts (Space)' : 'Pause to hover over points and read exact values (Space)';
+    }
     this.dirty = true;
   }
 
@@ -251,17 +278,23 @@ export class LiveTab {
     }
     if (this.frames.length > MAX_POINTS) this.frames.splice(0, this.frames.length - MAX_POINTS);
     this.rateCount += frames.length;
+    this.lastArrival = performance.now();
     this.dirty = true;
   }
 
   tick() {
-    if (this.dirty && document.getElementById('tab-live').classList.contains('active')) {
+    const now = performance.now();
+    const visible = document.getElementById('tab-live').classList.contains('active');
+    // While data is coming in, charts are redrawn every screen frame on a smooth clock, so
+    // they glide instead of jumping each time a batch arrives (about 20 times a second).
+    const streaming = this.lastArrival && now - this.lastArrival < 1000;
+    if (visible && !this.paused && (streaming || this.dirty)) this.renderCharts(now);
+    this.lastTick = now;
+    if (this.dirty && visible) {
       this.dirty = false;
-      if (!this.paused) this.renderCharts();
       this.renderTable();
       this.drawField();
     }
-    const now = performance.now();
     if (now - this.rateStart > 1000) {
       document.getElementById('rate').textContent = this.rateCount ? `${Math.round(this.rateCount * 1000 / (now - this.rateStart))} samples/s` : '';
       this.rateCount = 0;
@@ -270,22 +303,38 @@ export class LiveTab {
     requestAnimationFrame(() => this.tick());
   }
 
-  renderCharts() {
+  /** The robot time shown at the right edge: runs with the wall clock, eased toward the data. */
+  displayTime(now) {
+    const latest = this.frames[this.frames.length - 1].t;
+    // Newest sample, plus the time since it arrived, minus a small delay so the next batch
+    // is already there when the edge reaches it.
+    const target = latest + Math.min(0.25, (now - (this.lastArrival || now)) / 1000) - 0.06;
+    if (this.shownTime == null || Math.abs(target - this.shownTime) > 0.5) {
+      this.shownTime = target;
+    } else {
+      this.shownTime += Math.min(0.1, (now - (this.lastTick || now)) / 1000);
+      this.shownTime += (target - this.shownTime) * 0.08;
+    }
+    return this.shownTime;
+  }
+
+  renderCharts(now = performance.now()) {
     if (!this.frames.length) return;
-    const end = this.frames[this.frames.length - 1].t;
-    const start = end - this.windowSeconds;
+    const end = this.displayTime(now);
+    const start = end - this.windowSeconds - 0.5;
     let first = this.frames.length - 1;
     while (first > 0 && this.frames[first - 1].t >= start) first--;
     const shown = this.frames.slice(first);
     const xs = shown.map((f) => f.t - end);   // seconds before now
-    for (const chart of this.charts) {
+    // Full size: only that chart is visible, so only it is drawn.
+    for (const chart of this.expanded ? [this.expanded] : this.charts) {
       const data = [xs, ...chart.spec.series.map((s) => shown.map((f) => {
         const value = s.get ? s.get(f) : f.n[s.key];
         return value === undefined ? null : value;
       }))];
       chart.plot.setData(data);
       chart.plot.setScale('x', { min: -this.windowSeconds, max: 0 });
-      this.updateLegend(chart, null);
+      this.updateLegend(chart, chart.plot.cursor.left >= 0 ? chart.plot.cursor.idx : null);
     }
   }
 
@@ -301,10 +350,43 @@ export class LiveTab {
       }
       spans[i].textContent = value == null ? '—' : formatNumber(value);
     });
+    // Hovering: which moment the values are from.
+    const t = index == null ? null : data[0]?.[index];
+    chart.legend.querySelector('.at').textContent = t == null ? '' : `at ${t.toFixed(2)} s`;
   }
 
   resize() {
-    for (const chart of this.charts) chart.plot.setSize({ width: chart.holder.clientWidth, height: 220 });
+    for (const chart of this.charts) {
+      if (chart === this.expanded) {
+        // Fill the Live area below its toolbar; the top bar and toolbar stay visible.
+        const toolbar = document.querySelector('#tab-live .toolbar').getBoundingClientRect();
+        const top = toolbar.bottom + 12;
+        chart.card.style.top = `${top}px`;
+        const head = chart.card.querySelector('.card-head').offsetHeight + chart.legend.offsetHeight;
+        const height = Math.max(200, window.innerHeight - top - 18 - head - 46);
+        chart.plot.setSize({ width: chart.holder.clientWidth, height });
+      } else {
+        chart.plot.setSize({ width: chart.holder.clientWidth, height: 220 });
+      }
+    }
+  }
+
+  /** One chart full size in the Live area; the button again, or Esc, puts it back. */
+  toggleExpand(chart) {
+    const opening = this.expanded !== chart;
+    if (this.expanded) {
+      this.expanded.card.classList.remove('expanded');
+      this.expanded.card.style.top = '';
+      this.expanded.card.querySelector('.expand').innerHTML = EXPAND_ICON;
+      this.expanded = null;
+    }
+    if (opening) {
+      this.expanded = chart;
+      chart.card.classList.add('expanded');
+      chart.card.querySelector('.expand').innerHTML = `${SHRINK_ICON}<span>Exit full size</span>`;
+    }
+    document.body.classList.toggle('chart-expanded', !!this.expanded);
+    requestAnimationFrame(() => { this.resize(); this.dirty = true; });
   }
 
   renderTable() {
