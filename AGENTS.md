@@ -135,6 +135,12 @@ voltage (11, not main's 12; set FLYWHEEL_F = 12 for the pre-competition behaviou
 FLYWHEEL_FIXED_F in robot.json only gives a settings warning; the next Save drops it. FlywheelTuner still writes
 one FLYWHEEL_F (now meaning F at 12.5 V).
 
+**Drive velocity mode removed on this branch** (2026-10-24, user's request): it was never
+reachable (no button toggled it, START_IN_VELOCITY_MODE was false), so `MecanumDrive` lost
+START_IN_VELOCITY_MODE, TUNE_PIDF and VEL_P/I/D/F; the drive motors are always
+RUN_WITHOUT_ENCODER (raw power), as before. The Driver Station "Drive mode" line went with it.
+Saved values for those names only give a settings warning until the next Save.
+
 Local competition main now applies voltage-compensated flywheel F in TeleOp and
 PedroAutonomous: linear F=11 at 12.5 V, F=12 at 10 V, clamped outside this range.
 Panels FLYWHEEL_VOLTAGE_COMPENSATION (default true) toggles this live in both
@@ -1067,7 +1073,7 @@ tunables, and the Panels virtual gamepad via `asCombinedFTCGamepad(gamepad1)` �
 to plain `gamepad1` when no browser gamepad is connected.
 
 As of the 2026-08-27 refactor the math lives in `lib/MecanumDrive.drive()` and the
-tunables (`SLOW_SPEED`, `INITIAL_SPEED`, `VEL_*`, …) are `@Configurable` statics on
+tunables (`SLOW_SPEED`, `INITIAL_SPEED`, …) are `@Configurable` statics on
 `MecanumDrive`, not on the OpMode. Panels finds them either way — its `ClassFinder` scans the
 whole classpath for `@Configurable`, it does not look only inside OpModes (verified against
 `configurables-1.0.5.aar`).
