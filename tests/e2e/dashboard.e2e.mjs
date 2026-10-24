@@ -303,6 +303,13 @@ try {
   const frame = `document.getElementById('visualizer').contentWindow.document`;
   await b.waitFor(`${frame}.querySelector('[data-testid=robot-panel]') && ${frame}.querySelector('[data-testid=robot-panel]').innerText.includes('connected')`, 20000);
   check(true, 'the path editor loads inside the dashboard and finds the robot');
+  const shown = (id) => `${frame}.querySelector('[data-testid=${id}]').offsetParent !== null`;
+  check(await b.eval(`${shown('panel-paths')} && !(${shown('panel-auton')})`),
+    'the side panel has tabs and opens on Paths (start point and the selected path)');
+  await b.eval(`${frame}.querySelector('[data-testid=panel-tab-auton]').click()`);
+  await sleep(200);
+  check(await b.eval(`${shown('panel-auton')} && !(${shown('panel-paths')})`),
+    'the Auton Sequence tab shows the sequence on its own');
   await b.waitFor(`[...${frame}.querySelectorAll('[data-testid=route-load] option')].some((o) => o.value === 'autos/saturday.json')`);
   await b.eval(`(() => { const s = ${frame}.querySelector('[data-testid=route-load]'); s.value = 'autos/saturday.json'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await b.waitFor(`${frame}.querySelector('[data-testid=route-message]') && ${frame}.querySelector('[data-testid=route-message]').innerText.includes('Loaded')`);

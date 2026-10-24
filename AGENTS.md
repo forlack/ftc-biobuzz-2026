@@ -82,10 +82,12 @@ Key facts for agents:
   real Follower/Foresight through `SimPedro` Localizer/Drivetrain adapters.
 - **Visualizer fork** github.com/forlack/Visualizer branch `biobuzz`: `src/lib/robot/`
   (RobotPanel, route export/import, field markers), `robotEvents` on paths, `robotAction` on
-  sequence wait items, service worker removed (it cached the dashboard's `/`). Built into
+  sequence wait items, service worker removed (it cached the dashboard's `/`). Side panel
+  has two tabs (2026-10-24): **Paths** (start point, selected path) and **Auton Sequence**
+  (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (86
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (91
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so
