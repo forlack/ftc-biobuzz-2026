@@ -25,6 +25,13 @@ public class PedroPathExport {
     public PedroPathExport(File file) throws IOException {
         String text = readText(file);
         text = text.replaceAll("(?s)/\\*.*?\\*/|//[^\\r\\n]*", "");
+        // The visualizer can export either a snippet or imports plus one class wrapper.
+        text = text.replaceAll("(?m)^\\s*import\\s+(?:static\\s+)?com\\.pedropathing\\.[A-Za-z0-9_.*]+\\s*;", "").trim();
+        Matcher wrapper = Pattern.compile("^public\\s+class\\s+" + ID + "\\s*\\{").matcher(text);
+        if (wrapper.find()) {
+            if (!text.endsWith("}")) throw new IllegalArgumentException("Unclosed export class");
+            text = text.substring(wrapper.end(), text.length() - 1);
+        }
         Pattern factory = Pattern.compile("private\\s+final\\s+PoseFactory\\s+poseFactory\\s*=\\s*PoseFactory\\.degrees\\(\\)\\s*;");
         Matcher declaration = factory.matcher(text);
         if (!declaration.find()) throw new IllegalArgumentException("Export must use PoseFactory.degrees()");

@@ -2,9 +2,28 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-22
+Last updated: 2026-10-24
 
 ---
+
+## Competition update — 2026-10-24
+
+Local competition main now applies voltage-compensated flywheel F in TeleOp and
+PedroAutonomous: linear F=11 at 12.5 V, F=12 at 10 V, clamped outside this range.
+Panels FLYWHEEL_VOLTAGE_COMPENSATION (default true) toggles this live in both
+OpModes; false uses FLYWHEEL_FIXED_F (default 12, prior competition behavior).
+Panels FLYWHEEL_F is the 12.5 V endpoint; FLYWHEEL_F_AT_10V is the low endpoint.
+Voltage sampled at 4 Hz, lowest positive finite hub reading, previous value if invalid.
+F is rounded to 0.01 and sent only when coefficients change. Intake PIDF unchanged.
+Dashboard shows battery V and applied F. Prior discussions never landed compensation.
+Current path start updated to (56,9,270°), park endpoint heading now 90°; sequence remains path1, shoot 3.5s, path2 park.
+Reader now accepts Pedro imports/class wrapper as well as snippets; exclude webpage text.
+Stinger-down default is 0.42. User confirmed autonomous and TeleOp auto-queue worked
+on competition day. Panels telemetry intermittently froze; cause unconfirmed (hub
+unreachable for log inspection). Do not attribute the earlier auton failure conclusively
+to export format: user reports no file edit at that time, and failure logs are unavailable.
+After competition, user requested these tested changes pushed to main and will integrate
+into dashboard themselves. Dashboard branch has not been deployed or merged here.
 
 ## Robot settings and the no-rebuild roadmap — 2026-10-22
 

@@ -107,6 +107,7 @@ public class PedroAutonomous extends OpMode {
             requestOpModeStop();
             return;
         }
+        updateFlywheelCompensation();
         intake.setTargetRPM(FieldCentricJava.INTAKE_RPM);
         shooterPollen.setTargetRPM(FieldCentricJava.POLLEN_FLYWHEEL_RPM);
         shooterNectar.setTargetRPM(FieldCentricJava.NECTAR_FLYWHEEL_RPM);
@@ -132,15 +133,39 @@ public class PedroAutonomous extends OpMode {
         if (transportNectar != null) transportNectar.setPower(0);
     }
 
+    private long nextFlywheelCompensation;
+    private double flywheelVoltage = 12.5;
+
+    private void updateFlywheelCompensation() {
+        long now = System.nanoTime();
+        if (now < nextFlywheelCompensation) return;
+        nextFlywheelCompensation = now + 250_000_000L;
+        flywheelVoltage = FieldCentricJava.flywheelBatteryVoltage(hardwareMap, flywheelVoltage);
+        double f = Math.round(FieldCentricJava.compensatedFlywheelF(flywheelVoltage) * 100) / 100.0;
+        if (f != shooterPollen.getF() || FieldCentricJava.POLLEN_FLYWHEEL_P != shooterPollen.getP()
+                || FieldCentricJava.POLLEN_FLYWHEEL_D != shooterPollen.getD()) {
+            shooterPollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, 0,
+                    FieldCentricJava.POLLEN_FLYWHEEL_D, f);
+        }
+        if (f != shooterNectar.getF() || FieldCentricJava.NECTAR_FLYWHEEL_P != shooterNectar.getP()
+                || FieldCentricJava.NECTAR_FLYWHEEL_D != shooterNectar.getD()) {
+            shooterNectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, 0,
+                    FieldCentricJava.NECTAR_FLYWHEEL_D, f);
+        }
+    }
+
     @Override
     public void loop() {
         if (auto == null) return;
+        updateFlywheelCompensation();
         follower.update();
         auto.update();
 
         Pose pose = follower.pose();
         panels.debug("Step", auto.stepNumber() + "/" + auto.stepCount() + "  " + auto.stepName());
         panels.debug("Following", follower.isBusy());
+        panels.debug("Flywheel battery V", flywheelVoltage);
+        panels.debug("Flywheel compensated F", shooterNectar.getF());
         panels.debug("Completion", follower.completion());
         panels.debug("X", pose.x());
         panels.debug("Y", pose.y());

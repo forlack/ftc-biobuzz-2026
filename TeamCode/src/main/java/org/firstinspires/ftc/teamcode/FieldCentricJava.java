@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
@@ -47,7 +48,10 @@ public class FieldCentricJava extends LinearOpMode {
     /** Turn both flywheels on or off from Panels. They start on. A switch, not a setting. */
     @RobotSettings.NotSaved
     public static boolean FLYWHEELS_ON = true;
-    public static double FLYWHEEL_F = 12;
+    public static boolean FLYWHEEL_VOLTAGE_COMPENSATION = true;
+    public static double FLYWHEEL_FIXED_F = 12; // previous competition behavior when disabled
+    public static double FLYWHEEL_F = 11; // F at 12.5 V
+    public static double FLYWHEEL_F_AT_10V = 12;
 
     // Pollen flywheel.
     public static double POLLEN_FLYWHEEL_RPM = 3400;
@@ -61,7 +65,7 @@ public class FieldCentricJava extends LinearOpMode {
 
     /** Stinger servo end points, 0 to 1. */
     public static double STINGER_UP = 0;
-    public static double STINGER_DOWN = 0.45;
+    public static double STINGER_DOWN = 0.42;
 
     // Drive and dashboard.
     private MecanumDrive chassis;
@@ -221,14 +225,42 @@ public class FieldCentricJava extends LinearOpMode {
         dashboard.addData("Stinger position", stinger.getPosition());
     }
 
+    private long nextFlywheelCompensation;
+    private double flywheelVoltage = 12.5;
+    private double appliedFlywheelF = FLYWHEEL_F;
+
+    /** Linear calibration between 10 V and 12.5 V, clamped at both endpoints. */
+    public static double compensatedFlywheelF(double voltage) {
+        if (!FLYWHEEL_VOLTAGE_COMPENSATION) return FLYWHEEL_FIXED_F;
+        double fraction = Math.max(0, Math.min(1, (12.5 - voltage) / 2.5));
+        return FLYWHEEL_F + fraction * (FLYWHEEL_F_AT_10V - FLYWHEEL_F);
+    }
+
+    /** Lowest valid hub voltage; use the previous reading if no sensor is valid. */
+    public static double flywheelBatteryVoltage(com.qualcomm.robotcore.hardware.HardwareMap map,
+                                                double previous) {
+        double volts = Double.POSITIVE_INFINITY;
+        for (VoltageSensor sensor : map.voltageSensor) {
+            double reading = sensor.getVoltage();
+            if (Double.isFinite(reading) && reading > 0) volts = Math.min(volts, reading);
+        }
+        return Double.isFinite(volts) ? volts : previous;
+    }
+
     private void updateShooter() {
+        long now = System.nanoTime();
+        if (now >= nextFlywheelCompensation) {
+            flywheelVoltage = flywheelBatteryVoltage(hardwareMap, flywheelVoltage);
+            nextFlywheelCompensation = now + 250_000_000L;
+        }
+        appliedFlywheelF = Math.round(compensatedFlywheelF(flywheelVoltage) * 100) / 100.0;
         if (POLLEN_FLYWHEEL_P != shooterPollen.getP()
-                || POLLEN_FLYWHEEL_D != shooterPollen.getD() || FLYWHEEL_F != shooterPollen.getF()) {
-            shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, 0, POLLEN_FLYWHEEL_D, FLYWHEEL_F);
+                || POLLEN_FLYWHEEL_D != shooterPollen.getD() || appliedFlywheelF != shooterPollen.getF()) {
+            shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, 0, POLLEN_FLYWHEEL_D, appliedFlywheelF);
         }
         if (NECTAR_FLYWHEEL_P != shooterNectar.getP()
-                || NECTAR_FLYWHEEL_D != shooterNectar.getD() || FLYWHEEL_F != shooterNectar.getF()) {
-            shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, 0, NECTAR_FLYWHEEL_D, FLYWHEEL_F);
+                || NECTAR_FLYWHEEL_D != shooterNectar.getD() || appliedFlywheelF != shooterNectar.getF()) {
+            shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, 0, NECTAR_FLYWHEEL_D, appliedFlywheelF);
         }
         // Flips the same switch Panels shows, so the button and Panels always agree.
         if (toggleFlywheels.pressed()) {
@@ -238,6 +270,8 @@ public class FieldCentricJava extends LinearOpMode {
         shooterNectar.setTargetRPM(FLYWHEELS_ON ? NECTAR_FLYWHEEL_RPM : 0);
         dashboard.addLine("");
         dashboard.addLine("--- SHOOTERS ---");
+        dashboard.addData("Flywheel battery V", flywheelVoltage);
+        dashboard.addData("Flywheel compensated F", appliedFlywheelF);
         dashboard.addData("Pollen RPM (actual / target)",
                 Math.round(shooterPollen.getRPM()) + " / " + Math.round(shooterPollen.getTargetRPM()));
         dashboard.addData("Pollen % off target", percentOff(shooterPollen));

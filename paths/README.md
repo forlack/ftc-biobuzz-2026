@@ -1,7 +1,7 @@
 # Autonomous path files
 
 Paste the complete **Java code** from Pedro's export into `auto.java.txt`, replacing
-its contents. Include the PoseFactory line, every pose declaration, and all path
+its contents. Imports and a `public class Paths { ... }` wrapper are also accepted. Include the PoseFactory line, every pose declaration, and all path
 methods. Do not include the surrounding web page text or export-mode labels.
 Coordinates already reflect Pedro's selected export mode; the robot does not mirror again.
 

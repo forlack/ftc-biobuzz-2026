@@ -1,15 +1,25 @@
-private final PoseFactory poseFactory = PoseFactory.degrees();
+import static com.pedropathing.api.Paths.*;
+import com.pedropathing.api.Paths;
 
-private final Pose start = poseFactory.of(56, 8, 270);
-private final Pose path1 = poseFactory.of(60, 16, 270);
-private final Pose point2Start = poseFactory.of(60, 16, 270);
-private final Pose point2 = poseFactory.of(13.2008, 96.0738, 180);
-private final Pose point2Control1 = poseFactory.of(15.6919, 29.3313, 0);
+import com.pedropathing.api.PoseFactory;
+import com.pedropathing.math.Pose;
+import com.pedropathing.paths.Path;
 
-public Path path1() {
-    return Paths.line(start, path1).linear(start, path1);
-}
+public class Paths {
 
-public Path path2() {
-    return Paths.curve(point2Start, point2Control1, point2).linear(point2Start, point2);
+    private final PoseFactory poseFactory = PoseFactory.degrees();
+
+    private final Pose start = poseFactory.of(56, 9, 270);
+    private final Pose path1 = poseFactory.of(60, 16, 270);
+    private final Pose point2Start = poseFactory.of(60, 16, 270);
+    private final Pose point2 = poseFactory.of(13.2008, 96.0738, 90);
+    private final Pose point2Control1 = poseFactory.of(15.6919, 29.3313, 0);
+
+    public Path path1() {
+        return Paths.line(start, path1).linear(start, path1);
+    }
+
+    public Path path2() {
+        return Paths.curve(point2Start, point2Control1, point2).linear(point2Start, point2);
+    }
 }
