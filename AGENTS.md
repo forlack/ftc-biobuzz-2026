@@ -22,6 +22,14 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   (`./dashboard-load`), Panels coexisting at :8001, `useHardwareMap` on Android (returns the
   Driver Station steps; switching via `RobotConfigFileManager` + robot restart is untested), the
   sim on the Mac (needs Java, e.g. Android Studio's JBR as JAVA_HOME).
+- **Teleop telemetry** (2026-10-23): all of it in `FieldCentricJava.updateTelemetry()`, each
+  motor speed read once per loop (was 3 hub reads per motor); `telemetry.addData` for lines
+  shown on both, `Dash.put` for chart-only values (targets, `Flywheels on/ready`, sticks,
+  `Loop ms`). Names match PedroAutonomous and the sim. Next idea after the first robot
+  baseline: `LynxModule` bulk caching (AUTO) to cut hub reads further; compare with
+  `./dashboard-load`.
+- Flywheel Tuner on this branch also feeds the Live tab's Flywheels chart (RPM only, no target
+  lines); results still applied with A and saved to robot.json.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
   and a Pedro add-on); robot pose on the field in teleop once Pinpoint coordinates are trusted;
   a per-viewer Detail selector; min/max thinning; listing USB cameras from the robot.
