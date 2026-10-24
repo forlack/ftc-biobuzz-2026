@@ -67,7 +67,7 @@ public class DriveDashboard {
 
     public void addData(String label, Object value) {
         panels.addData(label, value);
-        Dash.put(label, value);   // also to the BioBuzz dashboard
+        Dash.put(label, value);   // also to the Total Chaos Dashboard
     }
 
 }

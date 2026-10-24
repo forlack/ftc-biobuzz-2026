@@ -31,7 +31,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Starts the BioBuzz dashboard inside the Robot Controller app, on port 8686.
+ * Starts the Total Chaos Dashboard inside the Robot Controller app, on port 8686.
  *
  * Only in builds made with -Pdashboard (./deploy-linux --dashboard). It starts 5 s after the
  * event loop, on its own threads, and every failure is caught: if anything goes wrong the
@@ -81,7 +81,7 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
 
     // ---- RobotHost --------------------------------------------------------
 
-    @Override public String robotName() { return "BioBuzz 24621"; }
+    @Override public String robotName() { return "Total Chaos 24621"; }
 
     @Override public boolean simulated() { return false; }
 

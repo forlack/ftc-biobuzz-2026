@@ -6,7 +6,7 @@ Last updated: 2026-10-22
 
 ---
 
-## BioBuzz dashboard + simulator — 2026-10-23 (branch `dashboard`, not merged)
+## Total Chaos Dashboard + simulator — 2026-10-23 (branch `dashboard`, not merged)
 
 Built while the robot was with another team member; verified only against the simulator.
 Full guide: `dashboard/README.md`. Key facts for agents:
@@ -49,8 +49,11 @@ Full guide: `dashboard/README.md`. Key facts for agents:
   viewers, dashboard CPU (time in the websocket send loops, % of one core), whole-app CPU
   (/proc/self/stat), KB/s, Loop ms. `./dashboard-load [--url ...]` prints 0/1/2 viewers. Sim on
   the desktop: 0.5% of a core and 40 KB/s per viewer, no loop-time change. Not yet measured on
-  the Control Hub. Knobs (settings, Tune tab): `DashboardConfig.UPDATES_PER_SECOND` (20),
-  `CHART_SAMPLES_PER_SECOND` (0 = every loop; 25 cut 40 to 11 KB/s in the sim). Teleop battery read throttled to
+  the Control Hub. Knob (setting, Tune tab): `DashboardConfig.MAX_SAMPLES_PER_SECOND` (0 = every
+  loop). Stream (`TelemetryStream`): one thread builds each batch once (20/s) for all viewers;
+  names sent once per connection then values by position, text only on change; viewers not on
+  the Live tab send `{type:subscribe, frames:false}` and get status only. Browser decoder:
+  `dashboard/web/js/frames.js`. Teleop battery read throttled to
   4 Hz (a voltage read is a hub transaction).
 
 ## Robot settings and the no-rebuild roadmap — 2026-10-22

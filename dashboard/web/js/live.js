@@ -254,12 +254,18 @@ export class LiveTab {
   }
 
   /** New frames from the websocket. */
+  /** The robot app restarted: start the charts over. */
+  reset() {
+    this.frames = [];
+    this.trail = [];
+    this.lastSeq = 0;
+    this.shownTime = null;
+  }
+
   addFrames(frames) {
     for (const frame of frames) {
-      if (this.frames.length && frame.t < this.frames[this.frames.length - 1].t - 1) {
-        this.frames = [];   // the robot restarted: start over
-        this.trail = [];
-      }
+      if (frame.seq <= (this.lastSeq || 0)) continue;   // already have it (catch-up after a tab switch)
+      this.lastSeq = frame.seq;
       this.frames.push(frame);
       Object.assign(this.latest, frame.n);
       for (const key of Object.keys(frame.n)) delete this.latestText[key];

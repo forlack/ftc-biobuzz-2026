@@ -245,7 +245,7 @@ adb pull /sdcard/FIRST/2222-Config.xml robot-config/
 git add robot-config && git commit -m "Update robot config" && git push
 ```
 
-## BioBuzz dashboard and simulator (branch `dashboard`)
+## Total Chaos Dashboard and simulator (branch `dashboard`)
 
 Our own dashboard: live charts, settings, the path editor with robot actions, OpMode control
 and the hardware map. Try it with no robot at all:

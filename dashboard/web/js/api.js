@@ -33,7 +33,7 @@ export function putFile(path, text, baseHash = '*') {
   });
 }
 
-/** Keeps a websocket open, reconnecting after drops. Calls onMessage(json) and onStatus(bool). */
+/** Keeps a websocket open, reconnecting after drops. Calls onMessage(json) and onStatus(bool); returns {send}. */
 export function connectLive({ onMessage, onStatus }) {
   let socket;
   let retry = 500;
@@ -52,6 +52,11 @@ export function connectLive({ onMessage, onStatus }) {
     socket.onerror = () => socket.close();
   };
   open();
+  return {
+    send(message) {
+      if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+    },
+  };
 }
 
 export function toast(message, bad = false) {

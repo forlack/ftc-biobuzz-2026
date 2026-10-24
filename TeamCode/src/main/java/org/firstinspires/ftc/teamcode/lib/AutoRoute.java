@@ -19,7 +19,7 @@ import java.util.Map;
 
 /**
  * A whole autonomous routine from one file (autos/*.json, "version": 2): where to start, the
- * paths, actions placed part way along paths, and the steps in between. Written by the BioBuzz
+ * paths, actions placed part way along paths, and the steps in between. Written by the dashboard's
  * path editor; read at INIT, so changing a route never needs a rebuild.
  *
  * <pre>

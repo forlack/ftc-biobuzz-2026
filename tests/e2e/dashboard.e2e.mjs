@@ -1,4 +1,4 @@
-// End-to-end test of the BioBuzz dashboard against the desktop simulator, through a real
+// End-to-end test of the Total Chaos Dashboard against the desktop simulator, through a real
 // (headless) browser. Run with:  node tests/e2e/dashboard.e2e.mjs
 //
 // It starts its own simulator on port 8687 with a scratch SD card, so it never touches your
@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Browser, sleep } from './browser.mjs';
+import { FrameDecoder } from '../../dashboard/web/js/frames.js';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const PORT = 8687;
@@ -102,6 +103,13 @@ try {
   await b.screenshot(join(OUT, '1-live.png'));
   await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent.includes('Motor power')).querySelector('.remove').click()`);
   check(await b.eval(`![...document.querySelectorAll('.chart h3')].some((h) => h.textContent.includes('Motor power'))`), 'and ✕ removes it');
+
+  // Compact stream: names once, then numbers; text only when it changes.
+  await sleep(2500);
+  const liveLoad = (await api('/api/state')).data.load;
+  const perLoop = liveLoad.kbPerSecond * 1024 / liveLoad.loopsPerSecond;
+  check(liveLoad.liveViewers === 1 && perLoop < 250,
+    `on the Live tab the browser gets every loop, compactly: ${Math.round(perLoop)} bytes per loop (${liveLoad.kbPerSecond} KB/s)`);
 
   // Full size: a chart fills the Live area under the toolbar, and Esc puts it back.
   await b.eval(`document.querySelector('.chart .expand').click()`);
@@ -234,9 +242,12 @@ try {
   check(devices === inFile, `hardware map shows all ${devices} devices on both hubs`);
   check(await b.eval(`document.querySelector('#hw-problems').children.length === 0`), 'the real map has no problems');
   await b.waitFor(`document.querySelector('#load').innerText.includes('Viewers')`);
+  await sleep(2500);
   const load = (await api('/api/state')).data.load;
-  check(load.viewers >= 1 && load.dashboardCpu >= 0 && load.kbPerSecond > 1 && load.loopMs > 0,
+  check(load.viewers >= 1 && load.dashboardCpu >= 0 && load.loopMs > 0,
     `the Load card measures the dashboard: ${load.viewers} viewer, ${load.dashboardCpu} % CPU, ${load.kbPerSecond} KB/s, loop ${load.loopMs} ms`);
+  check(load.liveViewers === 0 && load.kbPerSecond < 4,
+    `off the Live tab the browser gets status only, no loop data: ${load.kbPerSecond} KB/s`);
   await b.eval(`(() => {
     const input = [...document.querySelectorAll('table.devices input[data-field="name"]')].find((i) => i.value === 'stinger');
     input.value = 'stingr';
@@ -404,10 +415,11 @@ try {
   const { WebSocket: _ } = globalThis;
   const ws = new WebSocket(`ws://localhost:${PORT}/ws`);
   const seen = { steps: new Set(), stinger: new Set(), last: null };
+  const decoder = new FrameDecoder();
   ws.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    if (message.type !== 'frames') return;
-    for (const f of message.frames) {
+    const telemetry = decoder.handle(JSON.parse(event.data));
+    if (!telemetry) return;
+    for (const f of telemetry.frames) {
       if (f.s && f.s.Step) seen.steps.add(f.s.Step.replace(/^\d+\/\d+\s+/, ''));
       if (f.n.Stinger !== undefined) seen.stinger.add(f.n.Stinger);
       if (f.n.X !== undefined) seen.last = f;

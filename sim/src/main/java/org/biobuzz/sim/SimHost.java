@@ -81,7 +81,7 @@ public class SimHost implements RobotHost {
         kinds.put(name, kind);
     }
 
-    @Override public String robotName() { return "BioBuzz 24621 (simulator)"; }
+    @Override public String robotName() { return "Total Chaos 24621 (simulator)"; }
 
     @Override public boolean simulated() { return true; }
 

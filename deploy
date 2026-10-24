@@ -185,7 +185,7 @@ def restart_robot_controller(adb, target):
 
 
 def tuning_flag(args):
-    """Gradle flags for optional parts: Pedro AutoTune (-Ptuning) and the BioBuzz dashboard
+    """Gradle flags for optional parts: Pedro AutoTune (-Ptuning) and the Total Chaos Dashboard
     (-Pdashboard). Both are left out of competition builds unless asked for."""
     flags = []
     if getattr(args, 'tuning', False):
@@ -303,7 +303,7 @@ def main():
     parser.add_argument('--tuning', action='store_true',
                         help='include Pedro AutoTune (web page on port 10158); off for matches')
     parser.add_argument('--dashboard', action='store_true',
-                        help='include the BioBuzz dashboard (http://192.168.43.1:8686)')
+                        help='include the Total Chaos Dashboard (http://192.168.43.1:8686)')
     parser.add_argument('--check', action='store_true', help='check setup without building or changing networks')
     args = parser.parse_args()
     args.hardware_map = args.hardware_map or args.map_only

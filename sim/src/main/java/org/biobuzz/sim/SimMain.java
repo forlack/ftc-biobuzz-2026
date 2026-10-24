@@ -53,7 +53,7 @@ public final class SimMain {
         if (!server.lastError().isEmpty()) {
             System.err.println("Dashboard server: " + server.lastError());
         }
-        System.out.println("BioBuzz simulator running.");
+        System.out.println("Total Chaos simulator running.");
         System.out.println("  Dashboard:  http://localhost:" + port);
         System.out.println("  SD card:    " + storage.getCanonicalPath());
         System.out.println("  Web files:  " + web.getCanonicalPath());

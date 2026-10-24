@@ -31,14 +31,14 @@ dependencies {
 // Pedro AutoTune runs a web server (port 10158) as soon as its library is in the app, and
 // that server has crashed the Robot Controller at boot. Competition builds leave it out.
 // Build with -Ptuning (./deploy-linux --tuning) to include it and the src/tuning tuners.
-// The BioBuzz dashboard (port 8686) starts only in builds made with -Pdashboard
+// The Total Chaos Dashboard (port 8686) starts only in builds made with -Pdashboard
 // (./deploy-linux --dashboard), until it has proven itself on the robot. Its page comes
 // from ../dashboard/web.
 // The page is packed as assets/biobuzz/: Panels already uses assets/web/, and an app asset
 // with the same path would replace Panels' own page.
 if (project.hasProperty('dashboard')) {
     def dashboardAssets = "${buildDir}/generated/biobuzz-assets"
-    def copyDashboard = tasks.register('copyBioBuzzDashboard', Sync) {
+    def copyDashboard = tasks.register('copyTotalChaosDashboard', Sync) {
         from '../dashboard/web'
         into "${dashboardAssets}/biobuzz"
     }

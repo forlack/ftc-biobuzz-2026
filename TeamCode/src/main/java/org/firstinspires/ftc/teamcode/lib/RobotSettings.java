@@ -32,7 +32,7 @@ import java.util.function.BiConsumer;
  * default and a warning shows on telemetry. If robot.json cannot be read at all, the backup
  * from the previous save (robot.json.bak) is used instead.
  *
- * To save: press Save in the BioBuzz dashboard, or turn on SAVE_TO_ROBOT in Panels while
+ * To save: press Save in the Total Chaos Dashboard, or turn on SAVE_TO_ROBOT in Panels while
  * the teleop is running.
  */
 @Configurable

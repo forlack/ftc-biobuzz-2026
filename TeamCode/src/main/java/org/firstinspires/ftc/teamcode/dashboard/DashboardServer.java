@@ -36,7 +36,7 @@ import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 /**
- * The BioBuzz dashboard's web server: the page itself, a small JSON API, and a websocket that
+ * The Total Chaos Dashboard's web server: the page itself, a small JSON API, and a websocket that
  * streams live telemetry.
  *
  * Plain Java sockets only, so the exact same server runs in the Robot Controller app and in
@@ -90,11 +90,8 @@ public class DashboardServer {
     private volatile String lastError = "";
     private final DashboardLock lock;
 
-    // Load measurement: what the dashboard costs the robot.
-    private final java.util.concurrent.atomic.AtomicLong busyNanos = new java.util.concurrent.atomic.AtomicLong();
-    private final java.util.concurrent.atomic.AtomicLong bytesSent = new java.util.concurrent.atomic.AtomicLong();
-    private final AtomicInteger viewers = new AtomicInteger();
-    private volatile JSONObject load = new JSONObject();
+    private final TelemetryStream stream = new TelemetryStream(this::state);
+    private volatile JSONObject load = new JSONObject();   // what the dashboard costs the robot
 
     public DashboardServer(RobotHost host, int port) {
         this.host = host;
@@ -109,6 +106,9 @@ public class DashboardServer {
         Thread acceptor = new Thread(this::acceptLoop, "dashboard-accept");
         acceptor.setDaemon(true);
         acceptor.start();
+        Thread broadcaster = new Thread(() -> stream.broadcast(() -> running), "dashboard-stream");
+        broadcaster.setDaemon(true);
+        broadcaster.start();
         Thread meter = new Thread(this::measureLoad, "dashboard-load");
         meter.setDaemon(true);
         meter.start();
@@ -120,12 +120,12 @@ public class DashboardServer {
      * traffic, and the OpMode's loop time and rate.
      */
     private void measureLoad() {
-        long lastWall = System.nanoTime(), lastBusy = busyNanos.get(), lastBytes = bytesSent.get();
+        long lastWall = System.nanoTime(), lastBusy = stream.busyNanos.get(), lastBytes = stream.bytesSent.get();
         long lastTicks = cpuTicks(), lastSeq = Dash.latestSeq();
         while (running) {
             sleepQuietly(1000);
             try {
-                long wall = System.nanoTime(), busy = busyNanos.get(), bytes = bytesSent.get(), ticks = cpuTicks();
+                long wall = System.nanoTime(), busy = stream.busyNanos.get(), bytes = stream.bytesSent.get(), ticks = cpuTicks();
                 double seconds = (wall - lastWall) / 1e9;
                 List<Dash.Frame> frames = Dash.since(lastSeq, 100000);
                 double loopSum = 0;
@@ -139,7 +139,8 @@ public class DashboardServer {
                 }
                 if (!frames.isEmpty()) lastSeq = frames.get(frames.size() - 1).seq;
                 JSONObject json = new JSONObject();
-                json.put("viewers", viewers.get());
+                json.put("viewers", stream.viewers.get());
+                json.put("liveViewers", stream.liveViewers.get());
                 json.put("dashboardCpu", round((busy - lastBusy) / 1e9 / seconds * 100, 1));
                 json.put("appCpu", ticks < 0 || lastTicks < 0 ? JSONObject.NULL
                         : (Object) round((ticks - lastTicks) / 100.0 / seconds * 100, 1));
@@ -147,8 +148,7 @@ public class DashboardServer {
                 json.put("kbPerSecond", round((bytes - lastBytes) / 1024.0 / seconds, 1));
                 json.put("loopsPerSecond", round(frames.size() / seconds, 1));
                 json.put("loopMs", loopCount == 0 ? JSONObject.NULL : (Object) round(loopSum / loopCount, 2));
-                json.put("updatesPerSecond", DashboardConfig.UPDATES_PER_SECOND);
-                json.put("chartSamplesPerSecond", DashboardConfig.CHART_SAMPLES_PER_SECOND);
+                json.put("maxSamplesPerSecond", DashboardConfig.MAX_SAMPLES_PER_SECOND);
                 load = json;
                 lastWall = wall;
                 lastBusy = busy;
@@ -716,64 +716,29 @@ public class DashboardServer {
         output.flush();
         socket.setSoTimeout(0);
 
-        final boolean[] open = {true};
-        // Reader: answers pings and notices when the browser leaves.
+        TelemetryStream.Viewer viewer = new TelemetryStream.Viewer();
+        // Reader: notices when the browser leaves, and which data it wants.
         pool.execute(() -> {
             try {
-                while (open[0]) {
-                    int opcode = readFrame(input);
+                while (viewer.open) {
+                    String[] text = new String[1];
+                    int opcode = readFrame(input, text);
                     if (opcode == 8 || opcode < 0) break;
+                    if (opcode == 1 && text[0] != null) {
+                        JSONObject message = new JSONObject(text[0]);
+                        if ("subscribe".equals(message.optString("type"))) {
+                            viewer.wantsFrames = message.optBoolean("frames", true);
+                            stream.poke();
+                        }
+                    }
                 }
             } catch (Throwable ignored) {
             } finally {
-                open[0] = false;
+                viewer.open = false;
+                stream.poke();
             }
         });
-
-        long cursor = Math.max(0, Dash.latestSeq() - 400);   // start with ~2 s of history
-        long lastState = 0;
-        double lastSample = -1e9;
-        viewers.incrementAndGet();
-        try {
-            while (open[0] && running) {
-                long started = System.nanoTime();
-                List<Dash.Frame> frames = Dash.since(cursor, 600);
-                if (!frames.isEmpty()) {
-                    cursor = frames.get(frames.size() - 1).seq;
-                    // CHART_SAMPLES_PER_SECOND > 0 skips loops so each browser gets at most that many.
-                    int cap = DashboardConfig.CHART_SAMPLES_PER_SECOND;
-                    if (cap > 0) {
-                        List<Dash.Frame> kept = new ArrayList<>();
-                        for (Dash.Frame frame : frames) {
-                            if (frame.t - lastSample >= 1.0 / cap) {
-                                kept.add(frame);
-                                lastSample = frame.t;
-                            }
-                        }
-                        frames = kept;
-                    }
-                }
-                if (!frames.isEmpty()) {
-                    JSONObject message = new JSONObject();
-                    message.put("type", "frames");
-                    message.put("frames", framesJson(frames));
-                    bytesSent.addAndGet(sendText(output, message.toString()));
-                }
-                long now = System.currentTimeMillis();
-                if (now - lastState > 500) {
-                    lastState = now;
-                    JSONObject message = state();
-                    message.put("type", "state");
-                    bytesSent.addAndGet(sendText(output, message.toString()));
-                }
-                long spent = System.nanoTime() - started;
-                busyNanos.addAndGet(spent);
-                int rate = Math.max(1, Math.min(50, DashboardConfig.UPDATES_PER_SECOND));
-                sleepQuietly(Math.max(1, 1000 / rate - spent / 1000000));
-            }
-        } finally {
-            viewers.decrementAndGet();
-        }
+        stream.serve(viewer, output, () -> running);
         try {
             output.write(new byte[]{(byte) 0x88, 0});
             output.flush();
@@ -781,61 +746,8 @@ public class DashboardServer {
         }
     }
 
-    private static JSONArray framesJson(List<Dash.Frame> frames) throws JSONException {
-        JSONArray list = new JSONArray();
-        for (Dash.Frame frame : frames) {
-            JSONObject item = new JSONObject();
-            item.put("seq", frame.seq);
-            item.put("t", round(frame.t, 4));
-            JSONObject numbers = new JSONObject();
-            for (Map.Entry<String, Double> entry : frame.numbers.entrySet()) {
-                numbers.put(entry.getKey(), round(entry.getValue(), 4));
-            }
-            item.put("n", numbers);
-            if (!frame.text.isEmpty()) {
-                JSONObject text = new JSONObject();
-                for (Map.Entry<String, String> entry : frame.text.entrySet()) {
-                    text.put(entry.getKey(), entry.getValue());
-                }
-                item.put("s", text);
-            }
-            if (frame.pose != null) {
-                item.put("pose", new JSONArray().put(round(frame.pose[0], 3)).put(round(frame.pose[1], 3))
-                        .put(round(frame.pose[2], 4)));
-            }
-            list.put(item);
-        }
-        return list;
-    }
-
-    /** Sends one websocket text message and returns its size in bytes. */
-    private static int sendText(OutputStream output, String text) throws IOException {
-        byte[] payload = text.getBytes(StandardCharsets.UTF_8);
-        ByteArrayOutputStream frame = new ByteArrayOutputStream(payload.length + 10);
-        frame.write(0x81);
-        if (payload.length < 126) {
-            frame.write(payload.length);
-        } else if (payload.length < 65536) {
-            frame.write(126);
-            frame.write(payload.length >>> 8);
-            frame.write(payload.length & 0xff);
-        } else {
-            frame.write(127);
-            for (int shift = 56; shift >= 0; shift -= 8) {
-                frame.write((int) (((long) payload.length >>> shift) & 0xff));
-            }
-        }
-        frame.write(payload);
-        byte[] bytes = frame.toByteArray();
-        synchronized (output) {
-            output.write(bytes);
-            output.flush();
-        }
-        return bytes.length;
-    }
-
-    /** Reads and discards one client frame. Returns its opcode, or -1 at end of stream. */
-    private static int readFrame(InputStream input) throws IOException {
+    /** Reads one client frame; a small text payload is unmasked into {@code text[0]}. Returns its opcode, or -1 at the end. */
+    private static int readFrame(InputStream input, String[] text) throws IOException {
         int first = input.read();
         int second = input.read();
         if (first < 0 || second < 0) return -1;
@@ -846,12 +758,18 @@ public class DashboardServer {
             length = 0;
             for (int i = 0; i < 8; i++) length = (length << 8) | input.read();
         }
+        byte[] mask = new byte[4];
         if ((second & 0x80) != 0) {
-            for (int i = 0; i < 4; i++) input.read();   // mask key; payload is ignored
+            for (int i = 0; i < 4; i++) mask[i] = (byte) input.read();
         }
+        boolean keep = (first & 0x0f) == 1 && length <= 4096;
+        byte[] payload = keep ? new byte[(int) length] : null;
         for (long i = 0; i < length; i++) {
-            if (input.read() < 0) return -1;
+            int b = input.read();
+            if (b < 0) return -1;
+            if (keep) payload[(int) i] = (byte) (b ^ mask[(int) (i & 3)]);
         }
+        if (keep) text[0] = new String(payload, StandardCharsets.UTF_8);
         return first & 0x0f;
     }
 

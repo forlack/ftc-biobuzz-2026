@@ -90,7 +90,7 @@ lint/outputs/
 lint/tmp/
 # lint/reports/
 
-# BioBuzz simulator and sync state (local only)
+# Total Chaos simulator and sync state (local only)
 sim/sdcard/
 sim/build/
 sim/.gradle/

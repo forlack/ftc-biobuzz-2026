@@ -1,4 +1,4 @@
-# BioBuzz dashboard
+# Total Chaos Dashboard
 
 Our own robot dashboard: live telemetry and charts, settings you can change and save, the
 path editor with robot actions, OpMode control, and the hardware map. It is a plain web page
@@ -54,9 +54,12 @@ Centric and run (with other dashboard tabs closed):
 ./dashboard-load                 # 0, then 1, then 2 viewers; prints a table
 ```
 
-If the loop gets slower with viewers, turn down `DashboardConfig` on the Tune tab:
-`CHART_SAMPLES_PER_SECOND = 50` (or 25) sends fewer points per second for the charts, and
-`UPDATES_PER_SECOND = 10` sends bigger, less frequent batches. Save to keep them.
+If the loop gets slower with viewers, set `DashboardConfig.MAX_SAMPLES_PER_SECOND` on the
+Tune tab to 50 (or 25): the charts get at most that many loops a second. 0 sends every loop.
+Save to keep it.
+
+Already built in: each batch is prepared once for all viewers, value names are sent once and
+then only numbers, and a browser that is not on the Live tab (or is hidden) gets no loop data.
 
 ## Keeping the robot and Git in step
 

@@ -253,7 +253,7 @@ public class FieldCentricJava extends LinearOpMode {
                 Math.round(shooterNectar.getRPM()) + " / " + Math.round(shooterNectar.getTargetRPM()));
         dashboard.addData("Nectar % off target", percentOff(shooterNectar));
         dashboard.addData("Nectar hub PIDF", shooterNectar.getAppliedPIDF());
-        // Numbers for the BioBuzz dashboard's charts; the same names as the autonomous and simulator.
+        // Numbers for the Total Chaos Dashboard's charts; the same names as the autonomous and simulator.
         Dash.put("Pollen RPM", shooterPollen.getRPM());
         Dash.put("Pollen target", shooterPollen.getTargetRPM());
         Dash.put("Nectar RPM", shooterNectar.getRPM());

@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Live telemetry for the BioBuzz dashboard.
+ * Live telemetry for the Total Chaos Dashboard.
  *
  * During a loop, call {@link #put} for each value; at the end of the loop call
  * {@link #frame}. Numbers become chartable series; anything else shows as text. Frames are

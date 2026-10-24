@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measures what the BioBuzz dashboard costs the robot, with 0, 1 and 2 viewers.
+"""Measures what the Total Chaos Dashboard costs the robot, with 0, 1 and 2 viewers.
 
   ./dashboard-load                      the robot (on its Wi-Fi), http://192.168.43.1:8686
   ./dashboard-load --url http://localhost:8686    the simulator
@@ -88,8 +88,7 @@ def main():
         sys.exit('This dashboard does not measure its load yet; deploy the latest dashboard branch.')
     print(f"{first.get('robot')}: "
           f"{first.get('active') or 'no OpMode'} {first.get('state', '')}; "
-          f"updates {load.get('updatesPerSecond')}/s, chart samples "
-          f"{load.get('chartSamplesPerSecond') or 'every loop'}")
+          f"samples sent: {('at most %s/s' % load['maxSamplesPerSecond']) if load.get('maxSamplesPerSecond') else 'every loop'}")
     if not first.get('active') or first.get('state') != 'running':
         print('Tip: start an OpMode so the loop time is measured too.')
     if load.get('viewers'):
@@ -117,8 +116,8 @@ def main():
               f"{show(row['loopMs'], 2, ' ms'):>8}  {show(extra_loop, 2):>7}  {show(row['loopsPerSecond'], 0):>7}")
     print()
     print('CPU is % of one core (the Control Hub has 4). "+ app" and "+ loop" are the extra')
-    print('over 0 viewers. If "+ loop" is more than about 1 ms, lower DashboardConfig on the Tune tab:')
-    print('CHART_SAMPLES_PER_SECOND = 50 halves the data; UPDATES_PER_SECOND = 10 batches it more.')
+    print('over 0 viewers. If "+ loop" is more than about 1 ms, set on the Tune tab:')
+    print('DashboardConfig.MAX_SAMPLES_PER_SECOND = 50 (or 25) sends fewer loops to the charts.')
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
-// BioBuzz dashboard: tabs, the OpMode bar and the live connection.
+// Total Chaos Dashboard: tabs, the OpMode bar and the live connection.
 import { api, connectLive, escapeHtml, toast } from './api.js';
+import { FrameDecoder } from './frames.js';
 import { LiveTab } from './live.js';
 import { TuneTab } from './tune.js';
 import { RobotTab } from './robot.js';
@@ -9,6 +10,7 @@ const tune = new TuneTab();
 const robot = new RobotTab();
 let state = null;
 let tab = 'live';
+let connection = null;   // the live websocket
 
 function showTab(name) {
   tab = name;
@@ -19,6 +21,7 @@ function showTab(name) {
   if (name === 'live') { live.resize(); live.dirty = true; }
   if (name === 'paths') loadVisualizer();
   try { localStorage.setItem('biobuzz.tab', name); } catch { /* private window */ }
+  if (connection) subscribe();
 }
 
 async function loadVisualizer() {
@@ -62,12 +65,12 @@ function showLoad(load) {
   if (!load || load.viewers == null) return;
   const value = (v, unit) => (v == null ? '—' : `${v}${unit}`);
   const rows = [
-    ['Viewers', load.viewers],
+    ['Viewers', `${load.viewers} (${load.liveViewers} on Live)`],
     ['Dashboard CPU', value(load.dashboardCpu, ' %')],
     ['Whole app CPU', value(load.appCpu, ' %')],
     ['Wi-Fi sent', value(load.kbPerSecond, ' KB/s')],
     ['OpMode loop', load.loopMs == null ? 'no OpMode running' : `${load.loopMs} ms (${load.loopsPerSecond}/s)`],
-    ['Updates / chart samples', `${load.updatesPerSecond}/s, ${load.chartSamplesPerSecond ? `${load.chartSamplesPerSecond}/s` : 'every loop'}`],
+    ['Samples sent', load.maxSamplesPerSecond ? `at most ${load.maxSamplesPerSecond}/s` : 'every loop'],
   ];
   document.getElementById('load').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${escapeHtml(String(v))}</td></tr>`).join('');
 }
@@ -141,17 +144,28 @@ window.addEventListener('biobuzz:history', (event) => {
 });
 
 // ---- Live connection ----------------------------------------------------------------
-connectLive({
+const decoder = new FrameDecoder();
+connection = connectLive({
   onStatus(up) {
     const conn = document.getElementById('conn');
     conn.classList.toggle('up', up);
     conn.querySelector('span').textContent = up ? 'live' : 'offline';
+    if (up) subscribe();
   },
   onMessage(message) {
-    if (message.type === 'frames') live.addFrames(message.frames);
-    else if (message.type === 'state') showState(message);
+    if (message.type === 'state') { showState(message); return; }
+    const telemetry = decoder.handle(message);
+    if (!telemetry) return;
+    if (telemetry.restarted) live.reset();
+    if (telemetry.frames.length) live.addFrames(telemetry.frames);
   },
 });
+
+/** Loop data is only sent while the Live tab is showing; other tabs get status only. */
+function subscribe() {
+  connection.send({ type: 'subscribe', frames: tab === 'live' && !document.hidden });
+}
+document.addEventListener('visibilitychange', subscribe);
 
 // The path editor (in its iframe) can ask for things it cannot reach itself.
 window.addEventListener('message', (event) => {
