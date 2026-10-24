@@ -10,9 +10,9 @@ package org.firstinspires.ftc.teamcode.lib;
 public final class FlywheelCompensation {
     private FlywheelCompensation() { }
 
-    /** With {@code enabled} false this is just {@code fixedF} (the old behaviour). */
-    public static double f(double volts, boolean enabled, double fixedF, double fAt12_5V, double fAt10V) {
-        if (!enabled) return fixedF;
+    /** With {@code enabled} false this is just {@code fAt12_5V}, whatever the voltage. */
+    public static double f(double volts, boolean enabled, double fAt12_5V, double fAt10V) {
+        if (!enabled) return fAt12_5V;
         double fraction = Math.max(0, Math.min(1, (12.5 - volts) / 2.5));
         return Math.round((fAt12_5V + fraction * (fAt10V - fAt12_5V)) * 100) / 100.0;
     }

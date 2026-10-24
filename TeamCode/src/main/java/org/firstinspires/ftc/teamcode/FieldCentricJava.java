@@ -50,10 +50,9 @@ public class FieldCentricJava extends LinearOpMode {
     /** Turn both flywheels on or off from the Tune tab. They start on. A switch, not a setting. */
     @RobotSettings.NotSaved
     public static boolean FLYWHEELS_ON = true;
-    /** F follows the battery voltage (see FlywheelCompensation). Off: FLYWHEEL_FIXED_F. */
+    /** F follows the battery voltage (see FlywheelCompensation). Off: FLYWHEEL_F at any voltage. */
     public static boolean FLYWHEEL_VOLTAGE_COMPENSATION = true;
-    public static double FLYWHEEL_FIXED_F = 12; // previous competition behavior when disabled
-    public static double FLYWHEEL_F = 11; // F at 12.5 V
+    public static double FLYWHEEL_F = 11; // F at 12.5 V (and always, with compensation off)
     public static double FLYWHEEL_F_AT_10V = 12;
 
     // Pollen flywheel.
@@ -227,7 +226,7 @@ public class FieldCentricJava extends LinearOpMode {
     /** Flywheel F for this battery voltage, from the settings above. */
     public static double compensatedFlywheelF(double voltage) {
         return FlywheelCompensation.f(voltage, FLYWHEEL_VOLTAGE_COMPENSATION,
-                FLYWHEEL_FIXED_F, FLYWHEEL_F, FLYWHEEL_F_AT_10V);
+                FLYWHEEL_F, FLYWHEEL_F_AT_10V);
     }
 
     /** Lowest valid hub voltage; use the previous reading if no sensor is valid. */

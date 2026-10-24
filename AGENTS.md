@@ -129,7 +129,10 @@ the "Panels" settings below are on the Tune tab; teleop's one 4 Hz battery read 
 feeds both the F and `Battery V`; teleop and auton show `Flywheel compensated F`. The route
 changes went into `autos/saturday.json` (start y 9, path2 end heading 90°); the main-only
 Pedro export reader (`PedroPathExport`, `paths/`) stays removed here. Check the robot's saved
-robot.json: a saved `FLYWHEEL_F = 12` overrides the new 11 default. FlywheelTuner still writes
+robot.json: a saved `FLYWHEEL_F = 12` overrides the new 11 default. **`FLYWHEEL_FIXED_F` removed
+on this branch** (user's call, 2026-10-24): compensation off now uses `FLYWHEEL_F` at every
+voltage (11, not main's 12; set FLYWHEEL_F = 12 for the pre-competition behaviour). A saved
+FLYWHEEL_FIXED_F in robot.json only gives a settings warning; the next Save drops it. FlywheelTuner still writes
 one FLYWHEEL_F (now meaning F at 12.5 V).
 
 Local competition main now applies voltage-compensated flywheel F in TeleOp and
