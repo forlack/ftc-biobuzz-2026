@@ -1,76 +1,44 @@
 package org.firstinspires.ftc.teamcode.lib;
 
+import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 
-import com.bylazar.gamepad.PanelsGamepad;
-import com.bylazar.telemetry.PanelsTelemetry;
-import com.bylazar.telemetry.TelemetryManager;
-import com.qualcomm.robotcore.hardware.Gamepad;
-
-import org.firstinspires.ftc.robotcore.external.Telemetry;
-
 /**
- * All the Panels dashboard wiring: the browser gamepad, and the numbers on screen.
+ * The drive part of the teleop's telemetry, and the end of each loop's telemetry.
  *
- * This only shows things -- it never controls the robot. Everything sent here also reaches
- * the Driver Station, so an OpMode using this needs no telemetry calls of its own.
+ * This only shows things -- it never controls the robot. Give it the OpMode's telemetry after
+ * wrapping it in {@link DashboardTelemetry}, so the lines reach the Driver Station and the
+ * Total Chaos Dashboard.
  */
 public class DriveDashboard {
 
     private final MecanumDrive drive;
-    private final Telemetry driverStation;
-    private final TelemetryManager panels;
+    private final Telemetry telemetry;
 
-    public DriveDashboard(MecanumDrive drive, Telemetry driverStation) {
+    public DriveDashboard(MecanumDrive drive, Telemetry telemetry) {
         this.drive = drive;
-        this.driverStation = driverStation;
-        this.panels = PanelsTelemetry.INSTANCE.getTelemetry();
-    }
-
-    /** Lets a gamepad plugged into the Panels browser tab drive alongside the real one. */
-    public Gamepad mergeGamepad(Gamepad driverStationGamepad) {
-        return PanelsGamepad.INSTANCE.getFirstManager().asCombinedFTCGamepad(driverStationGamepad);
-    }
-
-    /** Combines the second browser gamepad with the operator's controller. */
-    public Gamepad mergeOperatorGamepad(Gamepad driverStationGamepad) {
-        return PanelsGamepad.INSTANCE.getSecondManager().asCombinedFTCGamepad(driverStationGamepad);
+        this.telemetry = telemetry;
     }
 
     /** Call once before waitForStart(). */
     public void showReady(String opModeName) {
-        panels.addLine(opModeName + " ready.");
-        panels.update(driverStation);
+        telemetry.addLine(opModeName + " ready.");
+        telemetry.update();
     }
 
-    /** Call once per loop, last. */
+    /** Call once per loop, last: adds the drive lines and sends this loop's telemetry. */
     public void update() {
-        panels.addLine("");
-        panels.addLine("--- DRIVE ---");
-        panels.addData("Speed (active / default)",
-                Math.round(drive.getLastSpeedUsed() * 100) + "% / "
-                        + Math.round(drive.getDefaultSpeed() * 100) + "%");
-        panels.addData("Drive mode", drive.isVelocityMode() ? "VELOCITY" : "RAW POWER");
-        panels.addData("Stopping", drive.isBrakeMode() ? "BRAKE" : "COAST");
-        panels.addData("Heading", Math.round(drive.getLastHeadingDegrees()) + " deg");
-        Dash.put("Speed %", drive.getLastSpeedUsed() * 100);
-        Dash.put("Heading", drive.getLastHeadingDegrees());
-        Dash.put("Drive forward", drive.getLastForward());   // stick inputs, -1 to 1
+        telemetry.addLine("");
+        telemetry.addLine("--- DRIVE ---");
+        telemetry.addData("Speed %", Math.round(drive.getLastSpeedUsed() * 100));
+        telemetry.addData("Default speed %", Math.round(drive.getDefaultSpeed() * 100));
+        telemetry.addData("Drive mode", drive.isVelocityMode() ? "VELOCITY" : "RAW POWER");
+        telemetry.addData("Stopping", drive.isBrakeMode() ? "BRAKE" : "COAST");
+        telemetry.addData("Heading", "%.0f", drive.getLastHeadingDegrees());
+        // Dashboard only: what the driver's sticks are doing, -1 to 1.
+        Dash.put("Drive forward", drive.getLastForward());
         Dash.put("Drive strafe", drive.getLastStrafe());
         Dash.put("Drive turn", drive.getLastTurn());
-
-        panels.update(driverStation);
-        Dash.frame();   // one dashboard frame per loop
+        telemetry.update();   // with DashboardTelemetry this also ends the dashboard frame
     }
-
-    /** Adds your own line, for parts of the robot the dashboard does not know about. */
-    public void addLine(String line) {
-        panels.addLine(line);
-    }
-
-    /** A line for the Driver Station and Panels. Send chart numbers with Dash.put instead. */
-    public void addData(String label, Object value) {
-        panels.addData(label, value);
-    }
-
 }

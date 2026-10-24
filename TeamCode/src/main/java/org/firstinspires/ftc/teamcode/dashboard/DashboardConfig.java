@@ -5,6 +5,7 @@ package org.firstinspires.ftc.teamcode.dashboard;
  * ./dashboard-load (or the Robot tab's Load card), and lower this if watching the dashboard
  * slows the robot's loop.
  */
+@Configurable
 public final class DashboardConfig {
     private DashboardConfig() { }
 

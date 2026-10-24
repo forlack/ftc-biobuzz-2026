@@ -25,9 +25,17 @@ import java.io.File;
 public final class SimOpModes {
     private SimOpModes() { }
 
-    /** Settings groups, in the same order as FieldCentricJava.SETTINGS, plus the simulator's own. */
-    public static final Class<?>[] SETTINGS = {FieldCentricJava.class, MecanumDrive.class, PedroAutonomous.class,
-            org.firstinspires.ftc.teamcode.dashboard.DashboardConfig.class, Simulator.class};
+    /** Settings groups: every @Configurable class (found when the simulator is built), in the
+     *  robot's Tune tab order, plus the simulator's own. */
+    public static final Class<?>[] SETTINGS = settingsClasses();
+
+    private static Class<?>[] settingsClasses() {
+        java.util.List<Class<?>> list = new java.util.ArrayList<>(java.util.Arrays.asList(
+                org.biobuzz.sim.mirror.ConfigurableClasses.ALL));
+        list.sort(RobotSettings.TAB_ORDER);
+        list.add(Simulator.class);
+        return list.toArray(new Class<?>[0]);
+    }
 
     /** Like the SDK's OpMode, cut down to what the simulator needs. */
     public abstract static class SimOpMode {

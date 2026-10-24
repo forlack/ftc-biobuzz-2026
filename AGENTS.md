@@ -39,10 +39,25 @@ Key facts for agents:
   root *.xml (history/ and snapshots/ read-only); PUT validates (routes are fully built against the action list) and supports
   `X-Base-Hash` conflict refusal. Missing page files fall back to `visualizer/<path>`
   because the visualizer requests `/fields/...` etc. at the root.
+- **Panels removed on this branch (2026-10-23)**: no `com.bylazar` dependency or Maven repo
+  (verified: 0 references in the APK; `-Ptuning` still resolves). The dashboard replaces it and
+  is in **every** build (`-Pdashboard` / `--dashboard` still accepted, no effect). Lost with
+  Panels: the browser virtual gamepad (teleop now reads gamepad1/gamepad2 directly) and the
+  `SAVE_TO_ROBOT` switch (use the Tune tab's Save).
+- **Developer API** (guide: `dashboard/DEVELOPER.md`, modelled on FTC Dashboard/Panels):
+  `@Configurable` (`teamcode.dashboard.Configurable`) marks settings classes;
+  `TeamCode/build.gradle` generates `teamcode.generated.ConfigurableClasses.ALL` from sources
+  containing a `@Configurable` line, and `new RobotSettings()` uses it (no runtime scanning; a
+  DexFile scan was rejected because TeamCode classes span 7 dex files in debug APKs). The sim
+  build generates its own list + mirrors the same way (`sim/build.gradle`). Telemetry:
+  `telemetry = new DashboardTelemetry(telemetry)` (implements the SDK `Telemetry`, delegates
+  to the Driver Station, `addData` → `Dash.put`, `update` → `Dash.frame`; the SDK skips its
+  internal auto-update for non-`TelemetryInternal` telemetry, like FTC Dashboard's
+  MultipleTelemetry, so one frame per `update()`). New `Mechanisms` methods should be
+  `default` no-ops so the sim needs no change.
 - **Android hook** `TeamCode/src/dashboard/java/.../AndroidDashboard` (`@OnCreateEventLoop`,
-  starts after 5 s, all errors swallowed) only with `-Pdashboard` (`--dashboard` on both deploy
-  scripts). Page packed as `assets/biobuzz/` — **not `assets/web/`, which is Panels' page**
-  (an app asset at the same path silently replaced Panels' index.html; caught 2026-10-23).
+  starts after 5 s, all errors swallowed). Page packed as `assets/biobuzz/` (originally to
+  avoid Panels' `assets/web/`; kept).
 - **Routes** `autos/*.json` v2 (`lib/AutoRoute`): start, paths (points = start, controls, end;
   heading linear/constant/tangential; maxSpeed; events {at, action, params}), steps
   ({follow} | {action, params}). `PedroAutonomous.ROUTE` (a robot.json setting) picks the file,
@@ -348,6 +363,9 @@ same bump, so this is sanctioned, not a hack.
 ---
 
 ## Panels dashboard
+
+> **Branch `dashboard`:** Panels is removed there (replaced by the Total Chaos Dashboard).
+> This section describes `main`.
 
 Auto-starts — **no glue code required**. `com.bylazar.panels.Panels` carries
 `@WebHandlerRegistrar`, `@OnCreateEventLoop`, and `@OpModeRegistrar`, so the SDK's

@@ -303,7 +303,7 @@ def main():
     parser.add_argument('--tuning', action='store_true',
                         help='include Pedro AutoTune (web page on port 10158); off for matches')
     parser.add_argument('--dashboard', action='store_true',
-                        help='include the Total Chaos Dashboard (http://192.168.43.1:8686)')
+                        help='accepted for old habits: on this branch the Total Chaos Dashboard (http://192.168.43.1:8686) is always in the build')
     parser.add_argument('--check', action='store_true', help='check setup without building or changing networks')
     args = parser.parse_args()
     args.hardware_map = args.hardware_map or args.map_only

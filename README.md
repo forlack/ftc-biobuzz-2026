@@ -12,7 +12,7 @@ Everything outside `TeamCode/` is FIRST's code, unmodified except for two build 
 | Android Studio | Narwhal 3 Feature Drop or later |
 | Pedro Pathing | revhub 3.0.1 / tuning 1.0.1 |
 | Gradle / AGP | 9.1.0 / 8.13.2 |
-| Panels dashboard | 1.0.17 |
+| Dashboard | Total Chaos Dashboard (ours, port 8686; Panels removed on this branch) |
 | JDK | Android Studio Embedded JDK (17+; JBR 25 verified) |
 
 For FIRST's own documentation and SDK release notes, go to the source rather than a stale
@@ -57,11 +57,10 @@ not have yet (never replacing one); `-m` also uploads the hardware XML.
 ```bash
 cd FtcRobotController
 ./gradlew :TeamCode:installDebug              # compile + push
-adb forward tcp:8001 tcp:8001                 # Panels — forwards drop on every install
-adb forward tcp:8002 tcp:8002
+adb forward tcp:8686 tcp:8686                 # dashboard; forwards drop on every install
 ```
 
-Dashboard at <http://localhost:8001>.
+Dashboard at <http://localhost:8686>.
 
 ### Deploy over the robot's Wi-Fi
 
@@ -114,12 +113,12 @@ spaces, or punctuation.
 Normal deploys leave AutoTune out, because its web server once crashed the robot at boot; the
 next normal deploy removes it again.
 
-**To stay on the robot's network afterwards** — for Panels, logs, or quick re-deploys — add
+**To stay on the robot's network afterwards** — for the dashboard, logs, or quick re-deploys — add
 `--stay` (or `-s`):
 
 ```bash
 ./deploy --stay
-# Panels at http://192.168.43.1:8001, adb still connected
+# dashboard at http://192.168.43.1:8686, adb still connected
 ```
 
 It still builds on your normal Wi-Fi first, so dependencies download while you have
@@ -148,7 +147,7 @@ so the script never handles one. Join the robot network once from the Wi-Fi menu
 ```bash
 ./deploy-linux -r "ROBOT WIFI" --check   # first time: name the saved connection, dry run
 ./deploy-linux                           # build, deploy, come back to your Wi-Fi
-./deploy-linux --stay                    # ...or stay on the robot network for Panels
+./deploy-linux --stay                    # ...or stay on the robot network for the dashboard
 ```
 
 The robot network name is remembered in `~/.config/ftc/deploy-wifi.json` (names only, no
@@ -165,7 +164,7 @@ robot. Unplug USB first, then join the robot's network:
 ```bash
 adb connect 192.168.43.1:5555
 ./gradlew --offline :TeamCode:installDebug
-# Panels dashboard: http://192.168.43.1:8001   (no adb forward on this network)
+# dashboard: http://192.168.43.1:8686   (no adb forward on this network)
 ```
 
 `--offline` is required: the robot's network has no internet, and without it Gradle stalls
@@ -254,7 +253,7 @@ and the hardware map. Try it with no robot at all:
 ./simulate          # then open http://localhost:8686
 ```
 
-On the robot: `./deploy-linux --dashboard --stay` (Mac: `./deploy --dashboard --stay`), then
+On the robot: `./deploy-linux --stay` (Mac: `./deploy --stay`; the dashboard is in every build on this branch), then
 <http://192.168.43.1:8686>. Test it with the repeatable checklist in
 [dashboard/ROBOT-TEST.md](dashboard/ROBOT-TEST.md).
 `./robot-sync pull|push|status` keeps the robot's files and Git in step.
@@ -262,8 +261,8 @@ Everything else: [dashboard/README.md](dashboard/README.md).
 
 ## What's here
 
-Tunable numbers (RPMs, PIDF, stinger, drive speeds) can be saved on the robot from Panels and
-copied with `./robot-sync pull|push`, also without rebuilding. See
+Tunable numbers (RPMs, PIDF, stinger, drive speeds) are tuned and saved on the robot from
+the dashboard's Tune tab and copied with `./robot-sync pull|push`, without rebuilding. See
 [settings/README.md](settings/README.md). Where this is heading: [ROADMAP.md](ROADMAP.md).
 
 All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
@@ -284,7 +283,8 @@ All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
 ```
 lib/Button.java          down() is a state, pressed()/released() are events
 lib/MecanumDrive.java    motors, IMU, field-centric math, speed, PIDF
-lib/DriveDashboard.java  all Panels wiring
+lib/DriveDashboard.java  the drive lines of the telemetry; ends each loop's telemetry
+lib/DashboardTelemetry.java  telemetry to the Driver Station AND the dashboard
 ```
 
 A teleop is one loop that **never waits**:
@@ -299,8 +299,10 @@ while (opModeIsActive()) {
 ```
 
 To add something to the robot, write an `updateXxx()` method and add one call to the loop.
-Its telemetry goes in `updateTelemetry()`: `dashboard.addData(...)` for a readable Driver
-Station / Panels line, and `Dash.put(...)` for a number to chart in the Total Chaos Dashboard.
+Its telemetry goes in `updateTelemetry()`: `telemetry.addData(...)` shows on the Driver Station
+and the Total Chaos Dashboard (numbers can be charted); `Dash.put(...)` is for a number only
+the dashboard needs. New settings: `public static` fields in a `@Configurable` class. The
+developer guide: [dashboard/DEVELOPER.md](dashboard/DEVELOPER.md).
 
 **The one rule: never block the loop.** No `sleep()`, no `while (motor.isBusy())`. The Robot
 Controller will stop the robot if the loop stops turning over, and gamepads only refresh
@@ -311,7 +313,7 @@ between iterations. Use a state machine instead — `PedroAutonomous` is the wor
 ## More detail
 
 [AGENTS.md](AGENTS.md) is the real documentation — hardware and wiring, the toolchain,
-tuning results and how they were measured, Pedro setup, Panels, naming and comment
+tuning results and how they were measured, Pedro setup, naming and comment
 conventions, and the gotchas that have already cost us time.
 
 ## License

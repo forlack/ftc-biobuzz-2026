@@ -1,7 +1,5 @@
 package org.firstinspires.ftc.teamcode.helpers;
 
-import com.bylazar.telemetry.PanelsTelemetry;
-import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -9,6 +7,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 
+import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.FieldCentricJava;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 
@@ -46,7 +45,6 @@ public class FlywheelTuner extends LinearOpMode {
     /** P values tried, as multiples of the current P. */
     private static final double[] P_SCALES = {0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0};
 
-    private TelemetryManager panels;
     private VoltageSensor battery;
 
     /** One flywheel and everything measured about it. */
@@ -93,8 +91,9 @@ public class FlywheelTuner extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        panels = PanelsTelemetry.INSTANCE.getTelemetry();
-        RobotSettings settings = new RobotSettings(FieldCentricJava.SETTINGS).load();
+        // Everything sent to telemetry also reaches the Total Chaos Dashboard.
+        telemetry = new DashboardTelemetry(telemetry);
+        RobotSettings settings = new RobotSettings().load();
         battery = hardwareMap.voltageSensor.iterator().next();
 
         // Same names and directions as FieldCentricJava.
@@ -106,14 +105,14 @@ public class FlywheelTuner extends LinearOpMode {
                 FieldCentricJava.NECTAR_FLYWHEEL_D);
         Wheel[] wheels = {pollen, nectar};
 
-        panels.addLine("Flywheel Tuner. Both flywheels spin up to full speed.");
-        panels.addLine("Keep hands and balls clear. About 40 seconds. STOP stops the wheels.");
-        panels.addData("Settings", settings.status());
-        panels.addData("Battery", volts());
+        telemetry.addLine("Flywheel Tuner. Both flywheels spin up to full speed.");
+        telemetry.addLine("Keep hands and balls clear. About 40 seconds. STOP stops the wheels.");
+        telemetry.addData("Settings", settings.status());
+        telemetry.addData("Battery", volts());
         for (Wheel wheel : wheels) {
-            panels.addData(wheel.name + " target RPM", wheel.targetRPM);
+            telemetry.addData(wheel.name + " target RPM", wheel.targetRPM);
         }
-        panels.update(telemetry);
+        telemetry.update();
         waitForStart();
 
         try {
@@ -284,25 +283,25 @@ public class FlywheelTuner extends LinearOpMode {
                 settings.save();
                 saved = true;
             }
-            panels.addLine(saved ? "Applied. " + settings.status() + "  (./robot-sync pull to keep it in Git)"
+            telemetry.addLine(saved ? "Applied. " + settings.status() + "  (./robot-sync pull to keep it in Git)"
                     : "Press A to apply and save to robot.json. STOP to discard.");
-            panels.addData("Battery (start / now)", round1(startVolts) + " V / " + volts());
-            panels.addData("FLYWHEEL_F (shared, average)", sharedF);
+            telemetry.addData("Battery (start / now)", round1(startVolts) + " V / " + volts());
+            telemetry.addData("FLYWHEEL_F (shared, average)", sharedF);
             for (Wheel wheel : wheels) {
-                panels.addLine("");
-                panels.addLine("--- " + wheel.name.toUpperCase(Locale.US) + " at " + Math.round(wheel.targetRPM) + " RPM ---");
-                if (!wheel.warning.isEmpty()) panels.addData("WARNING", wheel.warning);
-                panels.addData("F (this wheel)", wheel.f);
-                panels.addData("Best P", wheel.best.p + "  (was " + wheel.currentP + ")");
+                telemetry.addLine("");
+                telemetry.addLine("--- " + wheel.name.toUpperCase(Locale.US) + " at " + Math.round(wheel.targetRPM) + " RPM ---");
+                if (!wheel.warning.isEmpty()) telemetry.addData("WARNING", wheel.warning);
+                telemetry.addData("F (this wheel)", wheel.f);
+                telemetry.addData("Best P", wheel.best.p + "  (was " + wheel.currentP + ")");
                 for (Trial trial : wheel.trials) {
-                    panels.addLine(String.format(Locale.US, "%s P %-5s settle %s  over %4.1f%%  wobble %3.1f%%  error %+4.1f%%",
+                    telemetry.addLine(String.format(Locale.US, "%s P %-5s settle %s  over %4.1f%%  wobble %3.1f%%  error %+4.1f%%",
                             trial == wheel.best ? ">" : " ", fmt(trial.p),
                             Double.isFinite(trial.settleSeconds)
                                     ? String.format(Locale.US, "%.2fs", trial.settleSeconds) : "never",
                             trial.overshoot * 100, trial.wobble * 100, trial.steadyError * 100));
                 }
             }
-            panels.update(telemetry);
+            telemetry.update();
             sleep(50);
         }
     }
@@ -310,12 +309,12 @@ public class FlywheelTuner extends LinearOpMode {
     private void waitSeconds(double seconds, String status, Wheel[] wheels) {
         long end = System.nanoTime() + (long) (seconds * 1e9);
         while (opModeIsActive() && System.nanoTime() < end) {
-            panels.addLine(status);
-            panels.addData("Battery", volts());
+            telemetry.addLine(status);
+            telemetry.addData("Battery", volts());
             for (Wheel wheel : wheels) {
-                panels.addData(wheel.name + " RPM", Math.round(wheel.rpm()));
+                telemetry.addData(wheel.name + " RPM", Math.round(wheel.rpm()));
             }
-            panels.update(telemetry);
+            telemetry.update();
             sleep(20);
         }
     }

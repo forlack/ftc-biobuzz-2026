@@ -15,7 +15,6 @@ import com.qualcomm.robotcore.hardware.VoltageSensor;
 import org.firstinspires.ftc.ftccommon.external.OnCreateEventLoop;
 import org.firstinspires.ftc.robotcore.internal.opmode.OpModeMeta;
 import org.firstinspires.ftc.robotcore.internal.opmode.RegisteredOpModes;
-import org.firstinspires.ftc.teamcode.FieldCentricJava;
 import org.firstinspires.ftc.teamcode.dashboard.DashboardServer;
 import org.firstinspires.ftc.teamcode.dashboard.RobotHost;
 import org.firstinspires.ftc.teamcode.lib.Actions;
@@ -42,7 +41,7 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
 
     private final Context context;
     private final OpModeManagerImpl opModes;
-    private final RobotSettings settings = new RobotSettings(FieldCentricJava.SETTINGS);
+    private final RobotSettings settings = new RobotSettings();
     private final Actions actions = StandardActions.create(new Mechanisms() {
         // Only the list of actions is used here; routes run inside PedroAutonomous.
         @Override public void intake(boolean on) { }
@@ -145,7 +144,7 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
 
     @Override public InputStream openWebFile(String path) throws IOException {
         try {
-            return context.getAssets().open("biobuzz/" + path);   // not "web/": that is Panels'
+            return context.getAssets().open("biobuzz/" + path);
         } catch (FileNotFoundException error) {
             return null;
         }

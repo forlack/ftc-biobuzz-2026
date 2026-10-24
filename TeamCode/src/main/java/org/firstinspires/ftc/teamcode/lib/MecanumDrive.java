@@ -1,6 +1,6 @@
 package org.firstinspires.ftc.teamcode.lib;
 
-import com.bylazar.configurables.annotations.Configurable;
+import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -60,7 +60,7 @@ public class MecanumDrive {
     private boolean velocityMode = START_IN_VELOCITY_MODE;
     private boolean brakeMode = START_IN_BRAKE_MODE;
 
-    // The PIDF numbers currently loaded in the motors. Kept so we can tell when Panels has
+    // The PIDF numbers currently loaded in the motors. Kept so we can tell when the Tune tab has
     // changed one and skip re-sending numbers the motors already have.
     private double motorP = Double.NaN, motorI = Double.NaN;
     private double motorD = Double.NaN, motorF = Double.NaN;
@@ -181,7 +181,7 @@ public class MecanumDrive {
         applyZeroPowerBehavior();
     }
 
-    /** Sends PIDF numbers edited in Panels to the motors, but only when one actually changed. */
+    /** Sends PIDF numbers edited on the Tune tab to the motors, but only when one actually changed. */
     private void applyPidfTuning() {
         if (!TUNE_PIDF || (VEL_P == motorP && VEL_I == motorI
                 && VEL_D == motorD && VEL_F == motorF)) {

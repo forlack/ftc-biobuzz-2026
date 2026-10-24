@@ -67,9 +67,10 @@ trips through the loop, so `down()` would run your action 30 times.
 
 ## Telemetry
 
-`dashboard.addData("label", value)` puts a number on the screen — it goes to both the Panels
-dashboard and the Driver Station. It must come **before** `dashboard.update()`, which sends
-everything and empties the list.
+`telemetry.addData("label", value)` puts a value on the screen — it goes to the Driver Station
+and the Total Chaos Dashboard, where numbers can be charted (the OpMode wraps `telemetry` once:
+`telemetry = new DashboardTelemetry(telemetry)`). It must come **before** `dashboard.update()`,
+which sends everything and empties the list. More: `dashboard/DEVELOPER.md`.
 
 Show `down()`, not `pressed()`. `pressed()` is only true for one loop out of thirty, so the
 screen would almost always catch it as false and look broken.
@@ -81,11 +82,10 @@ Over USB:
 ```bash
 cd ~/ftc/FtcRobotController
 ./gradlew :TeamCode:installDebug
-adb forward tcp:8001 tcp:8001    # Panels, at http://localhost:8001
-adb forward tcp:8002 tcp:8002    # these drop every time you install
+adb forward tcp:8686 tcp:8686    # dashboard, at http://localhost:8686 (drops on every install)
 ```
 
-On the robot's Wi-Fi, no forwarding is needed — Panels is at <http://192.168.43.1:8001>.
+On the robot's Wi-Fi, no forwarding is needed — the dashboard is at <http://192.168.43.1:8686>.
 
 Or use the Run button in Android Studio. See the repo's `README.md` for the full Wi-Fi
 instructions.

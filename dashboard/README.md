@@ -34,11 +34,11 @@ Its SD card is `sim/sdcard/`, filled from the repo on first start.
 
 ## On the robot
 
-The dashboard is only in builds made with `--dashboard`, until it has proven itself:
+On this branch the dashboard is in every build, and Panels is gone (it replaces Panels):
 
 ```bash
-./deploy-linux --dashboard --stay      # or ./deploy --dashboard --stay on the Mac
-# then open http://192.168.43.1:8686   (Panels is still at :8001)
+./deploy-linux --stay      # or ./deploy --stay on the Mac
+# then open http://192.168.43.1:8686
 ```
 
 It starts 5 seconds after the Robot Controller app, and every error inside it is caught, so a
@@ -98,70 +98,23 @@ The robot ignores them.
 
 ## Adding things
 
-### A setting you can tune (Tune tab)
+**Read [DEVELOPER.md](DEVELOPER.md)**: quick start, a cheat sheet, and how it maps to FTC
+Dashboard and Panels. The short version:
 
-Add a `public static` (not `final`) number, boolean or String to `FieldCentricJava`,
-`MecanumDrive` or `PedroAutonomous`:
-
-```java
-public static double ARM_UP = 0.8;     // in FieldCentricJava
-```
-
-That is all: it shows on the Tune tab, changes live, and Save writes it to `robot.json`. The
-simulator picks it up by itself (its copies of those classes are generated from the real
-files at every build).
-
-- A live switch that should not be saved: add `@RobotSettings.NotSaved`.
-- A whole new class of settings (say `Arm`): add it to `FieldCentricJava.SETTINGS`, and to the
-  `mirrored` list in `sim/build.gradle` for the simulator.
-- Renaming a setting makes an old `robot.json` warn about the old name; Save again to clear it.
-
-### A value to watch or chart (Live tab)
-
-In the OpMode's loop:
-
-```java
-Dash.put("Arm position", arm.getPosition());   // a number: can be charted
-Dash.put("Arm state", "up");                     // text: telemetry table
-```
-
-In the teleop, all of this lives in `FieldCentricJava.updateTelemetry()`: `dashboard.addData`
-for readable Driver Station / Panels lines, `Dash.put` for plain numbers to chart. Read each
-sensor or motor speed **once** there and reuse the value: every read is a call to the hub that
-costs loop time. `Dash.frame()` ends each loop (DriveDashboard does it for the teleop). New
-names show in the telemetry table and in **+ Add chart** at once; the standard charts are in
-`web/js/live.js`.
+- **A setting:** `public static double ARM_UP = 0.8;` in a class marked `@Configurable`
+  (`teamcode.dashboard.Configurable`). It shows on the Tune tab and saves in `robot.json`;
+  the robot and the simulator both find it.
+- **Telemetry:** wrap once, `telemetry = new DashboardTelemetry(telemetry);`, then
+  `telemetry.addData(...)` reaches the Driver Station and the dashboard (numbers chart).
+  `Dash.put(...)` for dashboard-only values. Read each sensor once per loop.
+- **An auton function:** a `default` method in `lib/Mechanisms`, the real thing in
+  `PedroAutonomous.RobotMechanisms`, and a name in `lib/StandardActions`.
 
 What the teleop sends (the autonomous and the simulator use the same names): `Intake RPM`,
 `Intake target`, `Pollen RPM`, `Pollen target`, `Nectar RPM`, `Nectar target`,
 `Flywheels on`, `Flywheels ready`, `Feeding` (1/0), `Stinger` (servo position), `Battery V`,
 `Loop ms`, `Speed %`, `Heading`, `Drive forward` / `Drive strafe` / `Drive turn` (sticks,
--1 to 1), and text: `Intake` (ON/OFF/REVERSE), `Settings`.
-
-### A function for the Auton Sequence (Paths tab)
-
-Three small steps, because the same function runs on the robot and in the simulator:
-
-1. **Say what the robot can do**, in `lib/Mechanisms.java`:
-   ```java
-   void arm(boolean up);
-   ```
-2. **Do it**, on the robot in `PedroAutonomous.RobotMechanisms`
-   (`armServo.setPosition(up ? FieldCentricJava.ARM_UP : FieldCentricJava.ARM_DOWN)`) and in
-   the simulator in `sim/.../SimOpModes.SimMechanisms` (an empty method is enough to build).
-3. **Name it for the path editor**, in `lib/StandardActions.java`:
-   ```java
-   .instant("armUp", "arm up", "Raise the arm.", () -> robot.arm(true))
-   ```
-   `.instant` is a one-shot function: between paths, or **on a path** at a %. `.step` takes
-   time (like `shoot` or `wait`) and can have settings such as seconds; steps go only between
-   paths.
-
-After a deploy (or restarting `./simulate`) "arm up" is in **Add to the sequence**: the path
-editor asks the robot for its list, so the editor itself needs no change. **Function names
-are permanent once used**: renaming `armUp` breaks autons saved with it (the robot refuses
-them with a clear message). Teleop does not use `Mechanisms`; its buttons call the hardware
-directly.
+-1 to 1), and text: `Intake` (ON/OFF/REVERSE), `Flywheels`, `Settings`.
 
 ### Other pieces
 

@@ -1,7 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.bylazar.configurables.annotations.Configurable;
-import com.bylazar.configurables.annotations.IgnoreConfigurable;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
@@ -9,9 +7,10 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.Servo;
 
+import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
-import org.firstinspires.ftc.teamcode.dashboard.DashboardConfig;
 import org.firstinspires.ftc.teamcode.lib.Button;
+import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
 import org.firstinspires.ftc.teamcode.lib.MecanumDrive;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
@@ -41,12 +40,12 @@ import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 @TeleOp(name = "Field Centric (Java)", group = "Drive")
 public class FieldCentricJava extends LinearOpMode {
 
-    // Intake -- editable live in Panels.
+    // Intake -- editable live on the dashboard's Tune tab.
     public static double INTAKE_RPM = 700;
     public static double INTAKE_P = 15;
     public static double INTAKE_F = 15;
 
-    /** Turn both flywheels on or off from Panels. They start on. A switch, not a setting. */
+    /** Turn both flywheels on or off from the Tune tab. They start on. A switch, not a setting. */
     @RobotSettings.NotSaved
     public static boolean FLYWHEELS_ON = true;
     public static double FLYWHEEL_F = 12;
@@ -103,10 +102,6 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button gate            = buttons.add(() -> operate.right_bumper);
     private final Button sting           = buttons.add(() -> operate.left_bumper);
 
-    /** Classes whose public static values are saved in robot.json. Autonomous loads them too. */
-    @IgnoreConfigurable
-    public static final Class<?>[] SETTINGS = {FieldCentricJava.class, MecanumDrive.class, PedroAutonomous.class,
-            DashboardConfig.class};
     private RobotSettings settings;
     private long lastLoop, lastBatteryRead;
     private double batteryVolts;
@@ -115,7 +110,9 @@ public class FieldCentricJava extends LinearOpMode {
     @Override
     public void runOpMode() {
         // First, before anything reads a setting: robot.json replaces the defaults above.
-        settings = new RobotSettings(SETTINGS).load();
+        settings = new RobotSettings().load();   // every @Configurable class
+        // Everything sent to telemetry also reaches the Total Chaos Dashboard.
+        telemetry = new DashboardTelemetry(telemetry);
 
         // Drive.
         chassis = new MecanumDrive(hardwareMap);
@@ -164,8 +161,8 @@ public class FieldCentricJava extends LinearOpMode {
 
     /** Reads the gamepad once, so everything below sees the same thing. */
     private void readGamepad() {
-        operate = dashboard.mergeOperatorGamepad(gamepad2);
-        drive = dashboard.mergeGamepad(gamepad1);
+        operate = gamepad2;
+        drive = gamepad1;
         buttons.update();
     }
 
@@ -211,7 +208,7 @@ public class FieldCentricJava extends LinearOpMode {
     }
 
     private void updateServos() {
-        // Transports run only while the flywheels are on (operator A or Panels FLYWHEELS_ON).
+        // Transports run only while the flywheels are on (operator A, or FLYWHEELS_ON on the Tune tab).
         transportPollen.setPower(FLYWHEELS_ON ? 1 : 0);
         feeding = gate.down() || forceShoot.down();
         triggerNectar.setPower(feeding ? 1 : 0);
@@ -229,7 +226,7 @@ public class FieldCentricJava extends LinearOpMode {
                 || NECTAR_FLYWHEEL_D != shooterNectar.getD() || FLYWHEEL_F != shooterNectar.getF()) {
             shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, 0, NECTAR_FLYWHEEL_D, FLYWHEEL_F);
         }
-        // Flips the same switch Panels shows, so the button and Panels always agree.
+        // Flips the same switch the Tune tab shows, so the button and the dashboard always agree.
         if (toggleFlywheels.pressed()) {
             FLYWHEELS_ON = !FLYWHEELS_ON;
         }
@@ -241,8 +238,9 @@ public class FieldCentricJava extends LinearOpMode {
      * Everything the drivers and the dashboard see, in one place. Each motor speed is read
      * from the hub once per loop (every read is a call to the hub that costs loop time).
      *
-     * Driver Station / Panels get readable lines. The Total Chaos Dashboard gets plain numbers
-     * with the same names the autonomous and the simulator use, so the same charts work.
+     * telemetry.addData goes to the Driver Station and the dashboard; Dash.put to the dashboard
+     * only (values for charts that drivers do not need). The names match the autonomous and the
+     * simulator, so the same charts work everywhere.
      */
     private void updateTelemetry() {
         double intakeRpm = intake.getRPM();
@@ -251,7 +249,6 @@ public class FieldCentricJava extends LinearOpMode {
         boolean ready = FLYWHEELS_ON
                 && Math.abs(pollenRpm - shooterPollen.getTargetRPM()) < VelocityMotor.RPM_TOLERANCE
                 && Math.abs(nectarRpm - shooterNectar.getTargetRPM()) < VelocityMotor.RPM_TOLERANCE;
-        String intakeState = reverseIntake.down() ? "REVERSE" : (toggleIntake.active ? "ON" : "OFF");
 
         long now = System.nanoTime();
         // Reading the battery is a call to the hub that takes a few ms, so only 4 times a second.
@@ -260,27 +257,22 @@ public class FieldCentricJava extends LinearOpMode {
             batteryVolts = hardwareMap.voltageSensor.iterator().next().getVoltage();
         }
 
-        // Driver Station and Panels.
-        dashboard.addLine("--- INTAKE ---");
-        dashboard.addData("Intake", intakeState + "  " + rpmLine(intakeRpm, intake.getTargetRPM()));
-        dashboard.addData("Intake P / F", intake.getP() + " / " + intake.getF());
-        dashboard.addLine("");
-        dashboard.addLine("--- SHOOTERS ---");
-        dashboard.addData("Flywheels", !FLYWHEELS_ON ? "OFF" : ready ? "READY" : "spinning up");
-        dashboard.addData("Pollen", rpmLine(pollenRpm, shooterPollen.getTargetRPM()));
-        dashboard.addData("Nectar", rpmLine(nectarRpm, shooterNectar.getTargetRPM()));
-        dashboard.addData("Feeding", feeding ? "YES" : "no");
-        dashboard.addData("Pollen hub PIDF", shooterPollen.getAppliedPIDF());
-        dashboard.addData("Nectar hub PIDF", shooterNectar.getAppliedPIDF());
-        dashboard.addData("Stinger", (sting.down() ? "DOWN " : "UP ") + stinger.getPosition());
-        dashboard.addData("Battery", String.format(java.util.Locale.US, "%.2f V", batteryVolts));
-        settings.update((label, value) -> {
-            dashboard.addData(label, value);
-            Dash.put(label, value);
-        });
+        telemetry.addLine("--- INTAKE ---");
+        telemetry.addData("Intake", reverseIntake.down() ? "REVERSE" : (toggleIntake.active ? "ON" : "OFF"));
+        telemetry.addData("Intake speed", rpmLine(intakeRpm, intake.getTargetRPM()));
+        telemetry.addLine("");
+        telemetry.addLine("--- SHOOTERS ---");
+        telemetry.addData("Flywheels", !FLYWHEELS_ON ? "OFF" : ready ? "READY" : "spinning up");
+        telemetry.addData("Pollen", rpmLine(pollenRpm, shooterPollen.getTargetRPM()));
+        telemetry.addData("Nectar", rpmLine(nectarRpm, shooterNectar.getTargetRPM()));
+        telemetry.addData("Feeding", feeding);
+        telemetry.addData("Stinger", stinger.getPosition());
+        telemetry.addData("Battery V", "%.2f", batteryVolts);
+        telemetry.addLine("Pollen hub PIDF " + shooterPollen.getAppliedPIDF());
+        telemetry.addLine("Nectar hub PIDF " + shooterNectar.getAppliedPIDF());
+        settings.update(telemetry::addData);
 
-        // Total Chaos Dashboard: numbers to chart (same names as the autonomous and simulator).
-        Dash.put("Intake", intakeState);
+        // Dashboard only: numbers to chart.
         Dash.put("Intake RPM", intakeRpm);
         Dash.put("Intake target", intake.getTargetRPM());
         Dash.put("Pollen RPM", pollenRpm);
@@ -289,9 +281,6 @@ public class FieldCentricJava extends LinearOpMode {
         Dash.put("Nectar target", shooterNectar.getTargetRPM());
         Dash.put("Flywheels on", FLYWHEELS_ON);
         Dash.put("Flywheels ready", ready);
-        Dash.put("Feeding", feeding);
-        Dash.put("Stinger", stinger.getPosition());
-        Dash.put("Battery V", batteryVolts);
         if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
         lastLoop = now;
     }

@@ -1,7 +1,5 @@
 package org.firstinspires.ftc.teamcode.lib;
 
-import com.bylazar.configurables.annotations.Configurable;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -16,11 +14,14 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 /**
  * Keeps tunable numbers in settings/robot.json on the robot, so changing one does not need a
@@ -32,13 +33,55 @@ import java.util.function.BiConsumer;
  * default and a warning shows on telemetry. If robot.json cannot be read at all, the backup
  * from the previous save (robot.json.bak) is used instead.
  *
- * To save: press Save in the Total Chaos Dashboard, or turn on SAVE_TO_ROBOT in Panels while
- * the teleop is running.
+ * Which classes: every class marked {@code @Configurable}, found automatically
+ * ({@code new RobotSettings()}). To save: press Save on the Total Chaos Dashboard's Tune tab.
  */
-@Configurable
 public class RobotSettings {
-    /** Turn on in Panels to write every current value to the robot. Turns itself off. */
-    public static boolean SAVE_TO_ROBOT = false;
+    /** Tune tab order: by name, with the dashboard's own settings last. */
+    public static final Comparator<Class<?>> TAB_ORDER = (a, b) -> {
+        boolean aDashboard = a.getName().contains(".dashboard."), bDashboard = b.getName().contains(".dashboard.");
+        if (aDashboard != bDashboard) return aDashboard ? 1 : -1;
+        return a.getSimpleName().compareTo(b.getSimpleName());
+    };
+
+    /** Finds the @Configurable classes. The simulator replaces it with its generated list. */
+    private static volatile Supplier<List<Class<?>>> finder = RobotSettings::listedByBuild;
+    private static List<Class<?>> found;
+    private static String findProblem;
+
+    /** For the simulator (or a test): where the @Configurable classes come from. */
+    public static synchronized void setFinder(Supplier<List<Class<?>>> classes) {
+        finder = classes;
+        found = null;
+    }
+
+    /** Every @Configurable class, found once. Never throws: a failed scan finds nothing. */
+    public static synchronized List<Class<?>> configurableClasses() {
+        if (found == null) {
+            List<Class<?>> list;
+            try {
+                list = new ArrayList<>(finder.get());
+            } catch (Throwable error) {
+                list = new ArrayList<>();
+                findProblem = "No settings found, robot.json is not used: " + error.getMessage();
+            }
+            found = Collections.unmodifiableList(list);
+        }
+        return found;
+    }
+
+    /** On the robot: the list the build makes (by name, because the simulator has its own). */
+    private static List<Class<?>> listedByBuild() {
+        try {
+            Class<?>[] all = (Class<?>[]) Class.forName("org.firstinspires.ftc.teamcode.generated.ConfigurableClasses")
+                    .getField("ALL").get(null);
+            List<Class<?>> list = new ArrayList<>(java.util.Arrays.asList(all));
+            Collections.sort(list, TAB_ORDER);
+            return list;
+        } catch (Exception error) {
+            throw new IllegalStateException("could not list @Configurable classes: " + error, error);
+        }
+    }
 
     /** Marks a public static field that is a live switch, not a setting, so it is never saved. */
     @Retention(RetentionPolicy.RUNTIME)
@@ -54,6 +97,12 @@ public class RobotSettings {
     private final List<String> warnings = new ArrayList<>();
     private String status = "not loaded";
 
+    /** Every @Configurable class (the usual way). */
+    public RobotSettings() {
+        this(configurableClasses().toArray(new Class<?>[0]));
+    }
+
+    /** Only these classes. */
     public RobotSettings(Class<?>... classes) {
         this.classes = classes;
         synchronized (DEFAULTS) {
@@ -133,14 +182,9 @@ public class RobotSettings {
     }
 
     /**
-     * Call once per loop. Saves when SAVE_TO_ROBOT has been turned on in Panels, then reports
-     * the status and any warnings, for example {@code settings.update(dashboard::addData)}.
+     * Reports the status and any warnings, for example {@code settings.update(telemetry::addData)}.
      */
     public void update(BiConsumer<String, Object> telemetry) {
-        if (SAVE_TO_ROBOT) {
-            SAVE_TO_ROBOT = false;
-            save();
-        }
         telemetry.accept("Settings", status);
         for (String warning : warnings()) {
             telemetry.accept("Settings warning", warning);
@@ -165,7 +209,9 @@ public class RobotSettings {
     }
 
     public synchronized List<String> warnings() {
-        return new ArrayList<>(warnings);
+        List<String> all = new ArrayList<>(warnings);
+        if (classes.length == 0 && findProblem != null) all.add(0, findProblem);   // never silent
+        return all;
     }
 
     // ---- For the dashboard -------------------------------------------------

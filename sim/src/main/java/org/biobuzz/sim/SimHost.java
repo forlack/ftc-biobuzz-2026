@@ -23,6 +23,11 @@ import java.util.function.Supplier;
 public class SimHost implements RobotHost {
     private final SimWorld world;
     private final File webRoot;
+    static {
+        // new RobotSettings() anywhere in the shared code finds the same classes as the robot.
+        RobotSettings.setFinder(() -> java.util.Arrays.asList(SimOpModes.SETTINGS));
+    }
+
     private final RobotSettings settings = new RobotSettings(SimOpModes.SETTINGS);
     private final Actions catalog;
     private final Map<String, Supplier<SimOpModes.SimOpMode>> opModes = new LinkedHashMap<>();

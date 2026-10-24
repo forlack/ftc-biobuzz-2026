@@ -1,7 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.bylazar.telemetry.PanelsTelemetry;
-import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -10,6 +8,8 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 
+import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
+import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
@@ -34,6 +34,7 @@ import java.util.List;
  * setPose() does not move the robot; it tells Pedro where the robot already is. Lie to it and
  * the follower immediately lurches to "correct".
  */
+@Configurable
 @Autonomous(name = "Pedro Pathing Autonomous", group = "Autonomous",
         preselectTeleOp = "Field Centric (Java)")
 public class PedroAutonomous extends OpMode {
@@ -41,7 +42,6 @@ public class PedroAutonomous extends OpMode {
     /** Which route file in autos/ to run, without ".json". Chosen in the dashboard or with the D-pad at INIT. */
     public static String ROUTE = "saturday";
 
-    private TelemetryManager panels;
     private Follower follower;
     private AutoSequence auto;
     private Pose start;
@@ -60,11 +60,12 @@ public class PedroAutonomous extends OpMode {
 
     @Override
     public void init() {
-        panels = PanelsTelemetry.INSTANCE.getTelemetry();
+        // Everything sent to telemetry also reaches the Total Chaos Dashboard.
+        telemetry = new DashboardTelemetry(telemetry);
         // Same robot.json as teleop, so the flywheel and stinger numbers match.
-        RobotSettings settings = new RobotSettings(FieldCentricJava.SETTINGS).load();
-        panels.debug("Settings", settings.status());
-        for (String warning : settings.warnings()) panels.debug("Settings warning", warning);
+        RobotSettings settings = new RobotSettings().load();
+        telemetry.addData("Settings", settings.status());
+        for (String warning : settings.warnings()) telemetry.addData("Settings warning", warning);
 
         follower = Constants.create(hardwareMap);
 
@@ -145,20 +146,20 @@ public class PedroAutonomous extends OpMode {
 
     private void showInit() {
         if (problem != null) {
-            panels.debug("ROUTE PROBLEM", problem);
-            panels.debug("Route", ROUTE + "  (D-pad up/down to pick another)");
+            telemetry.addData("ROUTE PROBLEM", problem);
+            telemetry.addData("Route", ROUTE + "  (D-pad up/down to pick another)");
             Dash.put("Status", "Route problem: " + problem);
         } else {
-            panels.debug("Route", ROUTE + "  (D-pad up/down to pick another)");
-            panels.debug("From", source);
-            panels.debug("Steps", auto.stepCount());
-            panels.debug("Start X", start.x());
-            panels.debug("Start Y", start.y());
-            panels.debug("Start heading (deg)", Math.toDegrees(start.heading()));
+            telemetry.addData("Route", ROUTE + "  (D-pad up/down to pick another)");
+            telemetry.addData("From", source);
+            telemetry.addData("Steps", auto.stepCount());
+            telemetry.addData("Start X", start.x());
+            telemetry.addData("Start Y", start.y());
+            telemetry.addData("Start heading (deg)", Math.toDegrees(start.heading()));
             Dash.put("Status", "Route " + ROUTE + " ready: " + auto.stepCount() + " steps");
             Dash.put("Start", String.format(java.util.Locale.US, "%.1f, %.1f, %.0f°", start.x(), start.y(), Math.toDegrees(start.heading())));
         }
-        panels.update(telemetry);
+        telemetry.update();
     }
 
     @Override
@@ -189,27 +190,21 @@ public class PedroAutonomous extends OpMode {
         auto.update();
 
         Pose pose = follower.pose();
-        panels.debug("Step", auto.stepNumber() + "/" + auto.stepCount() + "  " + auto.stepName());
-        panels.debug("Following", follower.isBusy());
-        panels.debug("Completion", follower.completion());
-        panels.debug("X", pose.x());
-        panels.debug("Y", pose.y());
-        panels.debug("Heading (deg)", Math.toDegrees(pose.heading()));
-        panels.update(telemetry);
+        telemetry.addData("Step", auto.stepNumber() + "/" + auto.stepCount() + "  " + auto.stepName());
+        telemetry.addData("Following", follower.isBusy());
+        telemetry.addData("Completion", follower.completion());
+        telemetry.addData("X", pose.x());
+        telemetry.addData("Y", pose.y());
+        telemetry.addData("Heading", Math.toDegrees(pose.heading()));
 
-        // The same names the dashboard charts for the teleop and the simulator.
-        Dash.put("Step", auto.stepNumber() + "/" + auto.stepCount() + "  " + auto.stepName());
-        Dash.put("Completion", follower.completion());
-        Dash.put("X", pose.x());
-        Dash.put("Y", pose.y());
-        Dash.put("Heading", Math.toDegrees(pose.heading()));
+        // Dashboard only: the same names the teleop and the simulator chart.
         Dash.put("Route done", auto.finished());
         robot.telemetry();
         long now = System.nanoTime();
         if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
         lastLoop = now;
         Dash.pose(pose.x(), pose.y(), pose.heading());
-        Dash.frame();
+        telemetry.update();   // also ends this loop's dashboard frame
     }
 
     /** The robot's mechanisms, for the route's actions. */

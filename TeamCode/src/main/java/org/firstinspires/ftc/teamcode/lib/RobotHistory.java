@@ -15,7 +15,7 @@ import java.util.Locale;
  * Every saved version of the robot's files, so a bad change can be undone at the field.
  *
  * Each time a file such as settings/robot.json or autos/saturday.json is saved (from the
- * dashboard, Panels' SAVE_TO_ROBOT or robot-sync), a copy goes into
+ * dashboard or robot-sync), a copy goes into
  * history/settings__robot.json/2026-10-23_18-42-07-123.json. The first save of a file also
  * keeps the version it replaced (marked "-original"). Only the newest {@link #KEEP} versions of
  * each file are kept.
