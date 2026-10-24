@@ -44,6 +44,9 @@ The dashboard is only in builds made with `--dashboard`, until it has proven its
 It starts 5 seconds after the Robot Controller app, and every error inside it is caught, so a
 problem means "no dashboard", never "no robot".
 
+**First time on a robot, or after big changes:** follow [ROBOT-TEST.md](ROBOT-TEST.md), the
+same checklist every time, and fill in its log.
+
 ### What it costs the robot
 
 The Robot tab's **Load** card shows, every second: viewers, the dashboard's own CPU, the whole
@@ -93,20 +96,73 @@ Each route also saves the robot size and safety margin it was drawn with (`"robo
 {width, length, safetyMargin}`, inches); opening the route in the path editor puts them back.
 The robot ignores them.
 
-## For programmers
+## Adding things
 
-- **A new setting:** add a `public static` field to `FieldCentricJava`, `MecanumDrive` or
-  `PedroAutonomous`. It appears in the Tune tab and in `robot.json` by itself. Mark live
-  switches with `@RobotSettings.NotSaved`.
-- **A new autonomous action:** add it to `lib/StandardActions.java`, using `lib/Mechanisms`.
-  It appears in the path editor by itself, and works in the simulator once
-  `sim/.../SimOpModes.SimMechanisms` does the same thing.
-- **A new chart value:** `Dash.put("Name", number)` in the loop; `Dash.frame()` ends each
-  loop (DriveDashboard does it for the teleop). The named charts are in `web/js/live.js`.
+### A setting you can tune (Tune tab)
+
+Add a `public static` (not `final`) number, boolean or String to `FieldCentricJava`,
+`MecanumDrive` or `PedroAutonomous`:
+
+```java
+public static double ARM_UP = 0.8;     // in FieldCentricJava
+```
+
+That is all: it shows on the Tune tab, changes live, and Save writes it to `robot.json`. The
+simulator picks it up by itself (its copies of those classes are generated from the real
+files at every build).
+
+- A live switch that should not be saved: add `@RobotSettings.NotSaved`.
+- A whole new class of settings (say `Arm`): add it to `FieldCentricJava.SETTINGS`, and to the
+  `mirrored` list in `sim/build.gradle` for the simulator.
+- Renaming a setting makes an old `robot.json` warn about the old name; Save again to clear it.
+
+### A value to watch or chart (Live tab)
+
+In the OpMode's loop:
+
+```java
+Dash.put("Arm position", arm.getPosition());   // a number: can be charted
+Dash.put("Arm state", "up");                     // text: telemetry table
+```
+
+`dashboard.addData(...)` in the teleop does this too (and shows on the Driver Station).
+`Dash.frame()` ends each loop (DriveDashboard does it for the teleop). New names show in the
+telemetry table and in **+ Add chart** at once; the six standard charts are in `web/js/live.js`.
+
+### A function for the Auton Sequence (Paths tab)
+
+Three small steps, because the same function runs on the robot and in the simulator:
+
+1. **Say what the robot can do**, in `lib/Mechanisms.java`:
+   ```java
+   void arm(boolean up);
+   ```
+2. **Do it**, on the robot in `PedroAutonomous.RobotMechanisms`
+   (`armServo.setPosition(up ? FieldCentricJava.ARM_UP : FieldCentricJava.ARM_DOWN)`) and in
+   the simulator in `sim/.../SimOpModes.SimMechanisms` (an empty method is enough to build).
+3. **Name it for the path editor**, in `lib/StandardActions.java`:
+   ```java
+   .instant("armUp", "arm up", "Raise the arm.", () -> robot.arm(true))
+   ```
+   `.instant` is a one-shot function: between paths, or **on a path** at a %. `.step` takes
+   time (like `shoot` or `wait`) and can have settings such as seconds; steps go only between
+   paths.
+
+After a deploy (or restarting `./simulate`) "arm up" is in **Add to the sequence**: the path
+editor asks the robot for its list, so the editor itself needs no change. **Function names
+are permanent once used**: renaming `armUp` breaks autons saved with it (the robot refuses
+them with a clear message). Teleop does not use `Mechanisms`; its buttons call the hardware
+directly.
+
+### Other pieces
+
 - **The path editor** is <https://github.com/forlack/Visualizer> (branch `biobuzz`); our
   changes live in `src/lib/robot/`. After changing it run `./build-visualizer`, which builds it
   into `dashboard/web/visualizer/` (committed, so nobody else needs Node).
-- **Server API:** see `TeamCode/.../dashboard/DashboardServer.java`.
+- **Server API:** see `TeamCode/.../dashboard/DashboardServer.java`; the live stream format is
+  in `TelemetryStream.java` (browser side: `web/js/frames.js`).
+- **Hardware maps:** `web/js/hardware.js`. The names the code needs (checked before saving)
+  are its `REQUIRED` list: keep it in step with the Java code.
 
 ## Tests
 
@@ -116,7 +172,10 @@ node tests/e2e/dashboard.e2e.mjs          # the whole thing in a headless browse
 ```
 
 The end-to-end test starts its own simulator on port 8687 and a scratch SD card, then checks
-47 things: live charts at loop rate, OpMode control, editing and saving a setting, syncing it
-into a scratch repo, the hardware map checks, building a route with actions in the path editor, Save as new,
-the robot refusing a broken route, and running the route as the autonomous until Pedro parks
-the simulated robot. Screenshots go to `tests/e2e/out/`.
+86 things: live charts at loop rate (moving, closing, full size, pause), the compact stream
+and its load, OpMode control, editing and saving a setting, history and restore, syncing into
+a scratch repo, hardware maps (checks, New map, Expansion Hub, webcams, Use this map),
+building a route with actions in the path editor, Save as new, the robot refusing a broken
+route, snapshots, the lock, and running the route as the autonomous until Pedro parks the
+simulated robot. Screenshots go to `tests/e2e/out/`. It needs Node and Playwright's Chromium
+(`npx playwright install chromium`); the simulator alone needs neither.

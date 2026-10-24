@@ -254,7 +254,9 @@ and the hardware map. Try it with no robot at all:
 ./simulate          # then open http://localhost:8686
 ```
 
-On the robot: `./deploy-linux --dashboard --stay`, then <http://192.168.43.1:8686>.
+On the robot: `./deploy-linux --dashboard --stay` (Mac: `./deploy --dashboard --stay`), then
+<http://192.168.43.1:8686>. Test it with the repeatable checklist in
+[dashboard/ROBOT-TEST.md](dashboard/ROBOT-TEST.md).
 `./robot-sync pull|push|status` keeps the robot's files and Git in step.
 Everything else: [dashboard/README.md](dashboard/README.md).
 

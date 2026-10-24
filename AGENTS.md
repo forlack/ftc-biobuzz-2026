@@ -2,14 +2,31 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-22
+Last updated: 2026-10-23
 
 ---
 
 ## Total Chaos Dashboard + simulator — 2026-10-23 (branch `dashboard`, not merged)
 
 Built while the robot was with another team member; verified only against the simulator.
-Full guide: `dashboard/README.md`. Key facts for agents:
+Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-TEST.md`.
+
+**Handoff / state (2026-10-23):**
+- Name: **Total Chaos Dashboard** (team Total Chaos 24621; BIOBUZZ is the season's game).
+  Visible strings renamed; internal names (`org.biobuzz.sim`, `biobuzz.*` storage keys,
+  `assets/biobuzz/`, Visualizer branch `biobuzz`, the BIOBUZZ field image) deliberately kept.
+- The event on 2026-10-24 runs `main`. The first robot test of this branch is after that:
+  follow ROBOT-TEST.md exactly and fill in its log. Merge into `main` only when the user asks,
+  after a passing robot test. Leave the local checkout on `main` when not working on the branch.
+- Unverified on hardware: everything. Specific unknowns: dashboard load on the Control Hub
+  (`./dashboard-load`), Panels coexisting at :8001, `useHardwareMap` on Android (returns the
+  Driver Station steps; switching via `RobotConfigFileManager` + robot restart is untested), the
+  sim on the Mac (needs Java, e.g. Android Studio's JBR as JAVA_HOME).
+- Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
+  and a Pedro add-on); robot pose on the field in teleop once Pinpoint coordinates are trusted;
+  a per-viewer Detail selector; min/max thinning; listing USB cameras from the robot.
+
+Key facts for agents:
 
 - **Shared plain-Java core** (compiled into the app AND the desktop sim):
   `dashboard/{DashboardServer,Dash,RobotHost,Base64Codec}`, `lib/{RobotFiles,RobotSettings,
@@ -41,14 +58,28 @@ Full guide: `dashboard/README.md`. Key facts for agents:
   sequence wait items, service worker removed (it cached the dashboard's `/`). Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (76
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (86
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
-- Not yet done on hardware: everything above. First robot test: deploy with `--dashboard`,
-  check Panels still loads at :8001, then the checklist in dashboard/README.md.
+  Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
+  the agent's own shell). The user's `./simulate` runs from a private copy of the build, so
+  rebuilding never crashes it, but it must be restarted to pick up changes.
+- **Hardware maps** (`web/js/hardware.js`): any `*.xml` on the robot can be opened (picker marks
+  the active one "(in use)", read from `RobotConfigFileManager.getActiveConfig()`); New map
+  (Control Hub + IMU, optional Expansion Hub at an address, default 2), Save as copy, add/remove
+  the one Expansion Hub, Control Hub always listed first (file order kept), webcams and other
+  root-level USB devices shown for renaming (serials come from a Driver Station scan). Saving
+  an unchanged map reproduces 2222-Config.xml byte for byte (checked 2026-10-23).
+  `POST /api/hardware/active` → `RobotHost.useHardwareMap`: the sim switches (remembered in
+  `<sdcard>/.sim-active-config`); Android returns Driver Station steps. `REQUIRED` in
+  hardware.js lists the device names the Java code needs; keep it in step.
+- **Adding things** (settings, Dash values, auton functions via Mechanisms + StandardActions +
+  SimMechanisms): see "Adding things" in dashboard/README.md.
 - **Robot cost: measured by the dashboard itself.** `/api/state` "load" (Robot tab Load card):
   viewers, dashboard CPU (time in the websocket send loops, % of one core), whole-app CPU
   (/proc/self/stat), KB/s, Loop ms. `./dashboard-load [--url ...]` prints 0/1/2 viewers. Sim on
-  the desktop: 0.5% of a core and 40 KB/s per viewer, no loop-time change. Not yet measured on
+  the desktop after the stream rewrite: ~0.3% of a core total for 1-3 viewers, 14 KB/s
+  (~145 B/loop) per viewer (was 40 KB/s, 410 B/loop), no loop-time change (the sim paces
+  itself at 100 Hz, so only the robot can show a loop-time cost). Not yet measured on
   the Control Hub. Knob (setting, Tune tab): `DashboardConfig.MAX_SAMPLES_PER_SECOND` (0 = every
   loop). Stream (`TelemetryStream`): one thread builds each batch once (20/s) for all viewers;
   names sent once per connection then values by position, text only on change; viewers not on
