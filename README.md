@@ -256,6 +256,19 @@ adb pull /sdcard/FIRST/2222-Config.xml robot-config/
 git add robot-config && git commit -m "Update robot config" && git push
 ```
 
+## BioBuzz dashboard and simulator (branch `dashboard`)
+
+Our own dashboard: live charts, settings, the path editor with robot actions, OpMode control
+and the hardware map. Try it with no robot at all:
+
+```bash
+./simulate          # then open http://localhost:8686
+```
+
+On the robot: `./deploy-linux --dashboard --stay`, then <http://192.168.43.1:8686>.
+`./robot-sync pull|push|status` keeps the robot's files and Git in step.
+Everything else: [dashboard/README.md](dashboard/README.md).
+
 ## What's here
 
 Autonomous paths can be edited and uploaded without rebuilding. See

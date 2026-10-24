@@ -107,6 +107,7 @@ class LinuxDeployTests(unittest.TestCase):
         install = next(c for c in commands if ':TeamCode:installDebug' in c)
         self.assertNotIn('-Ptuning', install)
         self.assertEqual(module.tuning_flag(SimpleNamespace(tuning=True)), ['-Ptuning'])
+        self.assertEqual(module.tuning_flag(SimpleNamespace(dashboard=True)), ['-Pdashboard'])
 
     def test_adb_server_restarted_before_connecting(self):
         _, commands, _ = self.deploy()

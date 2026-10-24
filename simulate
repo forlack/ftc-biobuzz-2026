@@ -1,0 +1,8 @@
+#!/bin/sh
+# Start the desktop robot simulator and its dashboard on http://localhost:8686.
+# Options are passed through, for example:  ./simulate --fresh
+#                                           ./simulate --init "Pedro Pathing Autonomous" --start
+cd "$(dirname "$0")" || exit 1
+./gradlew -q -p sim installDist || exit 1
+cd sim || exit 1
+exec build/install/biobuzz-sim/bin/biobuzz-sim "$@"

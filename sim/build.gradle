@@ -1,0 +1,90 @@
+plugins {
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+    maven { url = "https://repo.dairy.foundation/releases/" } // Pedro Pathing core
+}
+
+dependencies {
+    implementation 'com.pedropathing:core:3.0.1'
+    implementation 'org.json:json:20240303'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+// The simulator compiles the robot's own plain-Java code from TeamCode, so what it tests is
+// what runs on the robot: the dashboard server, settings, actions, routes and AutoSequence.
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java', '../TeamCode/src/main/java']
+            include 'org/biobuzz/sim/**'
+            include 'com/bylazar/**'
+            include 'org/firstinspires/ftc/teamcode/dashboard/**'
+            include 'org/firstinspires/ftc/teamcode/lib/RobotFiles.java'
+            include 'org/firstinspires/ftc/teamcode/lib/RobotSettings.java'
+            include 'org/firstinspires/ftc/teamcode/lib/Actions.java'
+            include 'org/firstinspires/ftc/teamcode/lib/StandardActions.java'
+            include 'org/firstinspires/ftc/teamcode/lib/Mechanisms.java'
+            include 'org/firstinspires/ftc/teamcode/lib/AutoSequence.java'
+            include 'org/firstinspires/ftc/teamcode/lib/AutoRoute.java'
+            include 'org/firstinspires/ftc/teamcode/pedro/ForesightConstants.java'
+        }
+    }
+}
+
+application {
+    mainClass = 'org.biobuzz.sim.SimMain'
+}
+
+tasks.named('run') {
+    workingDir = rootProject.projectDir
+    standardInput = System.in
+}
+
+// Settings classes the simulator mirrors. Each mirror keeps the real class's simple name and
+// every public static setting (generated from the real source, so they can never drift), which
+// means one robot.json works on the robot and in the simulator.
+def mirrored = [
+    'FieldCentricJava': '../TeamCode/src/main/java/org/firstinspires/ftc/teamcode/FieldCentricJava.java',
+    'MecanumDrive'    : '../TeamCode/src/main/java/org/firstinspires/ftc/teamcode/lib/MecanumDrive.java',
+    'PedroAutonomous' : '../TeamCode/src/main/java/org/firstinspires/ftc/teamcode/PedroAutonomous.java',
+]
+def mirrorDir = layout.buildDirectory.dir('generated/mirror')
+
+tasks.register('generateMirrors') {
+    inputs.files(mirrored.values())
+    outputs.dir(mirrorDir)
+    doLast {
+        def folder = mirrorDir.get().dir('org/biobuzz/sim/mirror').asFile
+        folder.mkdirs()
+        def field = ~/^\s*public static (double|float|int|long|boolean|String) ([A-Z0-9_]+)\s*=\s*([^;]+);/
+        mirrored.each { name, path ->
+            def lines = file(path).readLines()
+            def body = new StringBuilder()
+            lines.eachWithIndex { line, i ->
+                def m = line =~ field
+                if (m.find()) {
+                    def liveOnly = i > 0 && lines[i - 1].contains('@RobotSettings.NotSaved')
+                    if (liveOnly) body << '    @RobotSettings.NotSaved\n'
+                    body << "    public static ${m.group(1)} ${m.group(2)} = ${m.group(3)};\n"
+                }
+            }
+            new File(folder, "${name}.java").text = """package org.biobuzz.sim.mirror;
+
+import org.firstinspires.ftc.teamcode.lib.RobotSettings;
+
+/** GENERATED from ${path} by sim/build.gradle. Do not edit. */
+public final class ${name} {
+${body}}
+"""
+        }
+    }
+}
+sourceSets.main.java.srcDir(mirrorDir)
+tasks.named('compileJava') { dependsOn 'generateMirrors' }

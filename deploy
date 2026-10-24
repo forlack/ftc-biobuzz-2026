@@ -178,8 +178,14 @@ def restart_robot_controller(adb, target):
 
 
 def tuning_flag(args):
-    """Gradle flag that adds Pedro AutoTune to the app; left out of competition builds."""
-    return ['-Ptuning'] if getattr(args, 'tuning', False) else []
+    """Gradle flags for optional parts: Pedro AutoTune (-Ptuning) and the BioBuzz dashboard
+    (-Pdashboard). Both are left out of competition builds unless asked for."""
+    flags = []
+    if getattr(args, 'tuning', False):
+        flags.append('-Ptuning')
+    if getattr(args, 'dashboard', False):
+        flags.append('-Pdashboard')
+    return flags
 
 
 def connect_adb(adb, target):
@@ -289,6 +295,8 @@ def main():
                         help='only upload robot-config/*.xml and restart the app; no build')
     parser.add_argument('--tuning', action='store_true',
                         help='include Pedro AutoTune (web page on port 10158); off for matches')
+    parser.add_argument('--dashboard', action='store_true',
+                        help='include the BioBuzz dashboard (http://192.168.43.1:8686)')
     parser.add_argument('--check', action='store_true', help='check setup without building or changing networks')
     args = parser.parse_args()
     args.hardware_map = args.hardware_map or args.map_only

@@ -10,16 +10,28 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 
-import org.firstinspires.ftc.teamcode.lib.AutoSequence;
+import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.AutoPathFile;
+import org.firstinspires.ftc.teamcode.lib.AutoRoute;
+import org.firstinspires.ftc.teamcode.lib.AutoSequence;
+import org.firstinspires.ftc.teamcode.lib.Mechanisms;
+import org.firstinspires.ftc.teamcode.lib.RobotFiles;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
+import org.firstinspires.ftc.teamcode.lib.StandardActions;
 import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 /**
- * Loads Pedro export and JSON settings at INIT, drives to shoot, then follows path two to park.
+ * Runs a route made in the path editor: autos/ROUTE.json on the robot (paths, actions along
+ * paths, steps in between). Without that file it falls back to the Pedro export in paths/
+ * (auto.java.txt + auto.json): wait, path1, shoot, path2 to park.
  *
- * Place the robot at the start pose reported during INIT.
+ * During INIT, D-pad up/down picks another route file. Place the robot at the start pose shown.
  *
  * setPose() does not move the robot; it tells Pedro where the robot already is. Lie to it and
  * the follower immediately lurches to "correct".
@@ -28,9 +40,17 @@ import org.firstinspires.ftc.teamcode.pedro.Constants;
         preselectTeleOp = "Field Centric (Java)")
 public class PedroAutonomous extends OpMode {
 
+    /** Which route file in autos/ to run, without ".json". Chosen in the dashboard or with the D-pad at INIT. */
+    public static String ROUTE = "saturday";
+
     private TelemetryManager panels;
     private Follower follower;
     private AutoSequence auto;
+    private Pose start;
+    private String source = "";
+    private String problem = null;
+    private boolean lastUp, lastDown;
+    private long lastLoop;
 
     private VelocityMotor intake;
     private VelocityMotor shooterPollen;
@@ -38,7 +58,7 @@ public class PedroAutonomous extends OpMode {
     private CRServo transportPollen, transportNectar;
     private CRServo triggerPollen, triggerNectar;
     private Servo stinger;
-
+    private RobotMechanisms robot;
 
     @Override
     public void init() {
@@ -48,19 +68,7 @@ public class PedroAutonomous extends OpMode {
         panels.debug("Settings", settings.status());
         for (String warning : settings.warnings()) panels.debug("Settings warning", warning);
 
-        AutoPathFile route;
-        try {
-            route = new AutoPathFile(AutoPathFile.LOCATION);
-        } catch (Exception error) {
-            panels.debug("Path file error", error.getMessage());
-            panels.debug("Upload", AutoPathFile.LOCATION.getAbsolutePath());
-            panels.update(telemetry);
-            requestOpModeStop();
-            return;
-        }
-
         follower = Constants.create(hardwareMap);
-        follower.setPose(route.start);
 
         intake = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD, 145.1);
         intake.setPIDF(FieldCentricJava.INTAKE_P, 0, 0, FieldCentricJava.INTAKE_F);
@@ -79,25 +87,91 @@ public class PedroAutonomous extends OpMode {
         triggerNectar = hardwareMap.get(CRServo.class, "triggerNectar");
         stinger = hardwareMap.get(Servo.class, "stinger");
         stinger.setPosition(FieldCentricJava.STINGER_UP);
-        shoot(false);
+        robot = new RobotMechanisms();
+        robot.feed(false);
 
-        ///Main Sequence
-        /////////////////////////////////////////////
-        auto = new AutoSequence(follower)
-                .waitSeconds(route.startupWaitSeconds)
-                .follow(route.path1)
-                .run(() -> shoot(true))
-                .waitSeconds(route.shootSeconds)
-                .run(() -> shoot(false))
-                .follow(route.path2);
-        if (route.path3 != null) {
-            auto.follow(route.path3);
+        prepare();
+    }
+
+    /** Builds the sequence from the chosen route file, or the old Pedro export. */
+    private void prepare() {
+        problem = null;
+        auto = null;
+        File file = RobotFiles.file("autos/" + ROUTE + ".json");
+        try {
+            if (file.isFile()) {
+                AutoRoute route = AutoRoute.read(file);
+                start = route.start;
+                auto = route.build(follower, StandardActions.create(robot));
+                source = file.getPath() + " (\"" + route.name + "\")";
+            } else {
+                AutoPathFile route = new AutoPathFile(AutoPathFile.LOCATION);
+                start = route.start;
+                auto = new AutoSequence(follower)
+                        .waitSeconds(route.startupWaitSeconds)
+                        .follow(route.path1).named("follow path1")
+                        .run("feed on", () -> robot.feed(true))
+                        .waitSeconds(route.shootSeconds)
+                        .run("feed off", () -> robot.feed(false))
+                        .follow(route.path2).named("follow path2");
+                if (route.path3 != null) {
+                    auto.follow(route.path3).named("follow path3");
+                }
+                source = AutoPathFile.LOCATION.getPath() + " (no " + file.getName() + ")";
+            }
+            follower.setPose(start);
+        } catch (Exception error) {
+            problem = error.getMessage();
+            auto = null;
         }
+        showInit();
+    }
 
-        panels.debug("Status", "Initialized from " + AutoPathFile.LOCATION.getAbsolutePath());
-        panels.debug("Start X", route.start.x());
-        panels.debug("Start Y", route.start.y());
-        panels.debug("Start heading (deg)", Math.toDegrees(route.start.heading()));
+    @Override
+    public void init_loop() {
+        // D-pad up/down: the next or previous route file in autos/.
+        boolean up = gamepad1.dpad_up, down = gamepad1.dpad_down;
+        if ((up && !lastUp) || (down && !lastDown)) {
+            List<String> routes = routeNames();
+            if (!routes.isEmpty()) {
+                int index = routes.indexOf(ROUTE);
+                index = (index + (up ? 1 : routes.size() - 1)) % routes.size();
+                ROUTE = routes.get(index);
+                prepare();
+            }
+        }
+        lastUp = up;
+        lastDown = down;
+        Dash.frame();
+    }
+
+    private static List<String> routeNames() {
+        List<String> names = new ArrayList<>();
+        File[] files = RobotFiles.file("autos").listFiles();
+        if (files != null) {
+            Arrays.sort(files);
+            for (File file : files) {
+                if (file.getName().endsWith(".json")) names.add(file.getName().replace(".json", ""));
+            }
+        }
+        return names;
+    }
+
+    private void showInit() {
+        if (problem != null) {
+            panels.debug("ROUTE PROBLEM", problem);
+            panels.debug("Route", ROUTE + "  (D-pad up/down to pick another)");
+            Dash.put("Status", "Route problem: " + problem);
+        } else {
+            panels.debug("Route", ROUTE + "  (D-pad up/down to pick another)");
+            panels.debug("From", source);
+            panels.debug("Steps", auto.stepCount());
+            panels.debug("Start X", start.x());
+            panels.debug("Start Y", start.y());
+            panels.debug("Start heading (deg)", Math.toDegrees(start.heading()));
+            Dash.put("Status", "Route " + ROUTE + " ready: " + auto.stepCount() + " steps");
+            Dash.put("Start", String.format(java.util.Locale.US, "%.1f, %.1f, %.0f°", start.x(), start.y(), Math.toDegrees(start.heading())));
+        }
         panels.update(telemetry);
     }
 
@@ -107,29 +181,19 @@ public class PedroAutonomous extends OpMode {
             requestOpModeStop();
             return;
         }
-        intake.setTargetRPM(FieldCentricJava.INTAKE_RPM);
-        shooterPollen.setTargetRPM(FieldCentricJava.POLLEN_FLYWHEEL_RPM);
-        shooterNectar.setTargetRPM(FieldCentricJava.NECTAR_FLYWHEEL_RPM);
-        transportPollen.setPower(1);
-        transportNectar.setPower(1);
-    }
-
-    /** Opens both shooting gates while enabled; call shoot(false) to stop feeding. */
-    private void shoot(boolean enabled) {
-        triggerPollen.setPower(enabled ? 1 : 0);
-        triggerNectar.setPower(enabled ? 1 : 0);
+        // Intake and flywheels run the whole match.
+        robot.intake(true);
+        robot.flywheels(true);
     }
 
     @Override
     public void stop() {
         if (follower != null) follower.stop();
-        if (triggerPollen != null) triggerPollen.setPower(0);
-        if (triggerNectar != null) triggerNectar.setPower(0);
-        if (intake != null) intake.stop();
-        if (shooterPollen != null) shooterPollen.stop();
-        if (shooterNectar != null) shooterNectar.stop();
-        if (transportPollen != null) transportPollen.setPower(0);
-        if (transportNectar != null) transportNectar.setPower(0);
+        if (robot != null) {
+            robot.feed(false);
+            robot.intake(false);
+            robot.flywheels(false);
+        }
     }
 
     @Override
@@ -146,5 +210,62 @@ public class PedroAutonomous extends OpMode {
         panels.debug("Y", pose.y());
         panels.debug("Heading (deg)", Math.toDegrees(pose.heading()));
         panels.update(telemetry);
+
+        // The same names the dashboard charts for the teleop and the simulator.
+        Dash.put("Step", auto.stepNumber() + "/" + auto.stepCount() + "  " + auto.stepName());
+        Dash.put("Completion", follower.completion());
+        Dash.put("X", pose.x());
+        Dash.put("Y", pose.y());
+        Dash.put("Heading", Math.toDegrees(pose.heading()));
+        Dash.put("Route done", auto.finished());
+        robot.telemetry();
+        long now = System.nanoTime();
+        if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
+        lastLoop = now;
+        Dash.pose(pose.x(), pose.y(), pose.heading());
+        Dash.frame();
+    }
+
+    /** The robot's mechanisms, for the route's actions. */
+    private final class RobotMechanisms implements Mechanisms {
+        private boolean flywheelsOn, intakeOn;
+
+        @Override public void intake(boolean on) {
+            intakeOn = on;
+            intake.setTargetRPM(on ? FieldCentricJava.INTAKE_RPM : 0);
+        }
+
+        @Override public void flywheels(boolean on) {
+            flywheelsOn = on;
+            shooterPollen.setTargetRPM(on ? FieldCentricJava.POLLEN_FLYWHEEL_RPM : 0);
+            shooterNectar.setTargetRPM(on ? FieldCentricJava.NECTAR_FLYWHEEL_RPM : 0);
+            // Same rule as teleop: the transports run while the flywheels do.
+            transportPollen.setPower(on ? 1 : 0);
+            transportNectar.setPower(on ? 1 : 0);
+        }
+
+        @Override public boolean flywheelsReady() {
+            return flywheelsOn && shooterPollen.atSpeed() && shooterNectar.atSpeed();
+        }
+
+        @Override public void feed(boolean on) {
+            triggerPollen.setPower(on ? 1 : 0);
+            triggerNectar.setPower(on ? 1 : 0);
+        }
+
+        @Override public void stinger(boolean down) {
+            stinger.setPosition(down ? FieldCentricJava.STINGER_DOWN : FieldCentricJava.STINGER_UP);
+        }
+
+        void telemetry() {
+            Dash.put("Pollen RPM", shooterPollen.getRPM());
+            Dash.put("Pollen target", shooterPollen.getTargetRPM());
+            Dash.put("Nectar RPM", shooterNectar.getRPM());
+            Dash.put("Nectar target", shooterNectar.getTargetRPM());
+            Dash.put("Intake RPM", intake.getRPM());
+            Dash.put("Intake target", intake.getTargetRPM());
+            Dash.put("Flywheels ready", flywheelsReady());
+            Dash.put("Stinger", stinger.getPosition());
+        }
     }
 }

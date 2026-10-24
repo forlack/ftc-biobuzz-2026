@@ -6,6 +6,10 @@ mechanism, a new autonomous action. Data files and a GUI handle the *tuning and 
 
 Agreed 2026-10-22. Step 4 changed to our own dashboard the same day.
 
+**Status 2026-10-23:** steps 2, 3 and 4 are built on branch `dashboard` and pass a 31-check
+end-to-end test against the desktop simulator (`./simulate`). Not yet tried on the robot.
+See [dashboard/README.md](dashboard/README.md).
+
 ## Principles
 
 - **The robot holds the live files** in `/sdcard/FIRST/`. Git holds the history. Scripts

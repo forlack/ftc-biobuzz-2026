@@ -9,6 +9,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.Servo;
 
+import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
 import org.firstinspires.ftc.teamcode.lib.MecanumDrive;
@@ -103,8 +104,9 @@ public class FieldCentricJava extends LinearOpMode {
 
     /** Classes whose public static values are saved in robot.json. Autonomous loads them too. */
     @IgnoreConfigurable
-    public static final Class<?>[] SETTINGS = {FieldCentricJava.class, MecanumDrive.class};
+    public static final Class<?>[] SETTINGS = {FieldCentricJava.class, MecanumDrive.class, PedroAutonomous.class};
     private RobotSettings settings;
+    private long lastLoop;
 
     @Override
     public void runOpMode() {
@@ -151,7 +153,7 @@ public class FieldCentricJava extends LinearOpMode {
             updateIntake();
             updateServos();
             updateShooter();
-            settings.update(dashboard);
+            settings.update(dashboard::addData);
             dashboard.update();
         }
     }
@@ -208,6 +210,8 @@ public class FieldCentricJava extends LinearOpMode {
                 Math.round(intake.getRPM()) + " / " + Math.round(intake.getTargetRPM()));
         dashboard.addData("Intake % off target", percentOff(intake));
         dashboard.addData("Intake P", intake.getP());
+        Dash.put("Intake RPM", intake.getRPM());
+        Dash.put("Intake target", intake.getTargetRPM());
     }
 
     private void updateServos() {
@@ -246,6 +250,15 @@ public class FieldCentricJava extends LinearOpMode {
                 Math.round(shooterNectar.getRPM()) + " / " + Math.round(shooterNectar.getTargetRPM()));
         dashboard.addData("Nectar % off target", percentOff(shooterNectar));
         dashboard.addData("Nectar hub PIDF", shooterNectar.getAppliedPIDF());
+        // Numbers for the BioBuzz dashboard's charts; the same names as the autonomous and simulator.
+        Dash.put("Pollen RPM", shooterPollen.getRPM());
+        Dash.put("Pollen target", shooterPollen.getTargetRPM());
+        Dash.put("Nectar RPM", shooterNectar.getRPM());
+        Dash.put("Nectar target", shooterNectar.getTargetRPM());
+        Dash.put("Battery V", hardwareMap.voltageSensor.iterator().next().getVoltage());
+        long now = System.nanoTime();
+        if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
+        lastLoop = now;
     }
 
     /** Numeric percent error for graphing. Negative means too slow; zero target reports 0. */

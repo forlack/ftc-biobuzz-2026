@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.lib;
 
+import org.firstinspires.ftc.teamcode.dashboard.Dash;
+
 import com.bylazar.gamepad.PanelsGamepad;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
@@ -51,8 +53,11 @@ public class DriveDashboard {
         panels.addData("Drive mode", drive.isVelocityMode() ? "VELOCITY" : "RAW POWER");
         panels.addData("Stopping", drive.isBrakeMode() ? "BRAKE" : "COAST");
         panels.addData("Heading", Math.round(drive.getLastHeadingDegrees()) + " deg");
+        Dash.put("Speed %", drive.getLastSpeedUsed() * 100);
+        Dash.put("Heading", drive.getLastHeadingDegrees());
 
         panels.update(driverStation);
+        Dash.frame();   // one dashboard frame per loop
     }
 
     /** Adds your own line, for parts of the robot the dashboard does not know about. */
@@ -62,6 +67,7 @@ public class DriveDashboard {
 
     public void addData(String label, Object value) {
         panels.addData(label, value);
+        Dash.put(label, value);   // also to the BioBuzz dashboard
     }
 
 }

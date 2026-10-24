@@ -4,7 +4,6 @@ import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
 import com.pedropathing.utils.Angle;
-import com.qualcomm.robotcore.util.ElapsedTime;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,7 +33,7 @@ public class AutoSequence {
 
     private final Follower follower;
     private final List<Step> steps = new ArrayList<>();
-    private final ElapsedTime timer = new ElapsedTime();
+    private long waitStartNanos;   // plain Java clock, so the desktop simulator can run this too
     private int index;
     private boolean startedCurrent;
 
@@ -52,7 +51,12 @@ public class AutoSequence {
 
     /** Do something once and move straight on. Use for setting a motor or servo. */
     public AutoSequence run(Runnable action) {
-        steps.add(new RunStep(action));
+        return run("action", action);
+    }
+
+    /** Same, with a name for telemetry, such as "intake on". */
+    public AutoSequence run(String name, Runnable action) {
+        steps.add(new RunStep(name, action));
         return this;
     }
 
@@ -83,7 +87,21 @@ public class AutoSequence {
 
     /** Wait for something to become true, such as an arm reaching its target. */
     public AutoSequence waitUntil(BooleanSupplier done) {
-        steps.add(new UntilStep(done));
+        return waitUntil("wait until", done);
+    }
+
+    /** Same, with a name for telemetry. */
+    public AutoSequence waitUntil(String name, BooleanSupplier done) {
+        steps.add(new UntilStep(name, done));
+        return this;
+    }
+
+    /** Names the follow step just added, for telemetry, such as "follow path1". */
+    public AutoSequence named(String name) {
+        if (steps.isEmpty() || !(steps.get(steps.size() - 1) instanceof FollowStep)) {
+            throw new IllegalStateException("named() must come straight after follow()");
+        }
+        ((FollowStep) steps.get(steps.size() - 1)).name = name;
         return this;
     }
 
@@ -161,6 +179,7 @@ public class AutoSequence {
     private class FollowStep implements Step {
         private final Path path;
         private final List<Marker> markers = new ArrayList<>();
+        private String name = "follow path";
 
         FollowStep(Path path) {
             this.path = path;
@@ -198,7 +217,7 @@ public class AutoSequence {
         }
 
         public String name() {
-            return "follow path";
+            return name;
         }
     }
 
@@ -237,9 +256,11 @@ public class AutoSequence {
     }
 
     private static class RunStep implements Step {
+        private final String name;
         private final Runnable action;
 
-        RunStep(Runnable action) {
+        RunStep(String name, Runnable action) {
+            this.name = name;
             this.action = action;
         }
 
@@ -252,7 +273,7 @@ public class AutoSequence {
         }
 
         public String name() {
-            return "action";
+            return name;
         }
     }
 
@@ -264,11 +285,11 @@ public class AutoSequence {
         }
 
         public void start() {
-            timer.reset();
+            waitStartNanos = System.nanoTime();
         }
 
         public boolean isDone() {
-            return timer.seconds() >= seconds;
+            return (System.nanoTime() - waitStartNanos) / 1e9 >= seconds;
         }
 
         public String name() {
@@ -277,9 +298,11 @@ public class AutoSequence {
     }
 
     private static class UntilStep implements Step {
+        private final String name;
         private final BooleanSupplier done;
 
-        UntilStep(BooleanSupplier done) {
+        UntilStep(String name, BooleanSupplier done) {
+            this.name = name;
             this.done = done;
         }
 
@@ -290,7 +313,7 @@ public class AutoSequence {
         }
 
         public String name() {
-            return "wait until";
+            return name;
         }
     }
 }

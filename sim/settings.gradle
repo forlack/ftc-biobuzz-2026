@@ -1,0 +1,2 @@
+// The desktop robot simulator is its own small Gradle build (no Android). Run it with ../sim.
+rootProject.name = 'biobuzz-sim'

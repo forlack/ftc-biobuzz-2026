@@ -6,6 +6,45 @@ Last updated: 2026-10-22
 
 ---
 
+## BioBuzz dashboard + simulator — 2026-10-23 (branch `dashboard`, not merged)
+
+Built while the robot was with another team member; verified only against the simulator.
+Full guide: `dashboard/README.md`. Key facts for agents:
+
+- **Shared plain-Java core** (compiled into the app AND the desktop sim):
+  `dashboard/{DashboardServer,Dash,RobotHost,Base64Codec}`, `lib/{RobotFiles,RobotSettings,
+  Actions,StandardActions,Mechanisms,AutoRoute,AutoSequence}`, `pedro/ForesightConstants`.
+  No Android or FTC SDK imports in these, Java 8 syntax, Android 7 APIs only (no
+  java.nio.file, no java.util.Base64, no String.join). `-Pdashboard` lint: no NewApi.
+- `RobotFiles.root()` is /sdcard/FIRST, or the sim's SD card (`biobuzz.storage` property).
+- **Server** on port 8686: static page + JSON API + websocket telemetry (`Dash.put`/`frame`,
+  every loop, ring buffer). Files API limited to settings/robot.json, paths/*, autos/*.json,
+  root *.xml; PUT validates (routes are fully built against the action list) and supports
+  `X-Base-Hash` conflict refusal. Missing page files fall back to `visualizer/<path>`
+  because the visualizer requests `/fields/...` etc. at the root.
+- **Android hook** `TeamCode/src/dashboard/java/.../AndroidDashboard` (`@OnCreateEventLoop`,
+  starts after 5 s, all errors swallowed) only with `-Pdashboard` (`--dashboard` on both deploy
+  scripts). Page packed as `assets/biobuzz/` — **not `assets/web/`, which is Panels' page**
+  (an app asset at the same path silently replaced Panels' index.html; caught 2026-10-23).
+- **Routes** `autos/*.json` v2 (`lib/AutoRoute`): start, paths (points = start, controls, end;
+  heading linear/constant/tangential; maxSpeed; events {at, action, params}), steps
+  ({follow} | {action, params}). `PedroAutonomous.ROUTE` (a robot.json setting) picks the file,
+  D-pad at INIT cycles; no file → old `paths/` export fallback, same sequence as before.
+- **Simulator** `sim/` (own Gradle build, `./simulate`): compiles the shared core from TeamCode
+  plus generated mirrors of the settings classes (same simple names, so robot.json is shared;
+  regenerated from the real sources every build). Physics: hub velocity PIDF formula, 20 ms
+  velocity sampling, voltage-dependent motor, shots, battery sag, mecanum chassis with Pedro's
+  real Follower/Foresight through `SimPedro` Localizer/Drivetrain adapters.
+- **Visualizer fork** github.com/forlack/Visualizer branch `biobuzz`: `src/lib/robot/`
+  (RobotPanel, route export/import, field markers), `robotEvents` on paths, `robotAction` on
+  sequence wait items, service worker removed (it cached the dashboard's `/`). Built into
+  `dashboard/web/visualizer/` by `./build-visualizer` (committed).
+- `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (31
+  browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
+- Not yet done on hardware: everything above. First robot test: deploy with `--dashboard`,
+  check Panels still loads at :8001, then the checklist in dashboard/README.md.
+
 ## Robot settings and the no-rebuild roadmap — 2026-10-22
 
 - **Event Saturday 2026-10-24** with one autonomous (the current path-file route). Keep
