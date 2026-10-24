@@ -155,7 +155,7 @@ try {
   check(restoredRpm === 3000, 'Restore puts the older version back on the robot (and keeps it in history)');
 
   const scratch = mkdtempSync(join(tmpdir(), 'biobuzz-repo-'));
-  for (const folder of ['autos', 'paths', 'robot-config']) cpSync(join(REPO, folder), join(scratch, folder), { recursive: true });
+  for (const folder of ['autos', 'robot-config']) cpSync(join(REPO, folder), join(scratch, folder), { recursive: true });
   const sync = (...args) => execFileSync(join(REPO, 'robot-sync'), [...args, '--url', URL],
     { env: { ...process.env, ROBOT_SYNC_ROOT: scratch }, encoding: 'utf8' });
   check(sync('status').includes('only on the robot'), 'robot-sync status sees the new robot.json');

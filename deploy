@@ -151,21 +151,28 @@ def reject_json_constant(value):
     raise ValueError(f'Invalid JSON number: {value}')
 
 
-def push_paths(adb, target):
-    """Replace the SD-card route before installing the app."""
-    file = ROOT / 'paths' / 'auto.json'
-    # Refuse malformed JSON before replacing the hub's current route.
-    json.loads(file.read_text(), parse_constant=reject_json_constant)
-    export = file.with_name('auto.java.txt')
-    if not export.read_text().strip():
-        raise RuntimeError('Pedro path export is empty.')
-    print('Uploading autonomous paths…', flush=True)
-    run([adb, '-s', target, 'shell', 'mkdir', '-p', '/sdcard/FIRST/paths'], timeout=30)
-    files = [export, file]
-    for source in files:
-        run([adb, '-s', target, 'push', str(source), '/sdcard/FIRST/paths/' + source.name + '.tmp'], timeout=30)
-    for source in files:
-        destination = '/sdcard/FIRST/paths/' + source.name
+def push_new_autos(adb, target):
+    """Upload autons (autos/*.json) the robot does not have yet.
+
+    Never replaces one already on the robot: it may have been changed there with the
+    dashboard. ./robot-sync push is for deliberately replacing one.
+    """
+    local = sorted((ROOT / 'autos').glob('*.json'))
+    if not local:
+        return
+    listing = run([adb, '-s', target, 'shell', 'ls /sdcard/FIRST/autos 2>/dev/null; true'], timeout=30)
+    existing = set((listing.stdout or '').split())
+    missing = [file for file in local if file.name not in existing]
+    if not missing:
+        return
+    for file in missing:
+        # Refuse malformed JSON before it reaches the hub.
+        json.loads(file.read_text(), parse_constant=reject_json_constant)
+    print('Uploading new autons: ' + ', '.join(f.name for f in missing), flush=True)
+    run([adb, '-s', target, 'shell', 'mkdir', '-p', '/sdcard/FIRST/autos'], timeout=30)
+    for file in missing:
+        destination = '/sdcard/FIRST/autos/' + file.name
+        run([adb, '-s', target, 'push', str(file), destination + '.tmp'], timeout=30)
         run([adb, '-s', target, 'shell', 'mv', destination + '.tmp', destination], timeout=30)
 
 
@@ -239,7 +246,7 @@ def deploy(args, interface, previous, previous_router, adb, env, passwords):
         if getattr(args, 'map_only', False):
             restart_robot_controller(adb, target)
         else:
-            push_paths(adb, target)
+            push_new_autos(adb, target)
             run([str(ROOT / 'gradlew'), '--offline', *tuning_flag(args), ':TeamCode:installDebug',
                  '--console=auto'], timeout=300, capture=False, env=deploy_env)
     except BaseException as exc:

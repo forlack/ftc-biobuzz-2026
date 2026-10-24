@@ -14,7 +14,7 @@ import java.nio.file.StandardCopyOption;
  * runs, on http://localhost:8686.
  *
  * Its "SD card" is sim/sdcard/ (like /sdcard/FIRST). On first start it is filled from the
- * repo: robot-config/*.xml, settings/robot.json, paths/ and autos/.
+ * repo: robot-config/*.xml, settings/robot.json and autos/.
  *
  * By default it starts "Field Centric (Java)" running, so the dashboard has live telemetry
  * straight away. Options: --port N, --storage DIR, --web DIR, --fresh (empty the SD card
@@ -76,8 +76,8 @@ public final class SimMain {
         File[] configs = new File(repo, "robot-config").listFiles((dir, name) -> name.endsWith(".xml"));
         if (configs != null) for (File file : configs) copyIfMissing(file, new File(storage, file.getName()));
         copyIfMissing(new File(repo, "settings/robot.json"), new File(storage, "settings/robot.json"));
-        for (String folder : new String[]{"paths", "autos"}) {
-            File[] files = new File(repo, folder).listFiles((dir, name) -> name.endsWith(".json") || name.endsWith(".txt"));
+        for (String folder : new String[]{"autos"}) {
+            File[] files = new File(repo, folder).listFiles((dir, name) -> name.endsWith(".json"));
             if (files != null) for (File file : files) copyIfMissing(file, new File(storage, folder + "/" + file.getName()));
         }
     }

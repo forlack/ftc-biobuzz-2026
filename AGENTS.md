@@ -18,8 +18,8 @@ Full guide: `dashboard/README.md`. Key facts for agents:
   java.nio.file, no java.util.Base64, no String.join). `-Pdashboard` lint: no NewApi.
 - `RobotFiles.root()` is /sdcard/FIRST, or the sim's SD card (`biobuzz.storage` property).
 - **Server** on port 8686: static page + JSON API + websocket telemetry (`Dash.put`/`frame`,
-  every loop, ring buffer). Files API limited to settings/robot.json, paths/*, autos/*.json,
-  root *.xml; PUT validates (routes are fully built against the action list) and supports
+  every loop, ring buffer). Files API limited to settings/robot.json, autos/*.json,
+  root *.xml (history/ and snapshots/ read-only); PUT validates (routes are fully built against the action list) and supports
   `X-Base-Hash` conflict refusal. Missing page files fall back to `visualizer/<path>`
   because the visualizer requests `/fields/...` etc. at the root.
 - **Android hook** `TeamCode/src/dashboard/java/.../AndroidDashboard` (`@OnCreateEventLoop`,
@@ -29,7 +29,8 @@ Full guide: `dashboard/README.md`. Key facts for agents:
 - **Routes** `autos/*.json` v2 (`lib/AutoRoute`): start, paths (points = start, controls, end;
   heading linear/constant/tangential; maxSpeed; events {at, action, params}), steps
   ({follow} | {action, params}). `PedroAutonomous.ROUTE` (a robot.json setting) picks the file,
-  D-pad at INIT cycles; no file → old `paths/` export fallback, same sequence as before.
+  D-pad at INIT cycles; no file → INIT shows the problem (the old `paths/` Java-export
+  reader, `update-paths` and their tests were removed on this branch 2026-10-23).
 - **Simulator** `sim/` (own Gradle build, `./simulate`): compiles the shared core from TeamCode
   plus generated mirrors of the settings classes (same simple names, so robot.json is shared;
   regenerated from the real sources every build). Physics: hub velocity PIDF formula, 20 ms
@@ -56,7 +57,7 @@ Full guide: `dashboard/README.md`. Key facts for agents:
   file's mtime changed, so unsaved Panels edits survive re-INIT. Bad values warn and keep
   the default; an unreadable file falls back to `robot.json.bak`, then to code defaults.
   `@RobotSettings.NotSaved` marks live switches (`FLYWHEELS_ON`). Repo copy:
-  `settings/robot.json` via `./robot-settings pull|push`. Details: `settings/README.md`.
+  `settings/robot.json` via `./robot-sync pull|push`. Details: `settings/README.md`.
 - **AutoTune is opt-in.** Its NanoHTTPD server starts unconditionally whenever the
   `tuning` library is in the APK (a Sinister `OnCreateEventLoop` hook; no off switch), and it
   crashed the RC app at boot once. `Tuning.java` and `procedures/` moved to
@@ -74,32 +75,13 @@ Full guide: `dashboard/README.md`. Key facts for agents:
 - **Roadmap** for autos as JSON and our own Pedro visualizer with robot actions on paths:
   `ROADMAP.md`.
 
-## Current desktop handoff — 2026-10-22
+## Desktop handoff — 2026-10-22 (main; superseded on branch `dashboard`)
 
-- User confirmed the exported-path autonomous works on the robot after redeployment.
-- Pull main on the desktop before edits. Mac/Linux helpers both upload
-  `paths/auto.java.txt` and `paths/auto.json` before APK install. `./update-paths`
-  uploads both without restarting; stop first, then INIT to read new files.
-- Geometry is the user's exact Pedro Java export (not executed/compiled at INIT).
-  JSON contains version 1, startupWaitSeconds=1, shootSeconds=3.5, speedLimits={}.
-  Current sequence: path1, shoot, path2 to park; stinger stays up. Start (56,8,270°),
-  path1 end (60,16,270°), path2 control (15.6919,29.3313), end (13.2008,96.0738,180°).
-  Any number of named paths can be parsed, but adding actions requires Java sequence edits.
-- Intake default 700 RPM. TeleOp auto-queue targets Field Centric (Java); DS setting
-  and timed run required. All current mechanism tuning remains in FieldCentricJava.
-- Current competition hub is reported by install logs as Control Hub v1.0 / Android
-  7.1.2; older hardware table below describes prior devices. FileInputStream fixes
-  the Android 7 INIT crash caused by java.nio.file.Files (Android 8+).
-- Linux desktop: save robot Wi-Fi in NetworkManager, use
-  `./deploy-linux -r 24621-RC --stay` from the user's terminal, never an agent session.
-  Gradle output now uses --console=auto (colors/progress when attached to a terminal).
-- Both path files and robot-config/2222-Config.xml are tracked. The latter includes
-  stinger on Expansion Hub servo port 2; hub was not connected for a fresh XML pull
-  at this handoff. Never invent hardware changes. Private Wi-Fi settings and passwords
-  stay outside Git and need separate setup on each computer.
-- Validation: Android assembleDebug, 35 Python tests, standalone real-Pedro parser
-  check (tests/java/PedroPathExportCheck.java): exact geometry, six named paths,
-  cubic curve, constant heading, invalid/unsupported exports rejected.
+On `main` the auton is the pasted Pedro export in `paths/` (auto.java.txt + auto.json,
+uploaded by deploy and `./update-paths`). On `dashboard` those are removed: `autos/*.json`
+holds whole autons and deploy uploads only autons the robot does not have. Hub is Android
+7.1.2: use FileInputStream, never java.nio.file. Intake default 700 RPM. Run deploy-linux
+from the user's terminal, never an agent session. Never invent hardware changes.
 
 ## Hardware
 
@@ -990,24 +972,10 @@ whole classpath for `@Configurable`, it does not look only inside OpModes (verif
 
 ## Autonomous framework (`lib/AutoSequence`)
 
-### SD-card path data (2026-10-22)
+### Auton files
 
-`PedroAutonomous` loads `/sdcard/FIRST/paths/auto.json` settings and
-`auto.java.txt` Pedro export at each INIT through `lib/AutoPathFile` and
-`lib/PedroPathExport`. Paste only the exported Java snippet into
-`paths/auto.java.txt`; no importer or on-robot Java compilation. The reader accepts
-named poses, lines, multi-control curves, linear/constant headings and rejects
-unsupported text. JSON holds version 1, startup/shoot waits and optional named
-`speedLimits` in inches/second. Both deploy helpers upload both files before
-installing the app. `./update-paths` uploads without network switching or restart;
-upload while stopped, then re-INIT. Missing/invalid files stop initialization.
-Deploy logs identify the current hub as Android 7.1.2: use FileInputStream,
-not java.nio.file.Files (Android 8+), for runtime file loading.
-Any number of named paths can be read; action order remains Java: path1, shoot,
-path2 to park, optional path3. Additional paths need sequence edits to execute.
-Stinger stays up. Current route ends at (13.2008, 96.0738, 180 degrees).
-Autonomous preselects Field Centric (Java); DS OpMode Auto Queue must be enabled.
-Intake target default is 700 RPM. See paths/README.md.
+`PedroAutonomous` reads `autos/<ROUTE>.json` (lib/AutoRoute) at INIT; see the dashboard
+section at the top of this file. Android 7: FileInputStream only.
 
 Built 2026-10-03 for Pedro 3. Same rule as teleop: **never block** — `update()` once per loop
 advances when the current step finishes.

@@ -11,7 +11,6 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
-import org.firstinspires.ftc.teamcode.lib.AutoPathFile;
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
 import org.firstinspires.ftc.teamcode.lib.Mechanisms;
@@ -27,9 +26,8 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Runs a route made in the path editor: autos/ROUTE.json on the robot (paths, actions along
- * paths, steps in between). Without that file it falls back to the Pedro export in paths/
- * (auto.java.txt + auto.json): wait, path1, shoot, path2 to park.
+ * Runs an auton made in the dashboard's path editor: autos/ROUTE.json on the robot, one file
+ * with the start pose, the paths, functions along the paths and the sequence in between.
  *
  * During INIT, D-pad up/down picks another route file. Place the robot at the start pose shown.
  *
@@ -93,32 +91,20 @@ public class PedroAutonomous extends OpMode {
         prepare();
     }
 
-    /** Builds the sequence from the chosen route file, or the old Pedro export. */
+    /** Builds the sequence from the chosen auton file, autos/ROUTE.json. */
     private void prepare() {
         problem = null;
         auto = null;
         File file = RobotFiles.file("autos/" + ROUTE + ".json");
         try {
-            if (file.isFile()) {
-                AutoRoute route = AutoRoute.read(file);
-                start = route.start;
-                auto = route.build(follower, StandardActions.create(robot));
-                source = file.getPath() + " (\"" + route.name + "\")";
-            } else {
-                AutoPathFile route = new AutoPathFile(AutoPathFile.LOCATION);
-                start = route.start;
-                auto = new AutoSequence(follower)
-                        .waitSeconds(route.startupWaitSeconds)
-                        .follow(route.path1).named("follow path1")
-                        .run("feed on", () -> robot.feed(true))
-                        .waitSeconds(route.shootSeconds)
-                        .run("feed off", () -> robot.feed(false))
-                        .follow(route.path2).named("follow path2");
-                if (route.path3 != null) {
-                    auto.follow(route.path3).named("follow path3");
-                }
-                source = AutoPathFile.LOCATION.getPath() + " (no " + file.getName() + ")";
+            if (!file.isFile()) {
+                throw new IllegalArgumentException("No auton file " + file.getPath()
+                        + ". Save one from the dashboard's Paths tab, or pick another with the D-pad.");
             }
+            AutoRoute route = AutoRoute.read(file);
+            start = route.start;
+            auto = route.build(follower, StandardActions.create(robot));
+            source = file.getPath() + " (\"" + route.name + "\")";
             follower.setPose(start);
         } catch (Exception error) {
             problem = error.getMessage();

@@ -23,14 +23,14 @@ See [dashboard/README.md](dashboard/README.md).
 ### 1. `robot.json` + "Save to robot" in Panels: done 2026-10-22
 `lib/RobotSettings` saves every `public static` setting of `FieldCentricJava` and
 `MecanumDrive` to `/sdcard/FIRST/settings/robot.json` and reads it back at INIT. Tune live in
-Panels, turn on `SAVE_TO_ROBOT`, then `./robot-settings pull` and commit.
+Panels, turn on `SAVE_TO_ROBOT`, then `./robot-sync pull` and commit.
 See [settings/README.md](settings/README.md).
 
 Also done: Pedro AutoTune's web server is out of competition builds (`--tuning` adds it).
 
 ### 2. Autonomous as data: paths, steps and actions in one JSON
-Today the paths come from a file (`paths/auto.java.txt`, a pasted Pedro export) but the
-order of steps is Java. Next:
+Before this, the paths came from a pasted Pedro export (`paths/auto.java.txt`) and the order
+of steps was Java. Now (branch `dashboard`):
 
 - **One route file:** poses, paths, and the steps between and along them:
   ```json
@@ -47,7 +47,6 @@ order of steps is Java. Next:
   `follow` / `run` / `waitSeconds` / `at(fraction, ...)`, so the JSON just builds a sequence.
   A new action is a short Java lesson whose payoff shows up in the editor straight away.
 - **Several autos** (left, right, two-cycle) become several files, picked at INIT.
-- Keep reading today's `auto.java.txt` as an import, so old exports still work.
 
 ### 3. Our own Pedro visualizer: draw paths and put robot actions on them
 Fork the Pedro Pathing visualizer and add what `AutoSequence` can do:
@@ -61,7 +60,7 @@ Fork the Pedro Pathing visualizer and add what `AutoSequence` can do:
 - **Preview:** animate the robot along the route with the waits included, to check timing
   against the 30 s autonomous before going to the field.
 
-Start as a static site (GitHub Pages) that downloads the JSON, uploaded with `./update-paths`.
+Built into the dashboard's Paths tab; it saves straight to the robot.
 
 ### 4. Our own dashboard, served by the robot (replaces Panels over time)
 One web page that fits our robot, served from the Robot Controller app, so on robot Wi-Fi
@@ -90,7 +89,7 @@ there is nothing to install and nothing to sync: open it, change things, Save, p
 
 ## Risks
 
-- **Two copies of the truth** (robot vs. Git). Make `./robot-settings pull` part of the
+- **Two copies of the truth** (robot vs. Git). Make `./robot-sync pull` part of the
   end-of-practice routine, and show the "changed" indicator in step 4.
 - **Scope.** Steps 2–4 are weeks of evenings, not one session. Do them in order.
 - **Match-day safety.** Validate before saving, keep backups, and never let INIT crash

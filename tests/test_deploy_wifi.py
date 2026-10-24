@@ -42,10 +42,10 @@ class HardwareMapTests(unittest.TestCase):
         self.assertTrue([c for c in commands if 'push' in c])
         self.assertTrue([c for c in commands if 'force-stop' in c])
 
-    def test_paths_replaced_before_install(self):
+    def test_new_autos_uploaded_before_install(self):
         commands = self.commands(False)
-        push = next(i for i, c in enumerate(commands) if 'push' in c and c[-1].endswith('auto.json.tmp'))
-        rename = next(i for i, c in enumerate(commands) if 'mv' in c)
+        push = next(i for i, c in enumerate(commands) if 'push' in c and c[-1].endswith('/autos/saturday.json.tmp'))
+        rename = next(i for i, c in enumerate(commands) if 'mv' in c and c[-1].endswith('/autos/saturday.json'))
         install = next(i for i, c in enumerate(commands) if ':TeamCode:installDebug' in c)
         self.assertLess(push, rename)
         self.assertLess(rename, install)

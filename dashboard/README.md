@@ -61,14 +61,14 @@ sides since the last sync is a conflict and is skipped unless you add `--force`.
 |---|---|
 | `settings/robot.json` | `settings/robot.json` |
 | `autos/*.json` | `autos/*.json` |
-| `paths/*` | `paths/*` |
 | `*.xml` (hardware maps) | `robot-config/*.xml` |
+| `history/`, `snapshots/` | `history/`, `snapshots/` (pull only) |
 
 ## Routes (`autos/*.json`)
 
 Written by the path editor, read at INIT by `PedroAutonomous` (and the simulator). The
 setting `PedroAutonomous.ROUTE` picks the file; D-pad up/down during INIT picks another.
-Without the file, `PedroAutonomous` falls back to the old Pedro export in `paths/`. The format
+Without the file, INIT shows what is missing. The format
 is documented in `TeamCode/.../lib/AutoRoute.java`. The robot refuses to save a route with an
 unknown action or a bad path, so a typo never reaches INIT.
 

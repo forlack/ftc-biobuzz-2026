@@ -50,7 +50,8 @@ import javax.xml.parsers.DocumentBuilderFactory;
  *   POST /api/settings/save             write robot.json
  *   POST /api/settings/reload           re-read robot.json
  *   GET  /api/actions                   autonomous actions for the path editor
- *   GET  /api/files                     robot files the dashboard may read and write
+ *   GET  /api/files                     robot files the dashboard may read and write:
+ *                                       settings/robot.json, autos/*.json, hardware maps (*.xml)
  *   GET  /api/file?path=...             raw file, with its hash in X-Hash
  *   PUT  /api/file?path=...             replace a file; send X-Base-Hash to refuse if it changed
  *   POST /api/opmode                    {action: init|start|stop, name}
@@ -70,7 +71,7 @@ public class DashboardServer {
 
     /** Files the dashboard may touch, relative to the robot's storage folder. */
     private static final Pattern MANAGED = Pattern.compile(
-            "settings/robot\\.json|paths/[A-Za-z0-9_.-]+\\.(json|txt)|autos/[A-Za-z0-9_.-]+\\.json|[A-Za-z0-9_ .-]+\\.xml");
+            "settings/robot\\.json|autos/[A-Za-z0-9_.-]+\\.json|[A-Za-z0-9_ .-]+\\.xml");
 
     /** History and snapshot copies: readable (for robot-sync and the History panel), never writable. */
     private static final Pattern ARCHIVE = Pattern.compile(
@@ -429,7 +430,7 @@ public class DashboardServer {
     private static List<String> managedNames() {
         List<String> names = new ArrayList<>();
         if (RobotSettings.location().isFile()) names.add("settings/robot.json");
-        for (String folder : new String[]{"paths", "autos", ""}) {
+        for (String folder : new String[]{"autos", ""}) {
             File[] files = RobotFiles.file(folder).listFiles();
             if (files == null) continue;
             Arrays.sort(files);

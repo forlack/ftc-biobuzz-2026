@@ -12,7 +12,7 @@ code. Changing the file needs **no build**.
    and telemetry shows `Settings: saved 18:42:07`.
 4. Copy the file into the repo and commit it:
    ```bash
-   ./robot-settings pull
+   ./robot-sync pull
    git add settings/robot.json && git commit -m "Tune flywheels" && git push
    ```
 
@@ -33,7 +33,7 @@ Unsaved Panels changes still disappear when the Robot Controller app restarts. S
 Edit `settings/robot.json` in any editor, then send it while on the robot Wi-Fi:
 
 ```bash
-./robot-settings push      # the robot's old file becomes robot.json.bak
+./robot-sync push      # the robot's old file becomes robot.json.bak
 ```
 
 Press INIT to use it. The file groups values by class:

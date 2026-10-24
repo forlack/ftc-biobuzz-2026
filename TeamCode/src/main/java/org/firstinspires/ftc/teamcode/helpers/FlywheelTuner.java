@@ -284,7 +284,7 @@ public class FlywheelTuner extends LinearOpMode {
                 settings.save();
                 saved = true;
             }
-            panels.addLine(saved ? "Applied. " + settings.status() + "  (./robot-settings pull to keep it in Git)"
+            panels.addLine(saved ? "Applied. " + settings.status() + "  (./robot-sync pull to keep it in Git)"
                     : "Press A to apply and save to robot.json. STOP to discard.");
             panels.addData("Battery (start / now)", round1(startVolts) + " V / " + volts());
             panels.addData("FLYWHEEL_F (shared, average)", sharedF);

@@ -25,34 +25,23 @@ copy here:
 Current tuning targets the competition robot. Historical test-platform measurements
 in AGENTS.md must not replace the current values in `pedro/Constants.java`.
 
-## Desktop handoff — 2026-10-22
+## Robot data files (this branch)
 
-The SD-card autonomous reader is **tested on the robot**. Pull `main` on the desktop
-before editing. Paste Pedro's complete Java export into `paths/auto.java.txt`;
-`paths/auto.json` keeps timing and named speed limits. Both files are versioned.
-See [the path workflow](paths/README.md) for supported syntax and upload instructions.
+Three kinds of file, all edited from the dashboard and kept in Git with `./robot-sync pull`:
 
-Current autonomous starts at **(56, 8, 270°)**, drives to **(60, 16, 270°)**,
-shoots for **3.5 seconds**, then follows the curve to **(13.2008, 96.0738, 180°)**
-to park. Startup wait is 1 second. The stinger stays up; intake defaults to 700 RPM.
-TeleOp auto-selection requires Driver Station **OpMode Auto Queue** and the timed auto run.
+| On the robot (`/sdcard/FIRST/`) | In the repo | What it is |
+|---|---|---|
+| `settings/robot.json` | `settings/robot.json` | Tunable variables (RPMs, PIDF, stinger, drive speeds, which auton to run) |
+| `autos/<name>.json` | `autos/<name>.json` | One auton each: start pose, paths, functions on paths, sequence |
+| `2222-Config.xml` | `robot-config/2222-Config.xml` | Hardware map |
 
-On the Linux desktop, save the robot Wi-Fi connection in NetworkManager once, then
-run `./deploy-linux -r 24621-RC --stay` from your terminal. Deploy uploads both path
-files automatically; `-m` additionally uploads the versioned hardware XML.
-For path-only edits, join robot Wi-Fi and run `./update-paths`, then re-INIT.
-No rebuild or app restart is needed. Both deploy helpers preserve Gradle colors and
-live progress in a terminal. Normal full deploy starts on internet Wi-Fi to build first.
+Plus `history/` (every saved version) and `snapshots/` (known good copies), made on the robot.
+The old `paths/auto.java.txt` + `paths/auto.json` export is gone on this branch;
+`autos/saturday.json` is the same Saturday route.
 
-Wi-Fi credentials remain in each machine's private configuration outside Git and
-must be set up separately. `local.properties` and Android Studio settings are also
-local. The robot identifies as **Control Hub v1.0, Android 7.1.2** in install logs;
-file loading uses FileInputStream for compatibility. Do not replace it with
-`java.nio.file.Files`, which needs Android 8.
-
-Hardware config remains `robot-config/2222-Config.xml` (including `stinger` on
-Expansion Hub servo port 2). No fresh hub XML was available during this handoff;
-pull it after any Driver Station hardware configuration changes.
+On the Linux desktop, save the robot Wi-Fi connection in NetworkManager once, then run
+`./deploy-linux -r 24621-RC --stay` from your terminal. Deploy uploads autons the robot does
+not have yet (never replacing one); `-m` also uploads the hardware XML.
 
 ## Getting started
 
@@ -271,11 +260,8 @@ Everything else: [dashboard/README.md](dashboard/README.md).
 
 ## What's here
 
-Autonomous paths can be edited and uploaded without rebuilding. See
-[paths/README.md](paths/README.md) for the Pedro export and JSON settings format, first setup, and `./update-paths`.
-
 Tunable numbers (RPMs, PIDF, stinger, drive speeds) can be saved on the robot from Panels and
-copied with `./robot-settings pull|push`, also without rebuilding. See
+copied with `./robot-sync pull|push`, also without rebuilding. See
 [settings/README.md](settings/README.md). Where this is heading: [ROADMAP.md](ROADMAP.md).
 
 All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
