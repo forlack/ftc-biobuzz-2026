@@ -77,9 +77,9 @@ select:focus, input:focus, textarea:focus { outline: none; border-color: var(--h
 .pill.running { color: var(--green); border-color: #3fb95066; }
 .pill.init { color: var(--honey); border-color: #f5b30166; }
 .pill.low { color: var(--red); border-color: #f8514966; }
-.conn { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 6px var(--red); }
-.conn.up i { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.conn { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--muted); }
+.conn i { width: 13px; height: 13px; border-radius: 50%; background: var(--red); box-shadow: 0 0 8px var(--red); }
+.conn.up i { background: var(--green); box-shadow: 0 0 8px var(--green); }
 
 /* ---- Pages ---------------------------------------------------------------- */
 main { flex: 1; min-height: 0; display: flex; }
