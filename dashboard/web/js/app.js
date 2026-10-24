@@ -51,6 +51,7 @@ function showState(next) {
   const battery = document.getElementById('battery');
   battery.textContent = next.battery == null ? '— V' : `${next.battery.toFixed(2)} V`;
   battery.classList.toggle('low', next.battery != null && next.battery < 12.2);
+  showLock(next.locked);
   document.getElementById('op-start').disabled = next.state !== 'init';
   document.getElementById('op-stop').disabled = next.state === 'stopped';
   if (first && tab === 'robot') robot.refresh(next.hardwareMap);
@@ -66,6 +67,43 @@ async function opMode(action) {
 document.getElementById('op-init').addEventListener('click', () => opMode('init'));
 document.getElementById('op-start').addEventListener('click', () => opMode('start'));
 document.getElementById('op-stop').addEventListener('click', () => opMode('stop'));
+
+// ---- Lock -----------------------------------------------------------------------------
+let locked = false;
+
+function showLock(value) {
+  locked = !!value;
+  document.body.classList.toggle('locked', locked);
+  document.getElementById('locked-banner').hidden = !locked;
+  const button = document.getElementById('lock');
+  button.textContent = locked ? '🔒 Locked' : '🔓 Lock';
+  button.classList.toggle('on', locked);
+}
+
+document.getElementById('lock').addEventListener('click', async () => {
+  try {
+    if (locked) {
+      const pin = prompt('PIN to unlock:');
+      if (pin === null) return;
+      showLock((await api('/api/lock', { method: 'POST', body: { action: 'unlock', pin } })).locked);
+      toast('Unlocked: changes allowed');
+    } else {
+      const pin = prompt('Choose a PIN (4 to 12 digits). Anyone can still watch; changes need this PIN.');
+      if (pin === null) return;
+      if (prompt('Type the PIN again:') !== pin) { toast('The PINs did not match', true); return; }
+      showLock((await api('/api/lock', { method: 'POST', body: { action: 'lock', pin } })).locked);
+      toast('Locked: view only');
+    }
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+// History buttons elsewhere (Tune, the path editor) open the History panel on the Robot tab.
+window.addEventListener('biobuzz:history', (event) => {
+  showTab('robot');
+  robot.history.open(event.detail);
+});
 
 // ---- Live connection ----------------------------------------------------------------
 connectLive({
@@ -83,6 +121,7 @@ connectLive({
 // The path editor (in its iframe) can ask for things it cannot reach itself.
 window.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'biobuzz:saved') toast(`Saved ${event.data.path} on the robot`);
+  if (event.data && event.data.type === 'biobuzz:history') window.dispatchEvent(new CustomEvent('biobuzz:history', { detail: event.data.path }));
 });
 
 let saved = 'live';

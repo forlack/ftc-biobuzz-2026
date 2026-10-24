@@ -60,9 +60,11 @@ public final class RobotFiles {
 
     /**
      * Writes a whole file so a crash or power loss leaves either the old or the new one, never
-     * half of each. The old file is kept as name.bak.
+     * half of each. The old file is kept as name.bak, and every saved version goes into
+     * {@link RobotHistory}.
      */
     public static void writeAtomically(File file, byte[] contents) throws IOException {
+        RobotHistory.beforeSave(file);
         File folder = file.getParentFile();
         if (folder != null && !folder.isDirectory() && !folder.mkdirs()) {
             throw new IOException("cannot create " + folder);
@@ -82,6 +84,7 @@ public final class RobotFiles {
         if (!temporary.renameTo(file)) {
             throw new IOException("cannot replace " + file.getName());
         }
+        RobotHistory.afterSave(file, contents);
     }
 
     /** Short content fingerprint, used to notice that a file changed since someone read it. */

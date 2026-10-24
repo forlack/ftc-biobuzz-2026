@@ -33,9 +33,11 @@
       <button class="btn danger" id="op-stop">Stop</button>
       <span class="pill" id="op-state">stopped</span>
       <span class="pill" id="battery">— V</span>
+      <button class="btn lock" id="lock" title="Lock the dashboard so nobody can change anything without the PIN">🔓 Lock</button>
       <span class="conn" id="conn" title="Connection"><i></i><span>offline</span></span>
     </div>
   </header>
+  <div class="locked-banner" id="locked-banner" hidden>🔒 Locked: view only. Click <b>🔒 Locked</b> and enter the PIN to make changes.</div>
 
   <main>
     <!-- LIVE -->
@@ -76,6 +78,7 @@
         <button class="btn primary" id="settings-save">Save to robot</button>
         <button class="btn" id="settings-reload">Reload from robot</button>
         <button class="btn" id="settings-download">Download robot.json</button>
+        <button class="btn" id="settings-history">History</button>
         <span class="status" id="settings-status"></span>
       </div>
       <div id="settings-warnings"></div>
@@ -101,9 +104,20 @@
           <div class="card-head"><h3>Hardware map</h3><span class="muted" id="hw-name"></span></div>
           <div id="hardware"></div>
         </div>
+        <div class="side-stack">
+        <div class="card">
+          <div class="card-head"><h3>Known good snapshots</h3></div>
+          <div class="hw-actions">
+            <input id="snapshot-name" placeholder="Name, like Saturday – worked" aria-label="Snapshot name">
+            <button class="btn primary" id="snapshot-save">Save snapshot</button>
+          </div>
+          <div class="muted">A copy of every robot file: settings, autons and hardware map. Restore puts them all back.</div>
+          <table class="files" id="snapshots"></table>
+        </div>
         <div class="card">
           <div class="card-head"><h3>Files on the robot</h3><button class="btn small" id="files-refresh">Refresh</button></div>
           <table class="files" id="files"></table>
+          <div class="card-section" id="history" hidden></div>
           <div id="editor" hidden>
             <div class="card-head"><h3 id="editor-name"></h3>
               <span>
@@ -114,6 +128,7 @@
             <textarea id="editor-text" spellcheck="false"></textarea>
             <div class="status" id="editor-status"></div>
           </div>
+        </div>
         </div>
       </div>
     </section>

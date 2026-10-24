@@ -2,7 +2,8 @@
 """Keep the robot's files and the repo in step: settings, autonomous routes, paths, hardware map.
 
   ./robot-sync status          what differs, and which side changed
-  ./robot-sync pull            robot -> repo, for files changed on the robot (then commit)
+  ./robot-sync pull            robot -> repo, for files changed on the robot (then commit);
+                               also copies the robot's history/ and snapshots/ folders
   ./robot-sync push            repo -> robot, for files changed in the repo
 
   --url http://localhost:8686  talk to the simulator (default: the robot's dashboard,
@@ -11,7 +12,8 @@
                                from wins; the other side's change is lost)
 
 The robot holds the live copy; Git holds the history. A file that changed on both sides
-since the last sync is a conflict and is never copied without --force.
+since the last sync is a conflict and is never copied without --force. history/ (every saved
+version) and snapshots/ (known-good copies) are made on the robot and only ever pulled.
 """
 import argparse
 import hashlib
@@ -37,6 +39,10 @@ REMOTE_ROOT = '/sdcard/FIRST'
 def fingerprint(data):
     """Same as RobotFiles.hash on the robot: the first 8 bytes of SHA-1, in hex."""
     return hashlib.sha1(data).hexdigest()[:16]
+
+
+def is_archive(path):
+    return path.startswith('history/') or path.startswith('snapshots/')
 
 
 def repo_path(robot_path):
@@ -75,7 +81,7 @@ class HttpRobot:
             return False
 
     def list(self):
-        with self._open('/api/files') as response:
+        with self._open('/api/files?all=1') as response:
             return {item['path']: item['hash'] for item in json.load(response)}
 
     def read(self, path):
@@ -114,8 +120,8 @@ class AdbRobot:
         return self.run('get-state', check=False).returncode == 0
 
     def list(self):
-        listing = self.run('shell', f'cd {REMOTE_ROOT} && ls settings/robot.json autos/*.json paths/* *.xml 2>/dev/null',
-                           check=False).stdout.decode().split()
+        listing = self.run('shell', f'cd {REMOTE_ROOT} && ls settings/robot.json autos/*.json paths/* *.xml 2>/dev/null; '
+                           'find history snapshots -type f 2>/dev/null', check=False).stdout.decode().split()
         return {path: fingerprint(self.read(path)) for path in listing if path}
 
     def read(self, path):
@@ -224,7 +230,9 @@ def main():
 
     robot = connect(args)
     target = args.url or 'robot'
-    robot_hashes = robot.list()
+    everything = robot.list()
+    archive = {path: h for path, h in everything.items() if is_archive(path)}
+    robot_hashes = {path: h for path, h in everything.items() if not is_archive(path)}
     repo = repo_files()
     base = load_state(target)
     situation = compare(robot_hashes, repo, base)
@@ -262,11 +270,26 @@ def main():
             synced[path] = fingerprint(data)
             print(f'  {shown:34} pushed')
         copied += 1
+    # history/ and snapshots/: made on the robot, copied into the repo, never pushed back.
+    new_archive = [path for path, h in archive.items()
+                   if not (ROOT / path).is_file() or fingerprint((ROOT / path).read_bytes()) != h]
+    if args.command == 'status':
+        if new_archive:
+            print(f'  {"history/ and snapshots/":34} {len(new_archive)} new file(s) on the robot -> pull')
+    elif args.command == 'pull':
+        for path in new_archive:
+            destination = ROOT / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(robot.read(path))
+        if new_archive:
+            print(f'  {"history/ and snapshots/":34} {len(new_archive)} file(s) pulled')
+            copied += len(new_archive)
+
     save_state(target, synced)
     if args.command != 'status':
         print(f'{copied} file(s) {args.command}ed' + (f', {conflicts} conflict(s) left alone' if conflicts else '') + '.')
         if args.command == 'pull' and copied:
-            print('Now commit them:  git add settings autos paths robot-config && git commit')
+            print('Now commit them:  git add settings autos robot-config history snapshots && git commit')
         if args.command == 'push' and copied:
             print('Press INIT on the robot to use them. A changed hardware map needs an app restart.')
     sys.exit(1 if conflicts else 0)

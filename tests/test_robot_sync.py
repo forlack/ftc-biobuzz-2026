@@ -4,7 +4,7 @@ import runpy
 import unittest
 
 SYNC = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'robot-sync'))
-compare, fingerprint, repo_path = SYNC['compare'], SYNC['fingerprint'], SYNC['repo_path']
+compare, fingerprint, repo_path, is_archive = SYNC['compare'], SYNC['fingerprint'], SYNC['repo_path'], SYNC['is_archive']
 
 
 class CompareTests(unittest.TestCase):
@@ -24,6 +24,11 @@ class CompareTests(unittest.TestCase):
     def test_fingerprint_matches_robot_hash(self):
         # RobotFiles.hash: first 8 bytes of SHA-1 as hex. sha1(b"abc") = a9993e36 4706816a ...
         self.assertEqual(fingerprint(b'abc'), 'a9993e364706816a')
+
+    def test_history_and_snapshots_are_archives(self):
+        self.assertTrue(is_archive('history/settings__robot.json/2026-10-23_18-00-00-000.json'))
+        self.assertTrue(is_archive('snapshots/Saturday_2026-10-23/manifest.json'))
+        self.assertFalse(is_archive('settings/robot.json'))
 
     def test_hardware_maps_live_in_robot_config(self):
         self.assertTrue(str(repo_path('2222-Config.xml')).endswith('robot-config/2222-Config.xml'))

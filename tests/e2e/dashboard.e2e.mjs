@@ -136,6 +136,24 @@ try {
   check(!('FLYWHEELS_ON' in saved.FieldCentricJava) && !('Simulator' in saved), 'live switches are not saved');
   await b.screenshot(join(OUT, '2-tune.png'));
 
+  // History: a second save, then the Tune tab's History button shows both and restores the first.
+  await b.eval(`(() => { const i = document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]');
+    i.value = '9000'; i.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await b.waitFor(`document.querySelectorAll('#settings .dot.unsaved').length === 1`);
+  await b.eval(`document.querySelector('#settings-save').click()`);
+  await b.waitFor(`document.querySelector('#settings-status').textContent.startsWith('all saved')`);
+  await b.eval(`document.querySelector('#settings-history').click()`);
+  await b.waitFor(`document.querySelector('#tab-robot').classList.contains('active') && document.querySelectorAll('#history tr[data-id]').length === 2`);
+  check(true, 'Tune → History opens the history of robot.json with both saves');
+  await b.eval(`document.querySelector('#history tr[data-id] [data-changes]').click()`);
+  await b.waitFor(`document.querySelector('#history tr.changes:not([hidden])')`);
+  const changes = await b.eval(`document.querySelector('#history tr.changes:not([hidden])').innerText`);
+  check(/POLLEN_FLYWHEEL_RPM\s+3000\s+→\s+9000/.test(changes), `it shows what the newest save changed: ${changes.trim()}`);
+  await b.eval(`(() => { window.confirm = () => true; [...document.querySelectorAll('#history tr[data-id]')][1].querySelector('[data-restore]').click(); })()`);
+  await b.waitFor(`document.querySelectorAll('#history tr[data-id]').length === 3`);
+  const restoredRpm = (await api('/api/settings')).data.items.find((i) => i.name === 'POLLEN_FLYWHEEL_RPM').value;
+  check(restoredRpm === 3000, 'Restore puts the older version back on the robot (and keeps it in history)');
+
   const scratch = mkdtempSync(join(tmpdir(), 'biobuzz-repo-'));
   for (const folder of ['autos', 'paths', 'robot-config']) cpSync(join(REPO, folder), join(scratch, folder), { recursive: true });
   const sync = (...args) => execFileSync(join(REPO, 'robot-sync'), [...args, '--url', URL],
@@ -145,6 +163,8 @@ try {
   const pulled = JSON.parse(readFileSync(join(scratch, 'settings/robot.json'), 'utf8'));
   check(pulled.FieldCentricJava.POLLEN_FLYWHEEL_RPM === 3000, 'robot-sync pull copies it into the repo');
   check(!sync('status').includes('->'), 'after the pull everything is in sync');
+  const historyFiles = execFileSync('find', [join(scratch, 'history'), '-type', 'f'], { encoding: 'utf8' }).trim().split('\n');
+  check(historyFiles.length >= 3, `robot-sync pull also copies the robot's history into the repo (${historyFiles.length} versions)`);
 
   // ---- 3. Hardware map editor ---------------------------------------------------------------
   console.log('Robot tab');
@@ -247,6 +267,38 @@ try {
   // The robot refuses a broken route instead of keeping it.
   const bad = await api('/api/file?path=autos/broken.json', { method: 'PUT', body: JSON.stringify({ ...route, steps: [{ action: 'doABackflip' }] }) });
   check(bad.status === 400 && /Unknown action/.test(bad.data.error), 'the robot rejects a route with an unknown action');
+
+  // ---- Known good snapshot, then break things, then restore ---------------------------------
+  console.log('Snapshots and lock');
+  await b.eval(`document.querySelector('[data-tab="robot"]').click()`);
+  await b.waitFor(`document.querySelector('#snapshot-name')`);
+  await b.eval(`(() => { document.querySelector('#snapshot-name').value = 'Before the kids'; document.querySelector('#snapshot-save').click(); })()`);
+  await b.waitFor(`document.querySelector('#snapshots').innerText.includes('Before the kids')`);
+  check(true, 'Save snapshot makes a known good copy');
+  const goodRoute = (await api('/api/file?path=autos/saturday.json')).data;
+  await api('/api/file?path=autos/saturday.json', { method: 'PUT', body: JSON.stringify({ ...goodRoute, steps: goodRoute.steps.slice(0, 1) }) });
+  await api('/api/settings', { method: 'POST', body: { group: 'FieldCentricJava', name: 'INTAKE_RPM', value: 1 } });
+  await api('/api/settings/save', { method: 'POST' });
+  await b.eval(`(() => { window.confirm = () => true; document.querySelector('#snapshots [data-snapshot]').click(); })()`);
+  await b.waitFor(`document.querySelector('#toast').textContent.startsWith('Restored')`);
+  const back = (await api('/api/file?path=autos/saturday.json')).data;
+  const intake = (await api('/api/settings')).data.items.find((i) => i.name === 'INTAKE_RPM').value;
+  check(back.steps.length === goodRoute.steps.length && intake === 700, 'Restore puts the auton and the settings back');
+
+  // Simple lock: watch, but no changes, until the PIN.
+  await b.eval(`(() => { const answers = ['2462', '2462']; window.prompt = () => answers.shift(); document.querySelector('#lock').click(); })()`);
+  await b.waitFor(`document.body.classList.contains('locked') && !document.querySelector('#locked-banner').hidden`);
+  check(true, 'Lock asks for a PIN twice and shows the dashboard as view only');
+  const refused = await api('/api/settings/save', { method: 'POST' });
+  check(refused.status === 423, 'while locked the robot refuses changes, even straight to the API');
+  check((await api('/api/opmode', { method: 'POST', body: { action: 'stop' } })).status === 423, 'and OpMode control');
+  check((await api('/api/settings')).status === 200, 'but watching still works');
+  await b.eval(`(() => { window.prompt = () => '1111'; document.querySelector('#lock').click(); })()`);
+  await b.waitFor(`document.querySelector('#toast').textContent.includes('Wrong PIN')`, 8000);
+  check(await b.eval(`document.body.classList.contains('locked')`), 'a wrong PIN keeps it locked');
+  await b.eval(`(() => { window.prompt = () => '2462'; document.querySelector('#lock').click(); })()`);
+  await b.waitFor(`!document.body.classList.contains('locked')`, 8000);
+  check((await api('/api/settings/save', { method: 'POST' })).status === 200, 'the right PIN unlocks it');
 
   // ---- 5. Run it as the autonomous ----------------------------------------------------------------
   console.log('Autonomous run');

@@ -7,6 +7,9 @@ export class TuneTab {
     document.getElementById('settings-save').addEventListener('click', () => this.save());
     document.getElementById('settings-reload').addEventListener('click', () => this.reload());
     document.getElementById('settings-download').addEventListener('click', () => this.download());
+    document.getElementById('settings-history').addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('biobuzz:history', { detail: 'settings/robot.json' }));
+    });
   }
 
   async refresh() {

@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.dashboard;
 
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
+import org.firstinspires.ftc.teamcode.lib.RobotHistory;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -53,6 +54,12 @@ import javax.xml.parsers.DocumentBuilderFactory;
  *   GET  /api/file?path=...             raw file, with its hash in X-Hash
  *   PUT  /api/file?path=...             replace a file; send X-Base-Hash to refuse if it changed
  *   POST /api/opmode                    {action: init|start|stop, name}
+ *   GET  /api/history?path=...          saved versions of a file; /api/history/file?path=&id=
+ *   POST /api/history/restore           {path, id}
+ *   GET  /api/snapshots                 known-good snapshots; POST {name} makes one
+ *   POST /api/snapshots/restore         {id}
+ *   POST /api/lock                      {action: lock|unlock, pin}. While locked, every change
+ *                                       is refused with 423 until unlocked.
  *   GET  /ws                            websocket: telemetry frames and state
  */
 public class DashboardServer {
@@ -65,6 +72,10 @@ public class DashboardServer {
     private static final Pattern MANAGED = Pattern.compile(
             "settings/robot\\.json|paths/[A-Za-z0-9_.-]+\\.(json|txt)|autos/[A-Za-z0-9_.-]+\\.json|[A-Za-z0-9_ .-]+\\.xml");
 
+    /** History and snapshot copies: readable (for robot-sync and the History panel), never writable. */
+    private static final Pattern ARCHIVE = Pattern.compile(
+            "(history|snapshots)/[A-Za-z0-9_. -]+(/[A-Za-z0-9_. -]+)+");
+
     private final RobotHost host;
     private final int port;
     private final ExecutorService pool = Executors.newCachedThreadPool(runnable -> {
@@ -76,10 +87,12 @@ public class DashboardServer {
     private volatile ServerSocket server;
     private volatile boolean running;
     private volatile String lastError = "";
+    private final DashboardLock lock;
 
     public DashboardServer(RobotHost host, int port) {
         this.host = host;
         this.port = port;
+        this.lock = new DashboardLock();
     }
 
     /** Starts listening on a background thread. Never throws; check {@link #lastError}. */
@@ -280,9 +293,11 @@ public class DashboardServer {
             case 200: return "OK";
             case 204: return "No Content";
             case 400: return "Bad Request";
+            case 403: return "Forbidden";
             case 404: return "Not Found";
             case 405: return "Method Not Allowed";
             case 409: return "Conflict";
+            case 423: return "Locked";
             default: return "Error";
         }
     }
@@ -298,6 +313,10 @@ public class DashboardServer {
             return response;
         }
         if (path.startsWith("/api/")) {
+            boolean changes = !method.equals("GET") && !path.equals("/api/lock");
+            if (changes && lock.locked()) {
+                return Response.error(423, "The dashboard is locked. Unlock it with the PIN to make changes.");
+            }
             switch (method + " " + path) {
                 case "GET /api/state": return Response.json(200, state());
                 case "GET /api/settings": return Response.json(200, settingsJson());
@@ -312,11 +331,18 @@ public class DashboardServer {
                     return Response.json(200, settingsJson());
                 }
                 case "GET /api/actions": return Response.json(200, host.actions().catalog());
-                case "GET /api/files": return Response.json(200, listFiles());
+                case "GET /api/files": return Response.json(200, listFiles(request.param("all") != null));
                 case "GET /api/file": return getFile(request.param("path"));
                 case "PUT /api/file":
                 case "POST /api/file": return putFile(request);
                 case "POST /api/opmode": return opMode(request.json());
+                case "GET /api/history": return Response.json(200, history(checkPath(request.param("path"))));
+                case "GET /api/history/file": return historyFile(checkPath(request.param("path")), request.param("id"));
+                case "POST /api/history/restore": return restoreVersion(request.json());
+                case "GET /api/snapshots": return Response.json(200, Snapshots.list());
+                case "POST /api/snapshots": return Response.json(200, Snapshots.create(request.json().getString("name"), managedNames()));
+                case "POST /api/snapshots/restore": return restoreSnapshot(request.json().getString("id"));
+                case "POST /api/lock": return lockAction(request.json());
                 default: return Response.error(404, "no such API: " + method + " " + path);
             }
         }
@@ -335,6 +361,7 @@ public class DashboardServer {
         json.put("battery", Double.isNaN(volts) ? JSONObject.NULL : (Object) round(volts, 2));
         json.put("hardwareMap", host.activeHardwareMap());
         json.put("settingsStatus", host.settings().status());
+        json.put("locked", lock.locked());
         json.put("time", Dash.now());
         return json;
     }
@@ -375,8 +402,31 @@ public class DashboardServer {
         return relative;
     }
 
-    private JSONArray listFiles() throws JSONException, IOException {
+    private JSONArray listFiles(boolean withArchive) throws JSONException, IOException {
         JSONArray list = new JSONArray();
+        List<String> names = managedNames();
+        if (withArchive) {
+            for (String folder : new String[]{RobotHistory.FOLDER, Snapshots.FOLDER}) {
+                addTree(RobotFiles.file(folder), folder, names);
+            }
+        }
+        for (String name : names) list.put(fileInfo(name));
+        return list;
+    }
+
+    private static void addTree(File folder, String relative, List<String> names) {
+        File[] files = folder.listFiles();
+        if (files == null) return;
+        Arrays.sort(files);
+        for (File file : files) {
+            String child = relative + "/" + file.getName();
+            if (file.isDirectory()) addTree(file, child, names);
+            else if (ARCHIVE.matcher(child).matches()) names.add(child);
+        }
+    }
+
+    /** Every robot file the dashboard manages: settings, paths, autons, hardware maps. */
+    private static List<String> managedNames() {
         List<String> names = new ArrayList<>();
         if (RobotSettings.location().isFile()) names.add("settings/robot.json");
         for (String folder : new String[]{"paths", "autos", ""}) {
@@ -388,8 +438,7 @@ public class DashboardServer {
                 if (file.isFile() && MANAGED.matcher(relative).matches()) names.add(relative);
             }
         }
-        for (String name : names) list.put(fileInfo(name));
-        return list;
+        return names;
     }
 
     private static JSONObject fileInfo(String relative) throws JSONException {
@@ -407,7 +456,8 @@ public class DashboardServer {
     }
 
     private Response getFile(String relative) throws IOException {
-        File file = RobotFiles.file(checkPath(relative));
+        boolean archive = relative != null && !relative.contains("..") && ARCHIVE.matcher(relative).matches();
+        File file = RobotFiles.file(archive ? relative : checkPath(relative));
         if (!file.isFile()) return Response.error(404, "no such file on the robot: " + relative);
         byte[] contents = RobotFiles.readBytes(file);
         Response response = new Response();
@@ -428,12 +478,102 @@ public class DashboardServer {
                 return Response.error(409, relative + " changed on the robot since you opened it. Reload it first.");
             }
         }
-        String problem = validate(relative, request.body);
+        return save(relative, request.body);
+    }
+
+    /** Checks a file, then saves it (which also records it in the history). */
+    private synchronized Response save(String relative, byte[] contents) throws Exception {
+        String problem = validate(relative, contents);
         if (problem != null) return Response.error(400, problem);
-        RobotFiles.writeAtomically(file, request.body);
+        RobotFiles.writeAtomically(RobotFiles.file(relative), contents);
         if (relative.equals("settings/robot.json")) host.settings().reload();
         JSONObject json = fileInfo(relative);
         json.put("ok", true);
+        return Response.json(200, json);
+    }
+
+    // ---- History, snapshots, lock ----------------------------------------------------
+
+    private static JSONObject history(String relative) throws JSONException {
+        JSONArray versions = new JSONArray();
+        for (String id : RobotHistory.versionIds(relative)) {
+            File file = RobotHistory.version(relative, id);
+            JSONObject item = new JSONObject();
+            item.put("id", id);
+            item.put("time", file.lastModified());
+            item.put("size", file.length());
+            item.put("original", id.contains("-original"));
+            try {
+                item.put("hash", RobotFiles.hash(RobotFiles.readBytes(file)));
+            } catch (IOException error) {
+                item.put("hash", JSONObject.NULL);
+            }
+            versions.put(item);
+        }
+        JSONObject json = new JSONObject();
+        json.put("path", relative);
+        json.put("versions", versions);
+        File current = RobotFiles.file(relative);
+        if (current.isFile()) {
+            try {
+                json.put("currentHash", RobotFiles.hash(RobotFiles.readBytes(current)));
+            } catch (IOException ignored) {
+            }
+        }
+        return json;
+    }
+
+    private static Response historyFile(String relative, String id) throws IOException {
+        File file = RobotHistory.version(relative, id);
+        if (!file.isFile()) return Response.error(404, "no such version");
+        Response response = new Response();
+        response.type = "text/plain; charset=utf-8";
+        response.body = RobotFiles.readBytes(file);
+        return response;
+    }
+
+    private Response restoreVersion(JSONObject body) throws Exception {
+        String relative = checkPath(body.getString("path"));
+        File file = RobotHistory.version(relative, body.getString("id"));
+        if (!file.isFile()) return Response.error(404, "no such version");
+        return save(relative, RobotFiles.readBytes(file));
+    }
+
+    /** Puts every file in a snapshot back. All are checked before any is written. */
+    private synchronized Response restoreSnapshot(String id) throws Exception {
+        JSONObject manifest = Snapshots.manifest(id);
+        List<String> files = Snapshots.filesOf(manifest);
+        for (String relative : files) {
+            checkPath(relative);
+            String problem = validate(relative, Snapshots.read(id, relative));
+            if (problem != null) return Response.error(400, "Snapshot not restored: " + problem);
+        }
+        JSONArray restored = new JSONArray();
+        for (String relative : files) {
+            RobotFiles.writeAtomically(RobotFiles.file(relative), Snapshots.read(id, relative));
+            restored.put(relative);
+        }
+        if (files.contains("settings/robot.json")) host.settings().reload();
+        JSONObject json = new JSONObject();
+        json.put("ok", true);
+        json.put("name", manifest.optString("name"));
+        json.put("restored", restored);
+        return Response.json(200, json);
+    }
+
+    private Response lockAction(JSONObject body) throws Exception {
+        String action = body.getString("action");
+        String pin = body.optString("pin", null);
+        if (action.equals("lock")) {
+            if (lock.locked()) return Response.error(400, "Already locked");
+            lock.lock(pin);
+        } else if (action.equals("unlock")) {
+            if (!lock.unlock(pin)) return Response.error(403, "Wrong PIN");
+        } else {
+            throw new IllegalArgumentException("action must be lock or unlock");
+        }
+        JSONObject json = new JSONObject();
+        json.put("locked", lock.locked());
         return Response.json(200, json);
     }
 

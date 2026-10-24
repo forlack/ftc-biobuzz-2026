@@ -27,6 +27,7 @@ sourceSets {
             include 'com/bylazar/**'
             include 'org/firstinspires/ftc/teamcode/dashboard/**'
             include 'org/firstinspires/ftc/teamcode/lib/RobotFiles.java'
+            include 'org/firstinspires/ftc/teamcode/lib/RobotHistory.java'
             include 'org/firstinspires/ftc/teamcode/lib/RobotSettings.java'
             include 'org/firstinspires/ftc/teamcode/lib/Actions.java'
             include 'org/firstinspires/ftc/teamcode/lib/StandardActions.java'
