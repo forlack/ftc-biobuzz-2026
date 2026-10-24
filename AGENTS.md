@@ -34,6 +34,17 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   ~200 KB/s at 100 Hz, even with no viewer); if robot loop times show GC spikes, reuse maps.
 - Flywheel Tuner on this branch also feeds the Live tab's Flywheels chart (RPM only, no target
   lines); results still applied with A and saved to robot.json.
+- **Next after the first robot test (agreed 2026-10-24): virtual gamepad.** A drawer at the
+  bottom of every tab (labelled handle "🎮 Gamepad ▲", lights up when a laptop controller is
+  detected, G toggles, pushes content up). Controller image like Panels': draggable sticks,
+  buttons, bumpers, triggers; browser Gamepad API for a USB/Bluetooth controller; touch.
+  gamepad 1/2 selector. Safety: explicit "Take control", top-bar pill while driving, inputs
+  zeroed if no message for ~0.25 s, ends with the OpMode, view-only when Locked, practice only
+  (not legal in matches). Teleop merges it via a small helper (one-line change where gamepads
+  are read). Build order: (1) drawer + mirror of the Driver Station gamepads (display only),
+  (2) Take control + failsafe, (3) drive the simulated robot with it.
+- Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
+  Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
   and a Pedro add-on); robot pose on the field in teleop once Pinpoint coordinates are trusted;
   a per-viewer Detail selector; min/max thinning; listing USB cameras from the robot.
