@@ -204,9 +204,9 @@ pre.diff { margin: 0; font-family: var(--mono); font-size: 12px; white-space: pr
 pre.diff del { color: #ffa198; text-decoration: none; }
 pre.diff ins { color: #7ee787; text-decoration: none; }
 #snapshot-name { flex: 1; min-width: 160px; }
-.btn.lock { display: inline-flex; align-items: center; gap: 7px; color: var(--green); border-color: #3fb95066; }
+.btn.lock { display: inline-flex; align-items: center; gap: 7px; color: #fff; }
 .btn.lock svg { width: 17px; height: 17px; }
-.btn.lock.on { color: #1a1300; background: var(--honey); border-color: var(--honey); }
+.btn.lock.on { color: #ffb4ad; background: #ff7b7222; border-color: #ff7b7288; }
 .locked-banner { background: #f5b30118; border-bottom: 1px solid #f5b30155; color: var(--honey); padding: 7px 18px; font-size: 13px; }
 /* While locked the robot refuses changes; grey out the controls that would try. */
 body.locked .setting-row .control, body.locked #settings-save, body.locked #settings-reload,
