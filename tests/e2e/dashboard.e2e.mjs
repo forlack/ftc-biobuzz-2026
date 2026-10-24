@@ -110,6 +110,8 @@ try {
   const perLoop = liveLoad.kbPerSecond * 1024 / liveLoad.loopsPerSecond;
   check(liveLoad.liveViewers === 1 && perLoop < 250,
     `on the Live tab the browser gets every loop, compactly: ${Math.round(perLoop)} bytes per loop (${liveLoad.kbPerSecond} KB/s)`);
+  check(/^Dashboard [\d.]+% CPU · [\d.]+ KB\/s$/.test(await b.eval(`document.getElementById('live-load').textContent`)),
+    'the Live toolbar shows the dashboard\'s own CPU and KB/s');
 
   // Full size: a chart fills the Live area under the toolbar, and Esc puts it back.
   await b.eval(`document.querySelector('.chart .expand').click()`);

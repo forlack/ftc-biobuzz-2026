@@ -68,6 +68,9 @@ function showState(next) {
 
 function showLoad(load) {
   if (!load || load.viewers == null) return;
+  // Live toolbar: the dashboard's own cost (drops when no browser is on the Live tab).
+  document.getElementById('live-load').textContent =
+    `Dashboard ${load.dashboardCpu ?? '—'}% CPU · ${load.kbPerSecond ?? '—'} KB/s`;
   const value = (v, unit) => (v == null ? '—' : `${v}${unit}`);
   const rows = [
     ['Viewers', `${load.viewers} (${load.liveViewers} on Live)`],
