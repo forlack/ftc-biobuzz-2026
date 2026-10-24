@@ -9,7 +9,7 @@ Controller app** or **in the desktop simulator**. Same page, same server code, s
 |---|---|
 | **Live** | Charts of every loop (flywheel RPM vs target, % error, intake, battery, loop time), the field with the robot's trail, and every telemetry value. Pause, drag to zoom, double click to resume, Export CSV. |
 | **Tune** | Every setting in `robot.json`, grouped by class, with its code default and whether it is saved. Changes apply on the robot at once; **Save to robot** keeps them. `live` switches (like `FLYWHEELS_ON`) are never saved. |
-| **Paths** | Our fork of the Pedro Pathing visualizer. Draw paths, then build the **Auton Sequence**: actions between paths (shoot, wait, turn to) or part way along a path (◆ markers: intake on, stinger down…). **Save** writes `autos/<name>.json`; **Save as new…** makes another auton file. One file holds the whole auton: start, paths and every step. |
+| **Paths** | Our fork of the Pedro Pathing visualizer. Draw paths, then build the **Auton Sequence**. The **Sequence** lists every step, with each path's on-path functions under it in the order they fire. **Add to the sequence**: a **Function** (shoot, wait, turn to…, placed after any step) or a **Function on a path** (pick the path, the function and % along; shown as ◆ on the field). **Save** writes `autos/<name>.json`; **Save as new…** makes another auton file. One file holds the whole auton: start, paths and every step. |
 | **Robot** | The hardware map as a form (checked against the names the code needs), and every robot file to view, edit or download. |
 
 The bar at the top picks an OpMode and runs **Init / Start / Stop**, and shows the battery.
@@ -95,7 +95,7 @@ node tests/e2e/dashboard.e2e.mjs          # the whole thing in a headless browse
 ```
 
 The end-to-end test starts its own simulator on port 8687 and a scratch SD card, then checks
-36 things: live charts at loop rate, OpMode control, editing and saving a setting, syncing it
+40 things: live charts at loop rate, OpMode control, editing and saving a setting, syncing it
 into a scratch repo, the hardware map checks, building a route with actions in the path editor, Save as new,
 the robot refusing a broken route, and running the route as the autonomous until Pedro parks
 the simulated robot. Screenshots go to `tests/e2e/out/`.

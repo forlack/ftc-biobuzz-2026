@@ -151,31 +151,52 @@ try {
   const steps = await b.eval(`${frame}.querySelector('[data-testid=route-steps]').innerText`);
   check(/follow\s+path1/.test(steps) && /shoot/.test(steps) && /follow\s+path2/.test(steps), 'Saturday route opens with its steps');
 
-  // Select path2 by clicking it in the path list, then put "stinger down" half way along it.
-  await b.eval(`(() => {
-    const item = [...${frame}.querySelectorAll('button, li, div')].find((e) => e.children.length < 4 && /^\\s*path2\\b/.test(e.innerText || ''));
-    item.click();
+  // "Function on a path": choose path2 from the list, stinger down at 40%, then flywheels on at 20%.
+  const setIn = (testid, value, type = 'change') => b.eval(`(() => {
+    const e = ${frame}.querySelector('[data-testid=${testid}]'); e.value = ${JSON.stringify(String(value))};
+    e.dispatchEvent(new Event('${type}', { bubbles: true })); })()`);
+  await b.eval(`${frame}.querySelector('[data-testid=add-mode-path]').click()`);
+  await b.waitFor(`${frame}.querySelector('[data-testid=onpath-path]')`);
+  const path2Id = await b.eval(`[...${frame}.querySelectorAll('[data-testid=onpath-path] option')].find((o) => o.textContent.trim() === 'path2').value`);
+  await setIn('onpath-path', path2Id);
+  await setIn('onpath-action', 'deployStinger');
+  await setIn('onpath-at', 40, 'input');
+  await b.eval(`${frame}.querySelector('[data-testid=onpath-add]').click()`);
+  await setIn('onpath-action', 'flywheelsOn');
+  await setIn('onpath-at', 20, 'input');
+  await b.eval(`${frame}.querySelector('[data-testid=onpath-add]').click()`);
+  await b.waitFor(`${frame}.querySelectorAll('[data-testid=event-row]').length === 2`);
+  // "Function": stinger up, after the last step.
+  await b.eval(`${frame}.querySelector('[data-testid=add-mode-function]').click()`);
+  await b.waitFor(`${frame}.querySelector('[data-testid=fn-action]')`);
+  await setIn('fn-action', 'stowStinger');
+  await b.eval(`${frame}.querySelector('[data-testid=fn-add]').click()`);
+  await sleep(300);
+  const sequenceText = (await b.eval(`${frame}.querySelector('[data-testid=route-steps]').innerText`)).replace(/\s+/g, ' ');
+  check(/Sequence/.test(await b.eval(`${frame}.querySelector('[data-testid=robot-panel]').innerText`)), 'the list is called Sequence');
+  const rows = await b.eval(`[...${frame}.querySelectorAll('[data-testid=event-row]')].map((r) =>
+    [r.querySelector('input').value, r.querySelector('select').value])`);
+  check(JSON.stringify(rows) === JSON.stringify([['20', 'flywheelsOn'], ['40', 'deployStinger']]),
+    `on-path functions are listed under their path, sorted by when they fire: ${JSON.stringify(rows)}`);
+  const underPath2 = await b.eval(`(() => {
+    const row = ${frame}.querySelector('[data-testid=event-row]').closest('li');
+    return row.innerText.includes('follow') && row.innerText.includes('path2');
   })()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=robot-panel]').innerText.includes('On the path: path2')`);
-  await b.eval(`(() => { const s = ${frame}.querySelector('[data-testid=event-action]'); s.value = 'deployStinger'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await b.eval(`${frame}.querySelector('[data-testid=event-add]').click()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=event-at]')`);
-  await b.eval(`(() => { const r = ${frame}.querySelector('[data-testid=event-at]'); r.value = '40'; r.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  // And raise it again at the end, as a step after path2.
-  await b.eval(`(() => { const s = ${frame}.querySelector('[data-testid=step-action]'); s.value = 'stowStinger'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await b.eval(`${frame}.querySelector('[data-testid=step-add]').click()`);
-  await sleep(500);
+  check(underPath2, 'they sit under the "follow path2" step');
+  const last = await b.eval(`[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].pop().innerText`);
+  check(/stinger up/.test(last), 'the Function was added at the end of the sequence');
   const time = await b.eval(`${frame}.querySelector('[data-testid=route-time]').innerText`);
   check(/of 30 s/.test(time), `timeline estimate includes the waits: ${time}`);
   const markers = await b.eval(`${frame}.querySelectorAll('[id^="robot-event-"]').length`);
-  check(markers === 1, 'the action shows as a marker on the field');
+  check(markers === 2, 'both on-path functions show as markers on the field');
   await b.screenshot(join(OUT, '4-paths.png'));
   await b.eval(`${frame}.querySelector('[data-testid=route-save]').click()`);
   await b.waitFor(`${frame}.querySelector('[data-testid=route-message]').innerText.includes('Saved autos/saturday.json')`);
   const route = (await api('/api/file?path=autos/saturday.json')).data;
   const path2 = route.paths.find((p) => p.name === 'path2');
-  check(path2.events.length === 1 && path2.events[0].action === 'deployStinger' && path2.events[0].at === 0.4,
-    'the saved route has "stinger down" at 40% of path2');
+  check(path2.events.length === 2 && path2.events[0].action === 'flywheelsOn' && path2.events[0].at === 0.2
+    && path2.events[1].action === 'deployStinger' && path2.events[1].at === 0.4,
+    'the saved route has flywheels on at 20% and stinger down at 40% of path2, in order');
   check(route.steps[route.steps.length - 1].action === 'stowStinger', 'and "stinger up" as the last step');
   check(route.paths[1].points.length === 3 && route.start.heading === 270, 'geometry and start pose survive the round trip');
 
