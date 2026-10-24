@@ -128,13 +128,18 @@ public class DashboardServer {
                 long wall = System.nanoTime(), busy = stream.busyNanos.get(), bytes = stream.bytesSent.get(), ticks = cpuTicks();
                 double seconds = (wall - lastWall) / 1e9;
                 List<Dash.Frame> frames = Dash.since(lastSeq, 100000);
-                double loopSum = 0;
-                int loopCount = 0;
+                double loopSum = 0, costSum = 0;
+                int loopCount = 0, costCount = 0;
                 for (Dash.Frame frame : frames) {
                     Double ms = frame.numbers.get("Loop ms");
                     if (ms != null) {
                         loopSum += ms;
                         loopCount++;
+                    }
+                    Double cost = frame.numbers.get(Dash.COST_KEY);
+                    if (cost != null) {
+                        costSum += cost;
+                        costCount++;
                     }
                 }
                 if (!frames.isEmpty()) lastSeq = frames.get(frames.size() - 1).seq;
@@ -148,6 +153,8 @@ public class DashboardServer {
                 json.put("kbPerSecond", round((bytes - lastBytes) / 1024.0 / seconds, 1));
                 json.put("loopsPerSecond", round(frames.size() / seconds, 1));
                 json.put("loopMs", loopCount == 0 ? JSONObject.NULL : (Object) round(loopSum / loopCount, 2));
+                // Time each loop spent in Dash (put/pose/frame): the dashboard's direct cost.
+                json.put("dashboardMs", costCount == 0 ? JSONObject.NULL : (Object) round(costSum / costCount, 3));
                 json.put("maxSamplesPerSecond", DashboardConfig.MAX_SAMPLES_PER_SECOND);
                 load = json;
                 lastWall = wall;

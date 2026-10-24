@@ -2,7 +2,7 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-23
+Last updated: 2026-10-24
 
 ---
 
@@ -101,9 +101,13 @@ Key facts for agents:
   hardware.js lists the device names the Java code needs; keep it in step.
 - **Adding things** (settings, Dash values, auton functions via Mechanisms + StandardActions +
   SimMechanisms): see "Adding things" in dashboard/README.md.
-- **Robot cost: measured by the dashboard itself.** `/api/state` "load" (Robot tab Load card):
-  viewers, dashboard CPU (time in the websocket send loops, % of one core), whole-app CPU
-  (/proc/self/stat), KB/s, Loop ms. `./dashboard-load [--url ...]` prints 0/1/2 viewers. Sim on
+- **Robot cost: measured by the dashboard itself, in loop ms.** Dash times its own put/pose/
+  frame calls and adds `Dashboard ms` to every frame (`Dash.COST_KEY`; direct in-loop cost).
+  The user cares about loop time, not CPU %: the Live toolbar shows `Loop X ms · dashboard +Y ms
+  · KB/s`. `/api/state` "load" (Robot tab Load card): viewers, loopMs, dashboardMs, KB/s, and
+  for diagnosis dashboard CPU (send thread, % of one core) and whole-app CPU (/proc/self/stat,
+  % of one core, assumes 100 ticks/s). `Loop ms` itself is still sent by each OpMode (a
+  central one in Dash.frame would also time the sim's 20 Hz idle frames). `./dashboard-load [--url ...]` prints 0/1/2 viewers. Sim on
   the desktop after the stream rewrite: ~0.3% of a core total for 1-3 viewers, 14 KB/s
   (~145 B/loop) per viewer (was 40 KB/s, 410 B/loop), no loop-time change (the sim paces
   itself at 100 Hz, so only the robot can show a loop-time cost). Not yet measured on
@@ -113,6 +117,35 @@ Key facts for agents:
   the Live tab send `{type:subscribe, frames:false}` and get status only. Browser decoder:
   `dashboard/web/js/frames.js`. Teleop battery read throttled to
   4 Hz (a voltage read is a hub transaction).
+
+## Competition update — 2026-10-24
+
+**Merged into `dashboard` on 2026-10-24** (merge of main `3d9495f`): compensation and
+STINGER_DOWN 0.42 brought over; the formula is in `lib/FlywheelCompensation.java` (plain Java,
+shared with the simulator; FieldCentricJava.compensatedFlywheelF delegates). On this branch
+the "Panels" settings below are on the Tune tab; teleop's one 4 Hz battery read (lowest hub)
+feeds both the F and `Battery V`; teleop and auton show `Flywheel compensated F`. The route
+changes went into `autos/saturday.json` (start y 9, path2 end heading 90°); the main-only
+Pedro export reader (`PedroPathExport`, `paths/`) stays removed here. Check the robot's saved
+robot.json: a saved `FLYWHEEL_F = 12` overrides the new 11 default. FlywheelTuner still writes
+one FLYWHEEL_F (now meaning F at 12.5 V).
+
+Local competition main now applies voltage-compensated flywheel F in TeleOp and
+PedroAutonomous: linear F=11 at 12.5 V, F=12 at 10 V, clamped outside this range.
+Panels FLYWHEEL_VOLTAGE_COMPENSATION (default true) toggles this live in both
+OpModes; false uses FLYWHEEL_FIXED_F (default 12, prior competition behavior).
+Panels FLYWHEEL_F is the 12.5 V endpoint; FLYWHEEL_F_AT_10V is the low endpoint.
+Voltage sampled at 4 Hz, lowest positive finite hub reading, previous value if invalid.
+F is rounded to 0.01 and sent only when coefficients change. Intake PIDF unchanged.
+Dashboard shows battery V and applied F. Prior discussions never landed compensation.
+Current path start updated to (56,9,270°), park endpoint heading now 90°; sequence remains path1, shoot 3.5s, path2 park.
+Reader now accepts Pedro imports/class wrapper as well as snippets; exclude webpage text.
+Stinger-down default is 0.42. User confirmed autonomous and TeleOp auto-queue worked
+on competition day. Panels telemetry intermittently froze; cause unconfirmed (hub
+unreachable for log inspection). Do not attribute the earlier auton failure conclusively
+to export format: user reports no file edit at that time, and failure logs are unavailable.
+After competition, user requested these tested changes pushed to main and will integrate
+into dashboard themselves. Dashboard branch has not been deployed or merged here.
 
 ## Robot settings and the no-rebuild roadmap — 2026-10-22
 

@@ -40,6 +40,7 @@ const CHARTS = [
     series: [
       { label: 'Battery V', key: 'Battery V', color: '#ff7b72', width: 1.5 },
       { label: 'Loop ms', key: 'Loop ms', color: '#bc8cff', width: 1, scale: 'ms' },
+      { label: 'Dashboard ms', key: 'Dashboard ms', color: '#39c5cf', width: 1, scale: 'ms' },
     ],
   },
 ];

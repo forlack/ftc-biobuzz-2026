@@ -6,12 +6,14 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
+import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
 import org.firstinspires.ftc.teamcode.lib.MecanumDrive;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
@@ -48,7 +50,11 @@ public class FieldCentricJava extends LinearOpMode {
     /** Turn both flywheels on or off from the Tune tab. They start on. A switch, not a setting. */
     @RobotSettings.NotSaved
     public static boolean FLYWHEELS_ON = true;
-    public static double FLYWHEEL_F = 12;
+    /** F follows the battery voltage (see FlywheelCompensation). Off: FLYWHEEL_FIXED_F. */
+    public static boolean FLYWHEEL_VOLTAGE_COMPENSATION = true;
+    public static double FLYWHEEL_FIXED_F = 12; // previous competition behavior when disabled
+    public static double FLYWHEEL_F = 11; // F at 12.5 V
+    public static double FLYWHEEL_F_AT_10V = 12;
 
     // Pollen flywheel.
     public static double POLLEN_FLYWHEEL_RPM = 3400;
@@ -62,7 +68,7 @@ public class FieldCentricJava extends LinearOpMode {
 
     /** Stinger servo end points, 0 to 1. */
     public static double STINGER_UP = 0;
-    public static double STINGER_DOWN = 0.45;
+    public static double STINGER_DOWN = 0.42;
 
     // Drive and dashboard.
     private MecanumDrive chassis;
@@ -103,8 +109,9 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button sting           = buttons.add(() -> operate.left_bumper);
 
     private RobotSettings settings;
-    private long lastLoop, lastBatteryRead;
-    private double batteryVolts;
+    private long lastLoop, nextBatteryRead;
+    private double batteryVolts = 12.5;
+    private double appliedFlywheelF = FLYWHEEL_F;
     private boolean feeding;
 
     @Override
@@ -217,14 +224,39 @@ public class FieldCentricJava extends LinearOpMode {
         stinger.setPosition(sting.down() ? STINGER_DOWN : STINGER_UP);
     }
 
+    /** Flywheel F for this battery voltage, from the settings above. */
+    public static double compensatedFlywheelF(double voltage) {
+        return FlywheelCompensation.f(voltage, FLYWHEEL_VOLTAGE_COMPENSATION,
+                FLYWHEEL_FIXED_F, FLYWHEEL_F, FLYWHEEL_F_AT_10V);
+    }
+
+    /** Lowest valid hub voltage; use the previous reading if no sensor is valid. */
+    public static double flywheelBatteryVoltage(com.qualcomm.robotcore.hardware.HardwareMap map,
+                                                double previous) {
+        double volts = Double.POSITIVE_INFINITY;
+        for (VoltageSensor sensor : map.voltageSensor) {
+            double reading = sensor.getVoltage();
+            if (Double.isFinite(reading) && reading > 0) volts = Math.min(volts, reading);
+        }
+        return Double.isFinite(volts) ? volts : previous;
+    }
+
     private void updateShooter() {
+        long now = System.nanoTime();
+        // Reading the battery is a call to the hub that takes a few ms, so only 4 times a second.
+        // The same reading drives the flywheel F and the Battery V telemetry.
+        if (now >= nextBatteryRead) {
+            batteryVolts = flywheelBatteryVoltage(hardwareMap, batteryVolts);
+            nextBatteryRead = now + 250_000_000L;
+        }
+        appliedFlywheelF = compensatedFlywheelF(batteryVolts);
         if (POLLEN_FLYWHEEL_P != shooterPollen.getP()
-                || POLLEN_FLYWHEEL_D != shooterPollen.getD() || FLYWHEEL_F != shooterPollen.getF()) {
-            shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, 0, POLLEN_FLYWHEEL_D, FLYWHEEL_F);
+                || POLLEN_FLYWHEEL_D != shooterPollen.getD() || appliedFlywheelF != shooterPollen.getF()) {
+            shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, 0, POLLEN_FLYWHEEL_D, appliedFlywheelF);
         }
         if (NECTAR_FLYWHEEL_P != shooterNectar.getP()
-                || NECTAR_FLYWHEEL_D != shooterNectar.getD() || FLYWHEEL_F != shooterNectar.getF()) {
-            shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, 0, NECTAR_FLYWHEEL_D, FLYWHEEL_F);
+                || NECTAR_FLYWHEEL_D != shooterNectar.getD() || appliedFlywheelF != shooterNectar.getF()) {
+            shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, 0, NECTAR_FLYWHEEL_D, appliedFlywheelF);
         }
         // Flips the same switch the Tune tab shows, so the button and the dashboard always agree.
         if (toggleFlywheels.pressed()) {
@@ -251,11 +283,6 @@ public class FieldCentricJava extends LinearOpMode {
                 && Math.abs(nectarRpm - shooterNectar.getTargetRPM()) < VelocityMotor.RPM_TOLERANCE;
 
         long now = System.nanoTime();
-        // Reading the battery is a call to the hub that takes a few ms, so only 4 times a second.
-        if (now - lastBatteryRead > 250_000_000L) {
-            lastBatteryRead = now;
-            batteryVolts = hardwareMap.voltageSensor.iterator().next().getVoltage();
-        }
 
         telemetry.addLine("--- INTAKE ---");
         telemetry.addData("Intake", reverseIntake.down() ? "REVERSE" : (toggleIntake.active ? "ON" : "OFF"));
@@ -268,6 +295,7 @@ public class FieldCentricJava extends LinearOpMode {
         telemetry.addData("Feeding", feeding);
         telemetry.addData("Stinger", stinger.getPosition());
         telemetry.addData("Battery V", "%.2f", batteryVolts);
+        telemetry.addData("Flywheel compensated F", "%.2f", appliedFlywheelF);
         telemetry.addLine("Pollen hub PIDF " + shooterPollen.getAppliedPIDF());
         telemetry.addLine("Nectar hub PIDF " + shooterNectar.getAppliedPIDF());
         settings.update(telemetry::addData);

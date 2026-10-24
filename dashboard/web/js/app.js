@@ -68,14 +68,16 @@ function showState(next) {
 
 function showLoad(load) {
   if (!load || load.viewers == null) return;
-  // Live toolbar: the dashboard's own cost (drops when no browser is on the Live tab).
-  document.getElementById('live-load').textContent =
-    `Dashboard ${load.dashboardCpu ?? '—'}% CPU · ${load.kbPerSecond ?? '—'} KB/s`;
+  // Live toolbar: how long a loop takes, and how much of it is the dashboard's own code.
+  document.getElementById('live-load').textContent = load.loopMs == null
+    ? `No OpMode loop · ${load.kbPerSecond ?? '—'} KB/s`
+    : `Loop ${load.loopMs} ms · dashboard +${load.dashboardMs ?? '—'} ms · ${load.kbPerSecond ?? '—'} KB/s`;
   const value = (v, unit) => (v == null ? '—' : `${v}${unit}`);
   const rows = [
     ['Viewers', `${load.viewers} (${load.liveViewers} on Live)`],
-    ['Dashboard CPU', value(load.dashboardCpu, ' %')],
-    ['Whole app CPU', value(load.appCpu, ' %')],
+    ['Dashboard in loop', value(load.dashboardMs, ' ms per loop')],
+    ['Dashboard CPU', value(load.dashboardCpu, ' % of one core')],
+    ['Whole app CPU', value(load.appCpu, ' % of one core')],
     ['Wi-Fi sent', value(load.kbPerSecond, ' KB/s')],
     ['OpMode loop', load.loopMs == null ? 'no OpMode running' : `${load.loopMs} ms (${load.loopsPerSecond}/s)`],
     ['Samples sent', load.maxSamplesPerSecond ? `at most ${load.maxSamplesPerSecond}/s` : 'every loop'],

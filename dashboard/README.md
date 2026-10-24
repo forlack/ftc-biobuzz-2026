@@ -7,7 +7,7 @@ Controller app** or **in the desktop simulator**. Same page, same server code, s
 
 | Tab | What it does |
 |---|---|
-| **Live** | Charts of every loop (flywheel RPM vs target, % error, intake, battery, loop time), the field with the robot's trail, and every telemetry value. Pause, drag to zoom, double click to resume, Export CSV. **+ Add chart** plots any numbers the robot sends (remembered in that browser; ✕ removes). The toolbar shows what the dashboard itself costs the robot right now (CPU and KB/s; it drops when nobody is on the Live tab). |
+| **Live** | Charts of every loop (flywheel RPM vs target, % error, intake, battery, loop time), the field with the robot's trail, and every telemetry value. Pause, drag to zoom, double click to resume, Export CSV. **+ Add chart** plots any numbers the robot sends (remembered in that browser; ✕ removes). The toolbar shows the OpMode loop time and how much of it the dashboard's own code takes (`Loop 10.1 ms · dashboard +0.01 ms · 17 KB/s`); `Dashboard ms` is also on the Battery & loop chart. |
 | **Tune** | Every setting in `robot.json`, grouped by class, with its code default and whether it is saved. Changes apply on the robot at once. A green dot means the robot runs what robot.json (or the code) says; yellow means changed but not saved yet. **Save to robot** keeps changes and turns every dot green. `live` switches (like `FLYWHEELS_ON`) are never saved. |
 | **Paths** | Our fork of the Pedro Pathing visualizer. Draw paths, then build the **Auton Sequence**. The **Sequence** lists every step, with each path's on-path functions under it in the order they fire. **Add to the sequence**: a **Function** (shoot, wait, turn to…, placed after any step) or a **Function on a path** (pick the path, the function and % along; shown as ◆ on the field). **Save** writes `autos/<name>.json`; **Save as new…** makes another auton file. One file holds the whole auton: start, paths and every step. |
 | **Robot** | Hardware maps as a form (checked against the names the code needs): pick any map on the robot (the one in use is marked), New map (Control Hub, plus an Expansion Hub if you have one), Save as copy, add or remove the Expansion Hub, rename webcams. **Use this map** switches maps in the simulator; on the robot it gives the Driver Station steps (Configure Robot → pick it → Activate) until switching from the dashboard is tested. Also every robot file to view, edit or download. |
@@ -49,9 +49,16 @@ same checklist every time, and fill in its log.
 
 ### What it costs the robot
 
-The Robot tab's **Load** card shows, every second: viewers, the dashboard's own CPU, the whole
-app's CPU (like `top`), Wi-Fi traffic and the OpMode's loop time. To compare, start Field
-Centric and run (with other dashboard tabs closed):
+What matters is the **loop time**. Every loop, `Dash` times its own work (each `put`, `pose`
+and `frame`, including waiting for the server) and sends it as **`Dashboard ms`**, next to the
+OpMode's `Loop ms`. The sending to browsers runs on its own thread, so it can only slow the loop
+indirectly (sharing the CPU); `./dashboard-load` measures that by comparing loop times with 0,
+1 and 2 viewers (**+ loop**).
+
+The Robot tab's **Load** card shows, every second: viewers, the loop time, the dashboard's ms
+per loop, Wi-Fi traffic, and for diagnosing, the dashboard's and the whole app's CPU (% of one
+core; the app is everything in the Robot Controller app: OpMode, SDK, Driver Station link,
+dashboard). To compare, start Field Centric and run (with other dashboard tabs closed):
 
 ```bash
 ./dashboard-load                 # 0, then 1, then 2 viewers; prints a table
@@ -134,7 +141,7 @@ node tests/e2e/dashboard.e2e.mjs          # the whole thing in a headless browse
 ```
 
 The end-to-end test starts its own simulator on port 8687 and a scratch SD card, then checks
-86 things: live charts at loop rate (moving, closing, full size, pause), the compact stream
+89 things: live charts at loop rate (moving, closing, full size, pause), the compact stream
 and its load, OpMode control, editing and saving a setting, history and restore, syncing into
 a scratch repo, hardware maps (checks, New map, Expansion Hub, webcams, Use this map),
 building a route with actions in the path editor, Save as new, the robot refusing a broken

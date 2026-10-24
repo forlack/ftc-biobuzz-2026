@@ -110,8 +110,14 @@ try {
   const perLoop = liveLoad.kbPerSecond * 1024 / liveLoad.loopsPerSecond;
   check(liveLoad.liveViewers === 1 && perLoop < 250,
     `on the Live tab the browser gets every loop, compactly: ${Math.round(perLoop)} bytes per loop (${liveLoad.kbPerSecond} KB/s)`);
-  check(/^Dashboard [\d.]+% CPU · [\d.]+ KB\/s$/.test(await b.eval(`document.getElementById('live-load').textContent`)),
-    'the Live toolbar shows the dashboard\'s own CPU and KB/s');
+  const toolbar = await b.eval(`document.getElementById('live-load').textContent`);
+  check(/^Loop [\d.]+ ms · dashboard \+[\d.]+ ms · [\d.]+ KB\/s$/.test(toolbar),
+    `the Live toolbar shows the loop time and the dashboard's share of it (${toolbar})`);
+  check(liveLoad.dashboardMs > 0 && liveLoad.dashboardMs < 0.5,
+    `each loop's time in the dashboard's own code is measured: ${liveLoad.dashboardMs} ms`);
+  const liveText = await b.eval(`document.getElementById('tab-live').innerText`);
+  check(/Flywheel compensated F\s+11\b/.test(liveText),
+    'the flywheel F follows the battery: 11 with the simulator\'s full battery');
 
   // Full size: a chart fills the Live area under the toolbar, and Esc puts it back.
   await b.eval(`document.querySelector('.chart .expand').click()`);
@@ -465,7 +471,7 @@ try {
     `it ran the steps from the file: ${[...seen.steps].join(' → ')}`);
   check(seen.stinger.has(saved.FieldCentricJava.STINGER_DOWN), 'the stinger went down part way along path2');
   const { X, Y, Heading } = seen.last.n;
-  check(Math.abs(X - 13.2) < 1.5 && Math.abs(Y - 96.07) < 1.5 && Math.abs(Math.abs(Heading) - 180) < 5,
+  check(Math.abs(X - 13.2) < 1.5 && Math.abs(Y - 96.07) < 1.5 && Math.abs(Heading - 90) < 5,
     `Pedro drove the simulated robot to the park pose: (${X.toFixed(2)}, ${Y.toFixed(2)}, ${Heading.toFixed(0)}°)`);
   await b.eval(`document.querySelector('[data-tab="live"]').click()`);
   await sleep(1000);

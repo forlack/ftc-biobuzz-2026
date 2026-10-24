@@ -15,6 +15,9 @@ import java.util.Map;
  * is charted, not just the ones that happened to be sampled.
  *
  * Cheap and safe when no dashboard is running: it only fills a bounded buffer.
+ *
+ * Every frame also gets {@value #COST_KEY}: the time this loop spent inside Dash (put, pose
+ * and frame, including waiting for the server), i.e. what the dashboard adds to the loop.
  */
 public final class Dash {
     private Dash() { }
@@ -32,6 +35,11 @@ public final class Dash {
     private static double[] pose;
     private static final ArrayDeque<Frame> FRAMES = new ArrayDeque<>();
     private static long nextSeq = 1;
+    /** Nanoseconds spent inside Dash since the last frame. */
+    private static long spentNanos;
+
+    /** Added to every frame: milliseconds this loop spent in the dashboard's code. */
+    public static final String COST_KEY = "Dashboard ms";
 
     /** One loop's worth of values. */
     public static final class Frame {
@@ -53,35 +61,47 @@ public final class Dash {
 
     /** Records a value for this loop. Numbers are charted; anything else is shown as text. */
     public static void put(String key, Object value) {
+        long start = System.nanoTime();
         synchronized (LOCK) {
-            if (value instanceof Number) {
-                double number = ((Number) value).doubleValue();
-                if (!Double.isNaN(number) && !Double.isInfinite(number)) {
-                    numbers.put(key, number);
-                    text.remove(key);
-                    return;
-                }
-            }
-            if (value instanceof Boolean) {
-                numbers.put(key, ((Boolean) value) ? 1.0 : 0.0);
+            store(key, value);
+            spentNanos += System.nanoTime() - start;
+        }
+    }
+
+    /** Call holding LOCK. */
+    private static void store(String key, Object value) {
+        if (value instanceof Number) {
+            double number = ((Number) value).doubleValue();
+            if (!Double.isNaN(number) && !Double.isInfinite(number)) {
+                numbers.put(key, number);
                 text.remove(key);
                 return;
             }
-            text.put(key, String.valueOf(value));
-            numbers.remove(key);
         }
+        if (value instanceof Boolean) {
+            numbers.put(key, ((Boolean) value) ? 1.0 : 0.0);
+            text.remove(key);
+            return;
+        }
+        text.put(key, String.valueOf(value));
+        numbers.remove(key);
     }
 
     /** Where the robot is on the field, for the dashboard's field view. */
     public static void pose(double x, double y, double headingRadians) {
+        long start = System.nanoTime();
         synchronized (LOCK) {
             pose = new double[]{x, y, headingRadians};
+            spentNanos += System.nanoTime() - start;
         }
     }
 
     /** Ends this loop: everything put since the last frame becomes one frame. */
     public static void frame() {
+        long start = System.nanoTime();
         synchronized (LOCK) {
+            numbers.put(COST_KEY, (spentNanos + System.nanoTime() - start) / 1e6);
+            text.remove(COST_KEY);
             FRAMES.addLast(new Frame(nextSeq++, (System.nanoTime() - START) / 1e9, numbers, text, pose));
             while (FRAMES.size() > CAPACITY) {
                 FRAMES.removeFirst();
@@ -89,6 +109,8 @@ public final class Dash {
             numbers = new LinkedHashMap<>();
             text = new LinkedHashMap<>();
             pose = null;
+            // The rest of this call counts toward the next loop.
+            spentNanos = System.nanoTime() - start;
         }
     }
 

@@ -51,9 +51,10 @@ Tick each one; write down anything that fails.
 | 5 | Robot tab | Map **2222-Config (in use)**, no red problems |
 | 6 | OpMode bar | Init then Start **Field Centric (Java)** from the dashboard; Stop stops it |
 | 7 | Live tab | Flywheel, intake, battery and loop charts move; telemetry table fills. **+ Add chart** offers `Flywheels ready`, `Feeding`, `Drive forward`…; toggling flywheels / holding feed shows on them. Driver Station lines read cleanly (one line per RPM with % off). (The field stays empty in teleop: teleop does not send its position yet.) |
+| 7b | Flywheel F | Telemetry shows **Flywheel compensated F** between 11 and 12 (11 on a full battery, rising as it drops). Tune tab: `FLYWHEEL_F` is **11** and `STINGER_DOWN` **0.42** (if the robot's saved robot.json still says 12 / 0.45, those win: set them, Save) |
 | 8 | Tune live | Change `INTAKE_RPM` while running: the intake changes. **Save to robot**: dots go green; History shows the save |
-| 9 | Load | Close every other dashboard tab, then run the commands below. Pass: **+ loop under 1 ms** |
-| 10 | Auton | Paths tab: open `saturday` from the robot, Save. On the Driver Station run **Pedro Pathing Autonomous** (ROUTE saturday): it drives the route and shoots |
+| 9 | Load | Live toolbar reads `Loop … ms · dashboard +… ms`. Close every other dashboard tab, then run the commands below. Pass: **in Dash under 0.5 ms** and **+ loop under 1 ms** |
+| 10 | Auton | Paths tab: open `saturday` from the robot (start **56, 9, 270°**; it ends facing 90°), Save. On the Driver Station run **Pedro Pathing Autonomous** (ROUTE saturday): it drives the route and shoots |
 | 11 | Leaving | Close the browser in the middle of teleop: the robot keeps running normally |
 | 12 | Sync | `./robot-sync pull`, then commit what changed |
 
@@ -66,6 +67,11 @@ Load measurement for check 9 (Field Centric running, robot on blocks or driven g
 
 Also note the app's memory limit (once per hub):
 `adb shell getprop dalvik.vm.heapgrowthlimit` — the dashboard's telemetry buffer uses ~2 MB of it.
+
+What the columns mean: **loop** = OpMode loop time; **in Dash** = ms per loop inside the
+dashboard's own code (expect well under 0.1 ms); **+ loop** = how much slower loops get with
+viewers (everything the dashboard does, including its send thread). CPU is only for diagnosing:
+dashboard CPU under ~5% of one core is as expected, over 20% means something is wrong.
 
 Copy both tables into the log. If **+ loop** is 1 ms or more: Tune tab →
 `DashboardConfig.MAX_SAMPLES_PER_SECOND` = 50, Save, measure again; then 25.
@@ -91,6 +97,6 @@ git checkout main
 
 ## Log
 
-| Date | Who | Branch commit | Checks failed | Load: + loop (ms), dashboard CPU, KB/s, 0/1/2 viewers | MAX_SAMPLES | Notes |
+| Date | Who | Branch commit | Checks failed | Load: loop, in Dash, + loop (ms), KB/s, 0/1/2 viewers | MAX_SAMPLES | Notes |
 |---|---|---|---|---|---|---|
 | | | | | | | |

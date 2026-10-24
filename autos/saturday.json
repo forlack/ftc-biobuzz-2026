@@ -1,18 +1,18 @@
 {
   "version": 2,
   "name": "Saturday",
-  "start": { "x": 56, "y": 8, "heading": 270 },
+  "start": { "x": 56, "y": 9, "heading": 270 },
   "paths": [
     {
       "name": "path1",
-      "points": [[56, 8], [60, 16]],
+      "points": [[56, 9], [60, 16]],
       "heading": { "type": "linear", "start": 270, "end": 270 },
       "events": []
     },
     {
       "name": "path2",
       "points": [[60, 16], [15.6919, 29.3313], [13.2008, 96.0738]],
-      "heading": { "type": "linear", "start": 270, "end": 180 },
+      "heading": { "type": "linear", "start": 270, "end": 90 },
       "events": []
     }
   ],

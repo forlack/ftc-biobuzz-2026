@@ -75,6 +75,8 @@ What is different on purpose:
 - **Call `telemetry.update()` once per loop.** Each call is one dashboard frame.
 - **Slow reads** (battery voltage) only a few times a second. The teleop shows how.
 - **Nobody watching costs almost nothing**: values only go into a small buffer.
+- **See the cost**: the Live toolbar and the `Dashboard ms` chart series show how much of each
+  loop is spent in the dashboard (`Dash.put`, `Dash.frame`); it is measured, not guessed.
 
 ## An autonomous function
 

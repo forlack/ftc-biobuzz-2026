@@ -168,6 +168,7 @@ public class PedroAutonomous extends OpMode {
             requestOpModeStop();
             return;
         }
+        updateFlywheelCompensation();
         // Intake and flywheels run the whole match.
         robot.intake(true);
         robot.flywheels(true);
@@ -183,15 +184,40 @@ public class PedroAutonomous extends OpMode {
         }
     }
 
+    private long nextFlywheelCompensation;
+    private double flywheelVoltage = 12.5;
+
+    /** Same voltage-compensated flywheel F as teleop, battery read 4 times a second. */
+    private void updateFlywheelCompensation() {
+        long now = System.nanoTime();
+        if (now < nextFlywheelCompensation) return;
+        nextFlywheelCompensation = now + 250_000_000L;
+        flywheelVoltage = FieldCentricJava.flywheelBatteryVoltage(hardwareMap, flywheelVoltage);
+        double f = FieldCentricJava.compensatedFlywheelF(flywheelVoltage);
+        if (f != shooterPollen.getF() || FieldCentricJava.POLLEN_FLYWHEEL_P != shooterPollen.getP()
+                || FieldCentricJava.POLLEN_FLYWHEEL_D != shooterPollen.getD()) {
+            shooterPollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, 0,
+                    FieldCentricJava.POLLEN_FLYWHEEL_D, f);
+        }
+        if (f != shooterNectar.getF() || FieldCentricJava.NECTAR_FLYWHEEL_P != shooterNectar.getP()
+                || FieldCentricJava.NECTAR_FLYWHEEL_D != shooterNectar.getD()) {
+            shooterNectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, 0,
+                    FieldCentricJava.NECTAR_FLYWHEEL_D, f);
+        }
+    }
+
     @Override
     public void loop() {
         if (auto == null) return;
+        updateFlywheelCompensation();
         follower.update();
         auto.update();
 
         Pose pose = follower.pose();
         telemetry.addData("Step", auto.stepNumber() + "/" + auto.stepCount() + "  " + auto.stepName());
         telemetry.addData("Following", follower.isBusy());
+        telemetry.addData("Battery V", "%.2f", flywheelVoltage);
+        telemetry.addData("Flywheel compensated F", "%.2f", shooterNectar.getF());
         telemetry.addData("Completion", follower.completion());
         telemetry.addData("X", pose.x());
         telemetry.addData("Y", pose.y());

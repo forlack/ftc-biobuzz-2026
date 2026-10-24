@@ -10,6 +10,7 @@ import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.Actions;
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
+import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
 import org.firstinspires.ftc.teamcode.lib.Mechanisms;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
@@ -69,6 +70,7 @@ public final class SimOpModes {
     static final class SimMechanisms implements Mechanisms {
         final SimWorld world;
         boolean intakeOn, flywheelsOn, stingerDown;
+        double flywheelF;
 
         SimMechanisms(SimWorld world) { this.world = world; }
 
@@ -85,8 +87,11 @@ public final class SimOpModes {
 
         /** Call every loop: applies targets and PIDF from the current settings. */
         void apply() {
-            world.pollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, 0, FieldCentricJava.POLLEN_FLYWHEEL_D, FieldCentricJava.FLYWHEEL_F);
-            world.nectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, 0, FieldCentricJava.NECTAR_FLYWHEEL_D, FieldCentricJava.FLYWHEEL_F);
+            // Same voltage-compensated F as the robot.
+            flywheelF = FlywheelCompensation.f(world.battery(), FieldCentricJava.FLYWHEEL_VOLTAGE_COMPENSATION,
+                    FieldCentricJava.FLYWHEEL_FIXED_F, FieldCentricJava.FLYWHEEL_F, FieldCentricJava.FLYWHEEL_F_AT_10V);
+            world.pollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, 0, FieldCentricJava.POLLEN_FLYWHEEL_D, flywheelF);
+            world.nectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, 0, FieldCentricJava.NECTAR_FLYWHEEL_D, flywheelF);
             world.intake.setPIDF(FieldCentricJava.INTAKE_P, 0, 0, FieldCentricJava.INTAKE_F);
             world.pollen.setTargetRPM(flywheelsOn ? FieldCentricJava.POLLEN_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
             world.nectar.setTargetRPM(flywheelsOn ? FieldCentricJava.NECTAR_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
@@ -109,6 +114,7 @@ public final class SimOpModes {
             Dash.put("Stinger", world.stinger());
             Dash.put("Flywheels on", flywheelsOn);
             Dash.put("Flywheels ready", flywheelsReady());
+            Dash.put("Flywheel compensated F", flywheelF);
         }
     }
 
