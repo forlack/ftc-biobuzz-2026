@@ -59,6 +59,11 @@ function showState(next) {
   document.getElementById('op-start').disabled = next.state !== 'init';
   document.getElementById('op-stop').disabled = next.state === 'stopped';
   if (first && tab === 'robot') robot.refresh(next.hardwareMap);
+  // The active map changed (Driver Station Activate, or Use this map): show it.
+  if (!first && next.hardwareMap !== robot.hardwareMap) {
+    robot.hardwareMap = next.hardwareMap;
+    robot.hardware.setMaps(robot.hardware.maps, next.hardwareMap);
+  }
 }
 
 function showLoad(load) {

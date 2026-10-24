@@ -5,7 +5,7 @@ import { HistoryPanel } from './history.js';
 
 export class RobotTab {
   constructor() {
-    this.hardware = new HardwareEditor(document.getElementById('hardware'));
+    this.hardware = new HardwareEditor(document.getElementById('hardware'), () => this.refresh());
     this.history = new HistoryPanel(document.getElementById('history'), (path) => {
       this.refresh();
       if (path.endsWith('.xml')) this.hardware.load(path);
@@ -34,8 +34,10 @@ export class RobotTab {
       document.querySelectorAll('[data-history]').forEach((button) =>
         button.addEventListener('click', () => this.history.open(button.dataset.history)));
       this.refreshSnapshots();
-      const map = this.hardwareMap || (files.find((f) => f.path.endsWith('.xml')) || {}).path;
-      if (map !== this.hardware.path) this.hardware.load(map);
+      const maps = files.map((f) => f.path).filter((p) => p.endsWith('.xml')).sort();
+      this.hardware.setMaps(maps, this.hardwareMap);
+      // Keep the map being looked at; otherwise open the one the robot uses.
+      if (!this.hardware.path || !maps.includes(this.hardware.path)) this.hardware.load(this.hardwareMap || maps[0]);
     } catch (error) {
       toast(`Could not list files: ${error.message}`, true);
     }

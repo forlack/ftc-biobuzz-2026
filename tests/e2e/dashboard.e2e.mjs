@@ -259,6 +259,36 @@ try {
   await sleep(500);
   await b.screenshot(join(OUT, '3-robot.png'));
 
+  // Several hardware maps: Control Hub first, new map with an Expansion Hub, webcams, Use this map.
+  check((await b.eval(`document.querySelector('.hub-title').innerText`)).startsWith('Control Hub'),
+    'the Control Hub is listed first, though the file has the Expansion Hub first');
+  check((await b.eval(`document.querySelector('#hw-map').selectedOptions[0].textContent`)) === '2222-Config (in use)',
+    'the map picker opens the map the robot uses, marked (in use)');
+  await b.eval(`document.querySelector('#hw-new').click()`);
+  await b.eval(`(() => { document.querySelector('#hw-new-name').value = 'TestBot'; document.querySelector('#hw-new-create').click(); })()`);
+  await b.waitFor(`document.querySelector('#hw-map') && document.querySelector('#hw-map').value === 'TestBot.xml' && document.querySelectorAll('.hub-title').length >= 2`);
+  const testBot = (await api('/api/file?path=TestBot.xml')).data;
+  check(/<LynxModule name="Expansion Hub 2" port="2"/.test(testBot) && /<LynxModule name="Control Hub" port="173">/.test(testBot),
+    'New map makes a map with the Control Hub and an Expansion Hub at address 2');
+  check((await b.eval(`document.querySelector('.hw-note').innerText`)).includes('Not in use'), 'a map that is not in use says so');
+  await b.eval(`(() => { window.confirm = () => true; document.querySelector('[data-remove-hub]').click(); })()`);
+  check(await b.eval(`!!document.querySelector('#hw-add-hub')`), 'removing the Expansion Hub offers + Expansion Hub');
+  await b.eval(`(() => { window.prompt = () => '3'; document.querySelector('#hw-add-hub').click(); })()`);
+  check((await b.eval(`[...document.querySelectorAll('.hub-title')].map((h) => h.innerText).join('|')`)).includes('Expansion Hub 3'),
+    '+ Expansion Hub adds one at the address you give');
+  await b.screenshot(join(OUT, '3b-new-map.png'));
+  await api('/api/file?path=CamBot.xml', { method: 'PUT', body: testBot.replace('</Robot>',
+    '    <Webcam name="Webcam 1" serialNumber="UVC:046d:0825:A1B2C3" />\n</Robot>') });
+  await b.eval(`document.querySelector('#files-refresh').click()`);
+  await b.waitFor(`[...document.querySelectorAll('#hw-map option')].some((o) => o.value === 'CamBot.xml')`);
+  await b.eval(`(() => { const s = document.querySelector('#hw-map'); s.value = 'CamBot.xml'; s.dispatchEvent(new Event('change')); })()`);
+  await b.waitFor(`document.querySelector('tr[data-u]')`);
+  check((await b.eval(`document.querySelector('tr[data-u]').innerText`)).includes('UVC:046d'), 'a webcam added on the Driver Station shows under USB devices');
+  await b.eval(`document.querySelector('#hw-use').click()`);
+  await b.waitFor(`document.querySelector('#hw-map').selectedOptions[0].textContent === 'CamBot (in use)'`);
+  check((await api('/api/state')).data.hardwareMap === 'CamBot.xml', 'Use this map switches the map the (simulated) robot uses');
+  await api('/api/hardware/active', { method: 'POST', body: { path: '2222-Config.xml' } });
+
   // ---- 4. Path editor: robot actions on the route --------------------------------------------------
   console.log('Paths tab');
   await b.eval(`document.querySelector('[data-tab="paths"]').click()`);

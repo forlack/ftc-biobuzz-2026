@@ -177,7 +177,29 @@ public class SimHost implements RobotHost {
 
     @Override public double batteryVolts() { return world.battery(); }
 
-    @Override public String activeHardwareMap() { return "2222-Config.xml"; }
+    /** Like the Robot Controller's remembered active config, kept next to the sim's SD card. */
+    private static File activeMapFile() {
+        return new File(org.firstinspires.ftc.teamcode.lib.RobotFiles.root(), ".sim-active-config");
+    }
+
+    @Override public String activeHardwareMap() {
+        try {
+            String name = new String(java.nio.file.Files.readAllBytes(activeMapFile().toPath()), "UTF-8").trim();
+            if (org.firstinspires.ftc.teamcode.lib.RobotFiles.file(name).isFile()) return name;
+        } catch (IOException ignored) {
+            // never switched: the default below
+        }
+        return org.firstinspires.ftc.teamcode.lib.RobotFiles.file("2222-Config.xml").isFile() ? "2222-Config.xml" : "";
+    }
+
+    @Override public String useHardwareMap(String file) {
+        try {
+            java.nio.file.Files.write(activeMapFile().toPath(), file.getBytes("UTF-8"));
+            return null;
+        } catch (IOException error) {
+            return "Could not switch: " + error.getMessage();
+        }
+    }
 
     @Override public RobotSettings settings() { return settings; }
 

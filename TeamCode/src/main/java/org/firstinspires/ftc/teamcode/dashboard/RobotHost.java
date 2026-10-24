@@ -38,6 +38,15 @@ public interface RobotHost {
     /** File name of the active hardware map, such as "2222-Config.xml", or "". */
     String activeHardwareMap();
 
+    /**
+     * Makes {@code file} the active hardware map. Returns null when done, or what to do instead
+     * (on the robot, until switching from the dashboard is tested: the Driver Station steps).
+     */
+    default String useHardwareMap(String file) {
+        return "Activate it on the Driver Station: Configure Robot, pick "
+                + file.replaceAll("\\.xml$", "") + ", then Activate.";
+    }
+
     RobotSettings settings();
 
     /** The autonomous actions the path editor may use. */

@@ -410,6 +410,7 @@ public class DashboardServer {
                 case "POST /api/snapshots": return Response.json(200, Snapshots.create(request.json().getString("name"), managedNames()));
                 case "POST /api/snapshots/restore": return restoreSnapshot(request.json().getString("id"));
                 case "POST /api/lock": return lockAction(request.json());
+                case "POST /api/hardware/active": return useHardwareMap(request.json());
                 default: return Response.error(404, "no such API: " + method + " " + path);
             }
         }
@@ -642,6 +643,20 @@ public class DashboardServer {
         }
         JSONObject json = new JSONObject();
         json.put("locked", lock.locked());
+        return Response.json(200, json);
+    }
+
+    /** Switches the active hardware map, where the host can; otherwise says how. */
+    private Response useHardwareMap(JSONObject body) throws JSONException {
+        String path = body.optString("path", "");
+        if (!path.matches("[A-Za-z0-9_ .-]+\\.xml") || !RobotFiles.file(path).isFile()) {
+            return Response.error(400, "No hardware map called " + path);
+        }
+        String instead = host.useHardwareMap(path);
+        JSONObject json = new JSONObject();
+        json.put("active", host.activeHardwareMap());
+        json.put("switched", instead == null);
+        if (instead != null) json.put("message", instead);
         return Response.json(200, json);
     }
 

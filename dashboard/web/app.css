@@ -176,6 +176,12 @@ table.devices tr.bad input { border-color: var(--red); }
 .hw-problems { font-size: 13px; }
 .hw-problems li { color: #ffb3ad; }
 .hw-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.hw-maps { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.hw-maps select { min-width: 180px; }
+.hw-note { flex-basis: 100%; font-size: 13px; color: var(--honey); }
+.hw-form { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 6px 0 10px; }
+.hw-form label { display: flex; gap: 8px; align-items: center; }
+.hub-title .btn { margin-left: 8px; }
 #editor { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
 #editor-text { width: 100%; min-height: 320px; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; resize: vertical; }
 
