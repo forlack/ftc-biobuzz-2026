@@ -179,6 +179,24 @@ try {
   check(route.steps[route.steps.length - 1].action === 'stowStinger', 'and "stinger up" as the last step');
   check(route.paths[1].points.length === 3 && route.start.heading === 270, 'geometry and start pose survive the round trip');
 
+  // Save as new: a second auton file, leaving the first one as it was.
+  check((await b.eval(`${frame}.querySelector('[data-testid=robot-panel]').innerText`)).includes('Auton Sequence'),
+    'the panel is called Auton Sequence');
+  const before = (await api('/api/files')).data.find((f) => f.path === 'autos/saturday.json').hash;
+  await b.eval(`(() => { document.getElementById('visualizer').contentWindow.prompt = () => 'Latest'; })()`);
+  await b.eval(`${frame}.querySelector('[data-testid=route-save-as]').click()`);
+  await b.waitFor(`${frame}.querySelector('[data-testid=route-message]').innerText.includes('Saved autos/Latest.json')`);
+  const latest = (await api('/api/file?path=autos/Latest.json')).data;
+  check(latest.name === 'Latest' && JSON.stringify(latest.paths) === JSON.stringify(route.paths)
+    && JSON.stringify(latest.steps) === JSON.stringify(route.steps), 'Save as new… creates autos/Latest.json with the same auton');
+  const after = (await api('/api/files')).data.find((f) => f.path === 'autos/saturday.json').hash;
+  check(before === after, 'and leaves autos/saturday.json unchanged');
+  check((await b.eval(`${frame}.querySelector('[data-testid=route-file]').innerText`)).includes('Editing autos/Latest.json'),
+    'the editor now shows it is editing the new file');
+  await b.eval(`(() => { const i = ${frame}.querySelector('[data-testid=route-name]'); i.value = 'Sunday'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  check((await b.eval(`${frame}.querySelector('[data-testid=route-file]').innerText`)).includes('will write a new file, autos/Sunday.json'),
+    'renaming warns that Save will write a new file');
+
   // The robot refuses a broken route instead of keeping it.
   const bad = await api('/api/file?path=autos/broken.json', { method: 'PUT', body: JSON.stringify({ ...route, steps: [{ action: 'doABackflip' }] }) });
   check(bad.status === 400 && /Unknown action/.test(bad.data.error), 'the robot rejects a route with an unknown action');
