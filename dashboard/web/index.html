@@ -33,11 +33,11 @@
       <button class="btn danger" id="op-stop">Stop</button>
       <span class="pill" id="op-state">stopped</span>
       <span class="pill" id="battery">— V</span>
-      <button class="btn lock" id="lock" title="Lock the dashboard so nobody can change anything without the PIN">🔓 Lock</button>
+      <button class="btn lock" id="lock" title="Unlocked: anyone can make changes. Click to lock with a PIN."></button>
       <span class="conn" id="conn" title="Connection"><i></i><span>offline</span></span>
     </div>
   </header>
-  <div class="locked-banner" id="locked-banner" hidden>🔒 Locked: view only. Click <b>🔒 Locked</b> and enter the PIN to make changes.</div>
+  <div class="locked-banner" id="locked-banner" hidden>Locked: view only. Click <b>Locked</b> at the top right and enter the PIN to make changes.</div>
 
   <main>
     <!-- LIVE -->
@@ -52,6 +52,7 @@
         <button class="btn" id="pause">Pause</button>
         <button class="btn" id="export-csv">Export CSV</button>
         <button class="btn primary" id="add-chart">+ Add chart</button>
+        <button class="btn" id="reset-charts" title="Back to the standard charts (in this browser)">Reset charts</button>
         <span class="muted" id="rate"></span>
       </div>
       <div class="live-grid">

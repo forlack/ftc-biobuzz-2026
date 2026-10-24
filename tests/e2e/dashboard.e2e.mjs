@@ -90,18 +90,41 @@ try {
     document.querySelector('#chart-title').value = 'Motor power';
     document.querySelector('#chart-create').click();
   })()`);
-  await b.waitFor(`[...document.querySelectorAll('.chart h3')].some((h) => h.textContent === 'Motor power')`);
+  await b.waitFor(`[...document.querySelectorAll('.chart h3')].some((h) => h.textContent.includes('Motor power'))`);
   await sleep(1200);
-  const custom = await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent === 'Motor power').querySelector('.legend').innerText`);
+  const custom = await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent.includes('Motor power')).querySelector('.legend').innerText`);
   check(/Pollen power\s+0\.\d+/.test(custom) && /Nectar power\s+0\.\d+/.test(custom), `the new chart plots live values (${custom.replace(/\s+/g, ' ')})`);
   await b.goto(URL);
-  await b.waitFor(`[...document.querySelectorAll('.chart h3')].some((h) => h.textContent === 'Motor power')`);
+  await b.waitFor(`[...document.querySelectorAll('.chart h3')].some((h) => h.textContent.includes('Motor power'))`);
   check(true, 'the added chart is still there after reloading the page');
   const scrolls = await b.eval(`(() => { const t = document.querySelector('.side .grow'); return getComputedStyle(t).overflowY === 'auto' && t.scrollHeight > t.clientHeight && t.getBoundingClientRect().bottom <= innerHeight + 1; })()`);
   check(scrolls, 'the telemetry list scrolls inside the page instead of running off the bottom');
   await b.screenshot(join(OUT, '1-live.png'));
-  await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent === 'Motor power').querySelector('.remove').click()`);
-  check(await b.eval(`![...document.querySelectorAll('.chart h3')].some((h) => h.textContent === 'Motor power')`), 'and ✕ removes it');
+  await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent.includes('Motor power')).querySelector('.remove').click()`);
+  check(await b.eval(`![...document.querySelectorAll('.chart h3')].some((h) => h.textContent.includes('Motor power'))`), 'and ✕ removes it');
+
+  // Standard charts can be closed and moved too; each browser remembers its own layout.
+  const titles = () => b.eval(`[...document.querySelectorAll('#charts .chart h3')].map((h) => h.textContent.replace('⠿', '').trim())`);
+  await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent.includes('Battery & loop')).querySelector('.remove').click()`);
+  await b.eval(`(() => {
+    const cards = [...document.querySelectorAll('#charts .chart')];
+    const moving = cards.find((c) => c.querySelector('h3').textContent.includes('Intake'));
+    const target = cards[0];
+    const data = new DataTransfer();
+    moving.querySelector('.grip').dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: data }));
+    const box = target.getBoundingClientRect();
+    target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: data, clientX: box.left + 5, clientY: box.top + 5 }));
+    target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
+  })()`);
+  const arranged = await titles();
+  check(JSON.stringify(arranged) === JSON.stringify(['Intake', 'Flywheels', 'Flywheel error']),
+    `closing and dragging standard charts works: ${arranged.join(', ')}`);
+  await b.goto(URL);
+  await b.waitFor(`document.querySelectorAll('#charts .chart').length === 3`);
+  check(JSON.stringify(await titles()) === JSON.stringify(arranged), 'and this browser remembers the layout');
+  await b.eval(`(() => { window.confirm = () => true; document.querySelector('#reset-charts').click(); })()`);
+  check(JSON.stringify(await titles()) === JSON.stringify(['Flywheels', 'Flywheel error', 'Intake', 'Battery & loop']),
+    'Reset charts brings back the standard ones');
 
   // ---- 2. Tune a setting, save it, sync it into Git ---------------------------------------------
   console.log('Tune tab');
@@ -109,17 +132,21 @@ try {
   await b.waitFor(`document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]')`);
   check(await b.eval(`document.querySelectorAll('#settings .dot.unsaved').length === 0 && document.querySelectorAll('#settings .dot.synced').length > 20`),
     'freshly loaded settings all show a green (in sync) dot');
+  const routeOptions = await b.eval(`[...document.querySelectorAll('[data-key="PedroAutonomous.ROUTE"] option')].map((o) => o.value)`);
+  check(routeOptions.includes('saturday'), `PedroAutonomous.ROUTE is a dropdown of the autons on the robot: ${routeOptions.join(', ')}`);
   await b.eval(`(() => {
     const input = document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]');
     input.value = '3000';
     input.dispatchEvent(new Event('change', { bubbles: true }));
   })()`);
-  await b.waitFor(`document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]').value === '3000'`);
+  await b.waitFor(`document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]').value === '3000'
+    && document.querySelectorAll('#settings .dot.unsaved').length > 0`);
   let settings = (await api('/api/settings')).data;
   const rpm = settings.items.find((i) => i.name === 'POLLEN_FLYWHEEL_RPM');
   check(rpm.value === 3000 && rpm.default === 3400, 'editing the box changes the setting on the robot right away');
   check(await b.eval(`!!document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]').closest('.setting-row').querySelector('.dot.unsaved')`)
-    && await b.eval(`document.querySelectorAll('#settings .dot.unsaved').length === 1`), 'only the changed setting turns yellow (changed, not saved)');
+    && await b.eval(`document.querySelectorAll('#settings .dot.unsaved').length === 1`),
+    `only the changed setting turns yellow (changed, not saved): ${await b.eval(`[...document.querySelectorAll('#settings .dot.unsaved')].map((d) => d.closest('.setting-row').querySelector('.setting-name').innerText.split('\\n')[0]).join(', ')`)}`);
   await sleep(1500);
   const target = await b.eval(`(() => { document.querySelector('[data-tab="live"]').click(); return true; })()`);
   await sleep(800);
@@ -221,7 +248,7 @@ try {
   const sequenceText = (await b.eval(`${frame}.querySelector('[data-testid=route-steps]').innerText`)).replace(/\s+/g, ' ');
   check(/Sequence/.test(await b.eval(`${frame}.querySelector('[data-testid=robot-panel]').innerText`)), 'the list is called Sequence');
   const rows = await b.eval(`[...${frame}.querySelectorAll('[data-testid=event-row]')].map((r) =>
-    [r.querySelector('input').value, r.querySelector('select').value])`);
+    [r.dataset.at, r.dataset.action])`);
   check(JSON.stringify(rows) === JSON.stringify([['20', 'flywheelsOn'], ['40', 'deployStinger']]),
     `on-path functions are listed under their path, sorted by when they fire: ${JSON.stringify(rows)}`);
   const underPath2 = await b.eval(`(() => {
@@ -231,6 +258,30 @@ try {
   check(underPath2, 'they sit under the "follow path2" step');
   const last = await b.eval(`[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].pop().innerText`);
   check(/stinger up/.test(last), 'the Function was added at the end of the sequence');
+
+  // Rows are read-only until the pencil is clicked.
+  check(await b.eval(`${frame}.querySelectorAll('[data-testid=route-steps] input').length === 0`),
+    'sequence rows show text, not boxes, until you click the pencil');
+  // Edit the first step (wait 1 s): 0.5 s.
+  await b.eval(`${frame}.querySelector('[data-testid=route-steps] > li [data-testid=step-edit]').click()`);
+  await b.waitFor(`${frame}.querySelector('[data-testid=step-edit-param]')`);
+  await setIn('step-edit-param', 0.5);
+  await b.eval(`${frame}.querySelector('[data-testid=edit-done]').click()`);
+  // Change the last step's function and back: stinger up -> intake off -> stinger up.
+  const lastEdit = `[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].pop()`;
+  await b.eval(`${lastEdit}.querySelector('[data-testid=step-edit]').click()`);
+  await b.waitFor(`${frame}.querySelector('[data-testid=step-edit-action]')`);
+  await setIn('step-edit-action', 'intakeOff');
+  check(await b.eval(`${lastEdit}.dataset.action === 'intakeOff'`), 'the pencil lets you change which function a step runs');
+  await setIn('step-edit-action', 'stowStinger');
+  await b.eval(`${frame}.querySelector('[data-testid=edit-done]').click()`);
+  // Edit the 40% stinger-down function on path2 to 45%.
+  await b.eval(`[...${frame}.querySelectorAll('[data-testid=event-row]')].find((r) => r.dataset.at === '40').querySelector('[data-testid=event-edit]').click()`);
+  await b.waitFor(`${frame}.querySelector('[data-testid=event-edit-at]')`);
+  await setIn('event-edit-at', 45);
+  await b.eval(`${frame}.querySelector('[data-testid=edit-done]').click()`);
+  const edited = await b.eval(`[...${frame}.querySelectorAll('[data-testid=event-row]')].map((r) => r.dataset.at + ' ' + r.dataset.action).join(', ')`);
+  check(edited === '20 flywheelsOn, 45 deployStinger', `editing a function on a path changes its %: ${edited}`);
   const time = await b.eval(`${frame}.querySelector('[data-testid=route-time]').innerText`);
   check(/of 30 s/.test(time), `timeline estimate includes the waits: ${time}`);
   const markers = await b.eval(`${frame}.querySelectorAll('[id^="robot-event-"]').length`);
@@ -241,8 +292,9 @@ try {
   const route = (await api('/api/file?path=autos/saturday.json')).data;
   const path2 = route.paths.find((p) => p.name === 'path2');
   check(path2.events.length === 2 && path2.events[0].action === 'flywheelsOn' && path2.events[0].at === 0.2
-    && path2.events[1].action === 'deployStinger' && path2.events[1].at === 0.4,
-    'the saved route has flywheels on at 20% and stinger down at 40% of path2, in order');
+    && path2.events[1].action === 'deployStinger' && path2.events[1].at === 0.45,
+    'the saved route has flywheels on at 20% and stinger down at 45% of path2, in order');
+  check(route.steps[0].action === 'wait' && route.steps[0].params.seconds === 0.5, 'and the edited wait of 0.5 s');
   check(route.steps[route.steps.length - 1].action === 'stowStinger', 'and "stinger up" as the last step');
   check(route.paths[1].points.length === 3 && route.start.heading === 270, 'geometry and start pose survive the round trip');
 
@@ -286,9 +338,11 @@ try {
   check(back.steps.length === goodRoute.steps.length && intake === 700, 'Restore puts the auton and the settings back');
 
   // Simple lock: watch, but no changes, until the PIN.
+  check(await b.eval(`document.querySelector('#lock').innerText.trim() === 'Unlocked' && !!document.querySelector('#lock svg')`),
+    'the lock button shows an open lock and says Unlocked');
   await b.eval(`(() => { const answers = ['2462', '2462']; window.prompt = () => answers.shift(); document.querySelector('#lock').click(); })()`);
   await b.waitFor(`document.body.classList.contains('locked') && !document.querySelector('#locked-banner').hidden`);
-  check(true, 'Lock asks for a PIN twice and shows the dashboard as view only');
+  check(await b.eval(`document.querySelector('#lock').innerText.trim() === 'Locked'`), 'Lock asks for a PIN twice, then says Locked and the dashboard is view only');
   const refused = await api('/api/settings/save', { method: 'POST' });
   check(refused.status === 423, 'while locked the robot refuses changes, even straight to the API');
   check((await api('/api/opmode', { method: 'POST', body: { action: 'stop' } })).status === 423, 'and OpMode control');

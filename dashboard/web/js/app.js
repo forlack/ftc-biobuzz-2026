@@ -71,14 +71,23 @@ document.getElementById('op-stop').addEventListener('click', () => opMode('stop'
 // ---- Lock -----------------------------------------------------------------------------
 let locked = false;
 
+// Flat padlocks: shackle open (unlocked) or closed (locked).
+const LOCK_ICON = {
+  open: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 9.6-2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><rect x="4" y="10" width="16" height="11" rx="2.5" fill="currentColor"/><circle cx="12" cy="15.5" r="1.7" fill="var(--bg)"/></svg>',
+  closed: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><rect x="4" y="10" width="16" height="11" rx="2.5" fill="currentColor"/><circle cx="12" cy="15.5" r="1.7" fill="var(--bg)"/></svg>',
+};
+
 function showLock(value) {
   locked = !!value;
   document.body.classList.toggle('locked', locked);
   document.getElementById('locked-banner').hidden = !locked;
   const button = document.getElementById('lock');
-  button.textContent = locked ? '🔒 Locked' : '🔓 Lock';
+  button.innerHTML = `${locked ? LOCK_ICON.closed : LOCK_ICON.open}<span>${locked ? 'Locked' : 'Unlocked'}</span>`;
   button.classList.toggle('on', locked);
+  button.title = locked ? 'Locked: view only. Click and enter the PIN to unlock.'
+    : 'Unlocked: anyone can make changes. Click to lock with a PIN.';
 }
+showLock(false);
 
 document.getElementById('lock').addEventListener('click', async () => {
   try {

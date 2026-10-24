@@ -148,6 +148,7 @@ public class SimHost implements RobotHost {
                 opMode.stop();
             } catch (Throwable ignored) {
             }
+            world.stopAllMotors();   // like the SDK: nothing keeps running after Stop
             synchronized (this) {
                 if (current == opMode) {
                     current = null;

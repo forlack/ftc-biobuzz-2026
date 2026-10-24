@@ -14,6 +14,10 @@ export class TuneTab {
 
   async refresh() {
     try {
+      // The autons on the robot, for PedroAutonomous.ROUTE's dropdown.
+      const files = await api('/api/files').catch(() => []);
+      this.routes = files.map((f) => f.path).filter((p) => /^autos\/.+\.json$/.test(p))
+        .map((p) => p.slice('autos/'.length, -'.json'.length));
       this.show(await api('/api/settings'));
     } catch (error) {
       this.status(`Could not read settings: ${error.message}`, 'bad');
@@ -66,7 +70,15 @@ export class TuneTab {
         <small>default ${escapeHtml(format(item.default))}${notDefault ? ' · changed' : ''}</small></div>
       <div class="control"></div>${tag}`;
     const control = row.querySelector('.control');
-    if (item.type === 'boolean') {
+    if (item.group === 'PedroAutonomous' && item.name === 'ROUTE') {
+      // Which auton file runs at INIT: pick from the autons on the robot.
+      const routes = [...new Set([...(this.routes || []), item.value])];
+      control.innerHTML = `<select data-key="${escapeHtml(key)}" class="route-select">${routes.map((r) =>
+        `<option value="${escapeHtml(r)}" ${r === item.value ? 'selected' : ''}>${escapeHtml(r)}${
+          (this.routes || []).includes(r) ? '' : ' (missing)'}</option>`).join('')}</select>`;
+      control.querySelector('select').addEventListener('change', (event) => this.set(item, event.target.value));
+      row.querySelector('.setting-name small').textContent = 'the auton that runs at INIT (autos/' + item.value + '.json)';
+    } else if (item.type === 'boolean') {
       control.innerHTML = `<label class="toggle"><input type="checkbox" data-key="${escapeHtml(key)}" ${item.value ? 'checked' : ''}><span></span></label>`;
       control.querySelector('input').addEventListener('change', (event) => this.set(item, event.target.checked));
     } else {

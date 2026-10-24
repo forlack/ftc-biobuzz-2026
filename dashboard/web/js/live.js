@@ -12,7 +12,7 @@ const PERCENT_OFF = (rpm, target) => (frame) => {
 };
 const CHARTS = [
   {
-    title: 'Flywheels', unit: 'RPM',
+    id: 'flywheels', title: 'Flywheels', unit: 'RPM',
     series: [
       { label: 'Pollen', key: 'Pollen RPM', color: '#f5b301', width: 2 },
       { label: 'Pollen target', key: 'Pollen target', color: '#ffe8a3', dash: [6, 5], width: 1.5 },
@@ -21,7 +21,7 @@ const CHARTS = [
     ],
   },
   {
-    title: 'Flywheel error', unit: '%',
+    id: 'flywheel-error', title: 'Flywheel error', unit: '%',
     series: [
       { label: 'Pollen', get: PERCENT_OFF('Pollen RPM', 'Pollen target'), color: '#f5b301', width: 1.5 },
       { label: 'Nectar', get: PERCENT_OFF('Nectar RPM', 'Nectar target'), color: '#58a6ff', width: 1.5 },
@@ -29,14 +29,14 @@ const CHARTS = [
     band: 2,
   },
   {
-    title: 'Intake', unit: 'RPM',
+    id: 'intake', title: 'Intake', unit: 'RPM',
     series: [
       { label: 'Intake', key: 'Intake RPM', color: '#3fb950', width: 2 },
       { label: 'Target', key: 'Intake target', color: '#b4f0bf', dash: [6, 5], width: 1.5 },
     ],
   },
   {
-    title: 'Battery & loop', unit: '',
+    id: 'battery', title: 'Battery & loop', unit: '',
     series: [
       { label: 'Battery V', key: 'Battery V', color: '#ff7b72', width: 1.5 },
       { label: 'Loop ms', key: 'Loop ms', color: '#bc8cff', width: 1, scale: 'ms' },
@@ -58,8 +58,8 @@ export class LiveTab {
     this.rateCount = 0;
     this.rateStart = performance.now();
     this.dirty = false;
-    this.charts = CHARTS.map((spec) => this.makeChart(spec));
-    for (const spec of loadCustomCharts()) this.charts.push(this.makeChart(spec));
+    this.charts = loadLayout().map((spec) => this.makeChart(spec));
+    this.bindDragging();
     this.bindChartDialog();
     this.field = document.getElementById('field');
     this.fieldImage = new Image();
@@ -73,8 +73,8 @@ export class LiveTab {
   makeChart(spec) {
     const card = document.createElement('div');
     card.className = 'card chart';
-    card.innerHTML = `<div class="card-head"><h3>${escapeHtml(spec.title)}</h3><span class="muted">${escapeHtml(spec.unit)}${
-      spec.custom ? ' <button class="remove" title="Remove this chart">✕</button>' : ''}</span></div>
+    card.innerHTML = `<div class="card-head"><h3><span class="grip" draggable="true" title="Drag to move this chart">⠿</span>${escapeHtml(spec.title)}</h3>
+      <span class="muted">${escapeHtml(spec.unit)} <button class="remove" title="Close this chart (Reset charts brings it back)">✕</button></span></div>
       <div class="legend"></div><div class="plot"></div>`;
     document.getElementById('charts').appendChild(card);
     const legend = card.querySelector('.legend');
@@ -89,7 +89,15 @@ export class LiveTab {
       axes.push({ ...axis, scale: 'ms', side: 1, grid: { show: false }, size: 44 });
     }
     const chart = { spec, legend, holder, card, plot: null };
-    if (spec.custom) card.querySelector('.remove').addEventListener('click', () => this.removeChart(chart));
+    card.querySelector('.remove').addEventListener('click', () => this.removeChart(chart));
+    card.querySelector('.grip').addEventListener('dragstart', (event) => {
+      this.dragging = chart;
+      card.classList.add('dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', spec.id || spec.title);
+      event.dataTransfer.setDragImage(card, 20, 20);
+    });
+    card.querySelector('.grip').addEventListener('dragend', () => this.finishDrag());
     const options = {
       width: holder.clientWidth || 600,
       height: 220,
@@ -150,7 +158,7 @@ export class LiveTab {
       series: keys.map((key, i) => ({ label: key, key, color: COLORS[i % COLORS.length], width: 1.5 })),
     };
     this.charts.push(this.makeChart(spec));
-    saveCustomCharts(this.charts);
+    saveLayout(this.charts);
     this.dirty = true;
     return spec;
   }
@@ -159,7 +167,41 @@ export class LiveTab {
     chart.plot.destroy();
     chart.card.remove();
     this.charts = this.charts.filter((c) => c !== chart);
-    saveCustomCharts(this.charts);
+    saveLayout(this.charts);
+  }
+
+  /** Back to the four standard charts, in this browser. */
+  resetCharts() {
+    for (const chart of this.charts) { chart.plot.destroy(); chart.card.remove(); }
+    try { localStorage.removeItem(LAYOUT_KEY); } catch { /* private window */ }
+    this.charts = CHARTS.map((spec) => this.makeChart(spec));
+    this.dirty = true;
+  }
+
+  // Drag a chart by its ⠿ grip to move it; the order is saved in this browser.
+  bindDragging() {
+    const holder = document.getElementById('charts');
+    holder.addEventListener('dragover', (event) => {
+      if (!this.dragging) return;
+      event.preventDefault();
+      const target = event.target.closest('.chart');
+      const moving = this.dragging.card;
+      if (!target || target === moving) return;
+      const box = target.getBoundingClientRect();
+      const after = event.clientX > box.left + box.width / 2 || event.clientY > box.bottom - 20;
+      holder.insertBefore(moving, after ? target.nextSibling : target);
+    });
+    holder.addEventListener('drop', (event) => { event.preventDefault(); this.finishDrag(); });
+  }
+
+  finishDrag() {
+    if (!this.dragging) return;
+    this.dragging.card.classList.remove('dragging');
+    this.dragging = null;
+    const order = [...document.querySelectorAll('#charts .chart')];
+    this.charts.sort((a, b) => order.indexOf(a.card) - order.indexOf(b.card));
+    saveLayout(this.charts);
+    this.resize();
   }
 
   bindToolbar() {
@@ -172,6 +214,9 @@ export class LiveTab {
     });
     document.getElementById('pause').addEventListener('click', () => this.setPaused(!this.paused));
     document.getElementById('export-csv').addEventListener('click', () => this.exportCsv());
+    document.getElementById('reset-charts').addEventListener('click', () => {
+      if (confirm('Go back to the standard charts? Charts you added are removed (in this browser only).')) this.resetCharts();
+    });
     document.getElementById('telemetry-filter').addEventListener('input', () => this.renderTable());
   }
 
@@ -326,15 +371,28 @@ export class LiveTab {
   }
 }
 
-// Custom charts are remembered in this browser only.
-function loadCustomCharts() {
-  try { return JSON.parse(localStorage.getItem('biobuzz.charts') || '[]'); } catch { return []; }
+// Each browser keeps its own charts: which ones, in what order, and any added ones.
+const LAYOUT_KEY = 'biobuzz.charts.v2';
+
+function loadLayout() {
+  const standard = new Map(CHARTS.map((spec) => [spec.id, spec]));
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null');
+    if (Array.isArray(saved)) {
+      return saved.map((entry) => (entry.custom ? entry : standard.get(entry.id))).filter(Boolean);
+    }
+    // Charts added before layouts were saved.
+    const added = JSON.parse(localStorage.getItem('biobuzz.charts') || '[]');
+    return [...CHARTS, ...added];
+  } catch {
+    return [...CHARTS];
+  }
 }
 
-function saveCustomCharts(charts) {
+function saveLayout(charts) {
   try {
-    localStorage.setItem('biobuzz.charts', JSON.stringify(charts.filter((c) => c.spec.custom).map((c) => c.spec)));
-  } catch { /* private window: charts last until the page closes */ }
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(charts.map((c) => (c.spec.custom ? c.spec : { id: c.spec.id }))));
+  } catch { /* private window: the layout lasts until the page closes */ }
 }
 
 function drawBand(u, percent) {

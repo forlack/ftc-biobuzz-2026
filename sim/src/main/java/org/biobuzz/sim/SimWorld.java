@@ -226,6 +226,20 @@ public class SimWorld {
         vForward = vLeft = omega = 0;
     }
 
+    /**
+     * What the SDK does when an OpMode stops: every motor gets zero power. The robot coasts
+     * to a stop; the battery and balls stay as they are.
+     */
+    public synchronized void stopAllMotors() {
+        feeding = false;
+        setDrivePowers(0, 0, 0);
+        for (VelocityMotor motor : new VelocityMotor[]{pollen, nectar, intake}) {
+            motor.target = 0;
+            motor.output = 0;
+            motor.integral = 0;
+        }
+    }
+
     /** Puts the robot back to a fresh start: full battery, preloads, wheels stopped. */
     public synchronized void reset() {
         batteryRest = 13.2;
