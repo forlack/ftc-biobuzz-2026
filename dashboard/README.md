@@ -125,9 +125,18 @@ Dash.put("Arm position", arm.getPosition());   // a number: can be charted
 Dash.put("Arm state", "up");                     // text: telemetry table
 ```
 
-`dashboard.addData(...)` in the teleop does this too (and shows on the Driver Station).
-`Dash.frame()` ends each loop (DriveDashboard does it for the teleop). New names show in the
-telemetry table and in **+ Add chart** at once; the six standard charts are in `web/js/live.js`.
+In the teleop, all of this lives in `FieldCentricJava.updateTelemetry()`: `dashboard.addData`
+for readable Driver Station / Panels lines, `Dash.put` for plain numbers to chart. Read each
+sensor or motor speed **once** there and reuse the value: every read is a call to the hub that
+costs loop time. `Dash.frame()` ends each loop (DriveDashboard does it for the teleop). New
+names show in the telemetry table and in **+ Add chart** at once; the standard charts are in
+`web/js/live.js`.
+
+What the teleop sends (the autonomous and the simulator use the same names): `Intake RPM`,
+`Intake target`, `Pollen RPM`, `Pollen target`, `Nectar RPM`, `Nectar target`,
+`Flywheels on`, `Flywheels ready`, `Feeding` (1/0), `Stinger` (servo position), `Battery V`,
+`Loop ms`, `Speed %`, `Heading`, `Drive forward` / `Drive strafe` / `Drive turn` (sticks,
+-1 to 1), and text: `Intake` (ON/OFF/REVERSE), `Settings`.
 
 ### A function for the Auton Sequence (Paths tab)
 

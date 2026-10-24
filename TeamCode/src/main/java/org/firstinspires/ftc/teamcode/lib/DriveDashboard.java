@@ -55,6 +55,9 @@ public class DriveDashboard {
         panels.addData("Heading", Math.round(drive.getLastHeadingDegrees()) + " deg");
         Dash.put("Speed %", drive.getLastSpeedUsed() * 100);
         Dash.put("Heading", drive.getLastHeadingDegrees());
+        Dash.put("Drive forward", drive.getLastForward());   // stick inputs, -1 to 1
+        Dash.put("Drive strafe", drive.getLastStrafe());
+        Dash.put("Drive turn", drive.getLastTurn());
 
         panels.update(driverStation);
         Dash.frame();   // one dashboard frame per loop
@@ -65,9 +68,9 @@ public class DriveDashboard {
         panels.addLine(line);
     }
 
+    /** A line for the Driver Station and Panels. Send chart numbers with Dash.put instead. */
     public void addData(String label, Object value) {
         panels.addData(label, value);
-        Dash.put(label, value);   // also to the Total Chaos Dashboard
     }
 
 }

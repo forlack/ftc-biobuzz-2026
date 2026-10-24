@@ -99,6 +99,7 @@ public final class SimOpModes {
             Dash.put("Feeding", world.feeding());
             Dash.put("Shots", world.shotsFired());
             Dash.put("Stinger", world.stinger());
+            Dash.put("Flywheels on", flywheelsOn);
             Dash.put("Flywheels ready", flywheelsReady());
         }
     }

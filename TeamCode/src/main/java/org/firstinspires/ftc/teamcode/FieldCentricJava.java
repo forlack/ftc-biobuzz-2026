@@ -110,6 +110,7 @@ public class FieldCentricJava extends LinearOpMode {
     private RobotSettings settings;
     private long lastLoop, lastBatteryRead;
     private double batteryVolts;
+    private boolean feeding;
 
     @Override
     public void runOpMode() {
@@ -156,7 +157,7 @@ public class FieldCentricJava extends LinearOpMode {
             updateIntake();
             updateServos();
             updateShooter();
-            settings.update(dashboard::addData);
+            updateTelemetry();
             dashboard.update();
         }
     }
@@ -207,25 +208,16 @@ public class FieldCentricJava extends LinearOpMode {
             rpm = INTAKE_RPM;
         }
         intake.setTargetRPM(rpm);
-        dashboard.addLine("--- INTAKE ---");
-        dashboard.addData("Intake", reverseIntake.down() ? "REVERSE" : (toggleIntake.active ? "ON" : "OFF"));
-        dashboard.addData("Intake RPM (actual / target)",
-                Math.round(intake.getRPM()) + " / " + Math.round(intake.getTargetRPM()));
-        dashboard.addData("Intake % off target", percentOff(intake));
-        dashboard.addData("Intake P", intake.getP());
-        Dash.put("Intake RPM", intake.getRPM());
-        Dash.put("Intake target", intake.getTargetRPM());
     }
 
     private void updateServos() {
         // Transports run only while the flywheels are on (operator A or Panels FLYWHEELS_ON).
         transportPollen.setPower(FLYWHEELS_ON ? 1 : 0);
-        boolean shooting = gate.down() || forceShoot.down();
-        triggerNectar.setPower(shooting ? 1 : 0);
-        triggerPollen.setPower(shooting ? 1 : 0);
+        feeding = gate.down() || forceShoot.down();
+        triggerNectar.setPower(feeding ? 1 : 0);
+        triggerPollen.setPower(feeding ? 1 : 0);
         transportNectar.setPower(FLYWHEELS_ON ? 1 : 0);
         stinger.setPosition(sting.down() ? STINGER_DOWN : STINGER_UP);
-        dashboard.addData("Stinger position", stinger.getPosition());
     }
 
     private void updateShooter() {
@@ -243,38 +235,70 @@ public class FieldCentricJava extends LinearOpMode {
         }
         shooterPollen.setTargetRPM(FLYWHEELS_ON ? POLLEN_FLYWHEEL_RPM : 0);
         shooterNectar.setTargetRPM(FLYWHEELS_ON ? NECTAR_FLYWHEEL_RPM : 0);
-        dashboard.addLine("");
-        dashboard.addLine("--- SHOOTERS ---");
-        dashboard.addData("Pollen RPM (actual / target)",
-                Math.round(shooterPollen.getRPM()) + " / " + Math.round(shooterPollen.getTargetRPM()));
-        dashboard.addData("Pollen % off target", percentOff(shooterPollen));
-        dashboard.addData("Pollen hub PIDF", shooterPollen.getAppliedPIDF());
-        dashboard.addData("Nectar RPM (actual / target)",
-                Math.round(shooterNectar.getRPM()) + " / " + Math.round(shooterNectar.getTargetRPM()));
-        dashboard.addData("Nectar % off target", percentOff(shooterNectar));
-        dashboard.addData("Nectar hub PIDF", shooterNectar.getAppliedPIDF());
-        // Numbers for the Total Chaos Dashboard's charts; the same names as the autonomous and simulator.
-        Dash.put("Pollen RPM", shooterPollen.getRPM());
-        Dash.put("Pollen target", shooterPollen.getTargetRPM());
-        Dash.put("Nectar RPM", shooterNectar.getRPM());
-        Dash.put("Nectar target", shooterNectar.getTargetRPM());
+    }
+
+    /**
+     * Everything the drivers and the dashboard see, in one place. Each motor speed is read
+     * from the hub once per loop (every read is a call to the hub that costs loop time).
+     *
+     * Driver Station / Panels get readable lines. The Total Chaos Dashboard gets plain numbers
+     * with the same names the autonomous and the simulator use, so the same charts work.
+     */
+    private void updateTelemetry() {
+        double intakeRpm = intake.getRPM();
+        double pollenRpm = shooterPollen.getRPM();
+        double nectarRpm = shooterNectar.getRPM();
+        boolean ready = FLYWHEELS_ON
+                && Math.abs(pollenRpm - shooterPollen.getTargetRPM()) < VelocityMotor.RPM_TOLERANCE
+                && Math.abs(nectarRpm - shooterNectar.getTargetRPM()) < VelocityMotor.RPM_TOLERANCE;
+        String intakeState = reverseIntake.down() ? "REVERSE" : (toggleIntake.active ? "ON" : "OFF");
+
         long now = System.nanoTime();
         // Reading the battery is a call to the hub that takes a few ms, so only 4 times a second.
         if (now - lastBatteryRead > 250_000_000L) {
             lastBatteryRead = now;
             batteryVolts = hardwareMap.voltageSensor.iterator().next().getVoltage();
         }
+
+        // Driver Station and Panels.
+        dashboard.addLine("--- INTAKE ---");
+        dashboard.addData("Intake", intakeState + "  " + rpmLine(intakeRpm, intake.getTargetRPM()));
+        dashboard.addData("Intake P / F", intake.getP() + " / " + intake.getF());
+        dashboard.addLine("");
+        dashboard.addLine("--- SHOOTERS ---");
+        dashboard.addData("Flywheels", !FLYWHEELS_ON ? "OFF" : ready ? "READY" : "spinning up");
+        dashboard.addData("Pollen", rpmLine(pollenRpm, shooterPollen.getTargetRPM()));
+        dashboard.addData("Nectar", rpmLine(nectarRpm, shooterNectar.getTargetRPM()));
+        dashboard.addData("Feeding", feeding ? "YES" : "no");
+        dashboard.addData("Pollen hub PIDF", shooterPollen.getAppliedPIDF());
+        dashboard.addData("Nectar hub PIDF", shooterNectar.getAppliedPIDF());
+        dashboard.addData("Stinger", (sting.down() ? "DOWN " : "UP ") + stinger.getPosition());
+        dashboard.addData("Battery", String.format(java.util.Locale.US, "%.2f V", batteryVolts));
+        settings.update((label, value) -> {
+            dashboard.addData(label, value);
+            Dash.put(label, value);
+        });
+
+        // Total Chaos Dashboard: numbers to chart (same names as the autonomous and simulator).
+        Dash.put("Intake", intakeState);
+        Dash.put("Intake RPM", intakeRpm);
+        Dash.put("Intake target", intake.getTargetRPM());
+        Dash.put("Pollen RPM", pollenRpm);
+        Dash.put("Pollen target", shooterPollen.getTargetRPM());
+        Dash.put("Nectar RPM", nectarRpm);
+        Dash.put("Nectar target", shooterNectar.getTargetRPM());
+        Dash.put("Flywheels on", FLYWHEELS_ON);
+        Dash.put("Flywheels ready", ready);
+        Dash.put("Feeding", feeding);
+        Dash.put("Stinger", stinger.getPosition());
         Dash.put("Battery V", batteryVolts);
         if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
         lastLoop = now;
     }
 
-    /** Numeric percent error for graphing. Negative means too slow; zero target reports 0. */
-    private static double percentOff(VelocityMotor motor) {
-        double target = motor.getTargetRPM();
-        if (target == 0) {
-            return 0;
-        }
-        return (motor.getRPM() - target) / Math.abs(target) * 100;
+    /** "3385 / 3400 RPM (-0.4%)" for the Driver Station. */
+    private static String rpmLine(double rpm, double target) {
+        String line = Math.round(rpm) + " / " + Math.round(target) + " RPM";
+        return target == 0 ? line : String.format(java.util.Locale.US, "%s (%+.1f%%)", line, (rpm - target) / Math.abs(target) * 100);
     }
 }

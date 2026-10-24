@@ -298,8 +298,9 @@ while (opModeIsActive()) {
 }
 ```
 
-To add something to the robot, write an `updateXxx()` method, have it publish its own
-telemetry with `dashboard.addData(...)`, and add one call to the loop.
+To add something to the robot, write an `updateXxx()` method and add one call to the loop.
+Its telemetry goes in `updateTelemetry()`: `dashboard.addData(...)` for a readable Driver
+Station / Panels line, and `Dash.put(...)` for a number to chart in the Total Chaos Dashboard.
 
 **The one rule: never block the loop.** No `sleep()`, no `while (motor.isBusy())`. The Robot
 Controller will stop the robot if the loop stops turning over, and gamepads only refresh

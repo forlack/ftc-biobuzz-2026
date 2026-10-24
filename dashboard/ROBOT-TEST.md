@@ -50,7 +50,7 @@ Tick each one; write down anything that fails.
 | 4 | Tune tab | Settings listed with green dots; **no Simulator group** |
 | 5 | Robot tab | Map **2222-Config (in use)**, no red problems |
 | 6 | OpMode bar | Init then Start **Field Centric (Java)** from the dashboard; Stop stops it |
-| 7 | Live tab | Flywheel, intake, battery and loop charts move; telemetry table fills. (The field stays empty in teleop: teleop does not send its position yet.) |
+| 7 | Live tab | Flywheel, intake, battery and loop charts move; telemetry table fills. **+ Add chart** offers `Flywheels ready`, `Feeding`, `Drive forward`…; toggling flywheels / holding feed shows on them. Driver Station lines read cleanly (one line per RPM with % off). (The field stays empty in teleop: teleop does not send its position yet.) |
 | 8 | Tune live | Change `INTAKE_RPM` while running: the intake changes. **Save to robot**: dots go green; History shows the save |
 | 9 | Load | Close every other dashboard tab, then run the commands below. Pass: **+ loop under 1 ms** |
 | 10 | Auton | Paths tab: open `saturday` from the robot, Save. On the Driver Station run **Pedro Pathing Autonomous** (ROUTE saturday): it drives the route and shoots |
