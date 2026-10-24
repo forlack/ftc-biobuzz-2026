@@ -16,15 +16,16 @@ import java.nio.file.StandardCopyOption;
  * Its "SD card" is sim/sdcard/ (like /sdcard/FIRST). On first start it is filled from the
  * repo: robot-config/*.xml, settings/robot.json, paths/ and autos/.
  *
- * Options: --port N, --storage DIR, --web DIR, --fresh (empty the SD card first),
- *          --init "OpMode name", --start (press PLAY after INIT).
+ * By default it starts "Field Centric (Java)" running, so the dashboard has live telemetry
+ * straight away. Options: --port N, --storage DIR, --web DIR, --fresh (empty the SD card
+ * first), --init "OpMode name" [--start], --idle (start with no OpMode running).
  */
 public final class SimMain {
     public static void main(String[] args) throws Exception {
         int port = DashboardServer.DEFAULT_PORT;
         File storage = new File("sdcard");
         File web = new File("../dashboard/web");
-        boolean fresh = false, start = false;
+        boolean fresh = false, start = false, idle = false;
         String init = null;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -34,6 +35,7 @@ public final class SimMain {
                 case "--fresh": fresh = true; break;
                 case "--init": init = args[++i]; break;
                 case "--start": start = true; break;
+                case "--idle": idle = true; break;
                 default: throw new IllegalArgumentException("Unknown option " + args[i]);
             }
         }
@@ -56,9 +58,14 @@ public final class SimMain {
         System.out.println("  SD card:    " + storage.getCanonicalPath());
         System.out.println("  Web files:  " + web.getCanonicalPath());
         System.out.println("Press Ctrl+C to stop.");
+        if (init == null && !idle) {
+            init = "Field Centric (Java)";
+            start = true;
+        }
         if (init != null) {
             host.initOpMode(init);
             if (start) host.startOpMode();
+            System.out.println("  Running:    " + init + (start ? "" : " (INIT)"));
         }
         Thread.currentThread().join();
     }

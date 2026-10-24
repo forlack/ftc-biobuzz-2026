@@ -17,8 +17,9 @@ The bar at the top picks an OpMode and runs **Init / Start / Stop**, and shows t
 ## Try it without the robot: the simulator
 
 ```bash
-./simulate                     # then open http://localhost:8686
+./simulate                     # then open http://localhost:8686 (teleop starts running)
 ./simulate --fresh             # start over with a clean fake SD card
+./simulate --idle              # start with no OpMode (battery and wheels still report)
 ./simulate --init "Pedro Pathing Autonomous" --start
 ```
 
