@@ -58,8 +58,8 @@ public class SimWorld {
                     integral = 0;
                 } else {
                     double error = target - measured;
-                    // Summed every cycle, like the hub (see tests/java/FlywheelTuningCheck).
-                    integral = clamp(integral + error, -20000, 20000);
+                    // Integrated per second (see tests/java/FlywheelTuningCheck for why).
+                    integral = clamp(integral + error * 0.02, -20000, 20000);
                     double derivative = (error - lastError) / 0.02;
                     lastError = error;
                     output = clamp((p * error + i * integral + d * derivative + f * target) / 32767.0, -1, 1);

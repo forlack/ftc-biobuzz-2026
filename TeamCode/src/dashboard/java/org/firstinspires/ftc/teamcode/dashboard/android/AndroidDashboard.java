@@ -129,13 +129,21 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
         }
     }
 
+    private volatile String activeMap = "";
+    private volatile long activeMapRead;
+
+    /** Re-read at most every 5 s: it is asked for twice a second and only changes on the DS. */
     @Override public String activeHardwareMap() {
+        long now = System.currentTimeMillis();
+        if (now - activeMapRead < 5000) return activeMap;
+        activeMapRead = now;
         try {
             RobotConfigFile active = new RobotConfigFileManager().getActiveConfig();
-            return active.isNoConfig() ? "" : active.getName() + ".xml";
+            activeMap = active.isNoConfig() ? "" : active.getName() + ".xml";
         } catch (Throwable error) {
-            return "";
+            activeMap = "";
         }
+        return activeMap;
     }
 
     @Override public RobotSettings settings() { return settings; }

@@ -15,13 +15,14 @@ import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import java.util.Locale;
 
 /**
- * Finds F, P, I and D for both flywheels at the target RPMs from robot.json / FieldCentricJava.
+ * Finds F, P, I and D for the flywheels at the target RPMs from robot.json / FieldCentricJava.
  * The procedure is in lib/FlywheelTuning (checked on the desktop by tests/java/FlywheelTuningCheck):
- * F from two fixed powers (saved as F at 12.5 V), then the same P values on both wheels, each
- * tried 3 times, then I and D, kept only if they clearly help.
+ * F from two fixed powers (saved as F at 12.5 V); P coarse then narrowing in; I from 3 and D
+ * from 5 upwards while they help; P checked again with them. Every trial runs 3 times on both
+ * wheels and their scores are pooled: the wheels are identical, so both get the same answer.
  *
  * Both wheels run at the same time and spin up to full speed: keep hands and balls clear.
- * Takes about 2 minutes. Press STOP at any time to stop the wheels.
+ * Takes about 2.5 minutes. Press STOP at any time to stop the wheels.
  * At the end, press A to put the results in the settings and save robot.json.
  * Watch it on the dashboard's Live tab: the Flywheels chart, and every trial's score.
  *
@@ -40,7 +41,7 @@ public class FlywheelTuner extends LinearOpMode {
         HubRig rig = new HubRig();
 
         telemetry.addData("Flywheel Tuner", "Both flywheels spin up to full speed. Keep hands and balls clear.");
-        telemetry.addData("Takes", "about 2 minutes. STOP stops the wheels.");
+        telemetry.addData("Takes", "about 2.5 minutes. STOP stops the wheels.");
         telemetry.addData("Settings", settings.status());
         telemetry.addData("Battery", "%.2f V", rig.volts());
         for (int w = 0; w < rig.wheels(); w++) telemetry.addData(rig.name(w) + " target RPM", rig.targetRPM(w));
@@ -68,33 +69,35 @@ public class FlywheelTuner extends LinearOpMode {
                 counted++;
             }
         }
-        fNow = counted == 0 ? FieldCentricJava.FLYWHEEL_F : Math.round(fNow / counted * 100) / 100.0;
-        FlywheelTuning.Wheel pollen = result.wheels.get(0), nectar = result.wheels.get(1);
-        boolean found = result.fAt12_5V > 0 && pollen.best != null && nectar.best != null;
+        fNow = counted == 0 ? oldF : Math.round(fNow / counted * 100) / 100.0;
+        FlywheelTuning.Trial best = result.best;
+        boolean found = result.fAt12_5V > 0 && best != null;
 
         // Every trial, dashboard only (the Driver Station screen is too small for the table).
-        for (FlywheelTuning.Wheel wheel : result.wheels) {
-            for (FlywheelTuning.Trial trial : wheel.trials) Dash.put(wheel.name + " " + trial.label, trial.describe());
+        for (int n = 0; n < result.trials.size(); n++) {
+            FlywheelTuning.Trial trial = result.trials.get(n);
+            Dash.put(String.format(Locale.US, "Trial %02d %s", n + 1, trial.label()), trial.describe());
         }
 
         boolean saved = false;
         while (opModeIsActive()) {
             if (found && !saved && gamepad1.a) {
+                // The flywheels are identical, so both get the same answer.
                 FieldCentricJava.FLYWHEEL_F = compensation ? result.fAt12_5V : fNow;
                 if (compensation) FieldCentricJava.FLYWHEEL_F_AT_10V = result.fAt10V;
-                FieldCentricJava.POLLEN_FLYWHEEL_P = pollen.best.p;
-                FieldCentricJava.POLLEN_FLYWHEEL_I = pollen.best.i;
-                FieldCentricJava.POLLEN_FLYWHEEL_D = pollen.best.d;
-                FieldCentricJava.NECTAR_FLYWHEEL_P = nectar.best.p;
-                FieldCentricJava.NECTAR_FLYWHEEL_I = nectar.best.i;
-                FieldCentricJava.NECTAR_FLYWHEEL_D = nectar.best.d;
+                FieldCentricJava.POLLEN_FLYWHEEL_P = FieldCentricJava.NECTAR_FLYWHEEL_P = best.p;
+                FieldCentricJava.POLLEN_FLYWHEEL_I = FieldCentricJava.NECTAR_FLYWHEEL_I = best.i;
+                FieldCentricJava.POLLEN_FLYWHEEL_D = FieldCentricJava.NECTAR_FLYWHEEL_D = best.d;
                 settings.save();
                 saved = true;
             }
             telemetry.addData("Next", !found ? "Nothing to apply: see the warnings."
-                    : saved ? "Applied. " + settings.status() + "  (./robot-sync pull to keep it in Git)"
-                    : "Press A to apply and save to robot.json. STOP to discard.");
+                    : saved ? "Applied to both flywheels. " + settings.status() + "  (./robot-sync pull to keep it in Git)"
+                    : "Press A to apply to both flywheels and save robot.json. STOP to discard.");
             if (!result.warning.isEmpty()) telemetry.addData("WARNING", result.warning);
+            for (FlywheelTuning.Wheel wheel : result.wheels) {
+                if (!wheel.warning.isEmpty()) telemetry.addData(wheel.name + " WARNING", wheel.warning);
+            }
             telemetry.addData("Battery during test", "%.2f V", result.volts);
             if (compensation) {
                 telemetry.addData("FLYWHEEL_F (at 12.5 V)", "%.2f  (was %.2f)", result.fAt12_5V, oldF);
@@ -102,14 +105,13 @@ public class FlywheelTuner extends LinearOpMode {
             } else {
                 telemetry.addData("FLYWHEEL_F (compensation off)", "%.2f  (was %.2f)", fNow, oldF);
             }
-            for (FlywheelTuning.Wheel wheel : result.wheels) {
-                if (!wheel.warning.isEmpty()) telemetry.addData(wheel.name + " WARNING", wheel.warning);
-                if (wheel.best == null) continue;
-                telemetry.addData(wheel.name + " best", String.format(Locale.US, "P %s  I %s  D %s   %s",
-                        FlywheelTuning.format(wheel.best.p), FlywheelTuning.format(wheel.best.i),
-                        FlywheelTuning.format(wheel.best.d), wheel.best.describe()));
+            if (best != null) {
+                telemetry.addData("Best", best.label() + "   " + best.describe());
+                telemetry.addData("Just as good", "P " + FlywheelTuning.format(result.similarPLow) + " to "
+                        + FlywheelTuning.format(result.similarPHigh) + " (within the noise; chose the gentlest)");
             }
-            telemetry.addData("Every trial", "on the dashboard's Live tab, telemetry table");
+            telemetry.addData("Trials", result.trials.size() + " in " + Math.round(result.seconds)
+                    + " s; every score in the dashboard's telemetry table");
             telemetry.update();
             sleep(50);
         }
@@ -166,7 +168,7 @@ public class FlywheelTuner extends LinearOpMode {
 
         public void status(String text) {
             telemetry.addData("Status", text);
-            telemetry.addData("Battery", "%.2f V", lastVolts);
+            telemetry.addData("Battery V", "%.2f", lastVolts);
             for (int w = 0; w < 2; w++) {
                 // Reuse the procedure's own reading when it is fresh: every read is a hub call.
                 double rpm = System.nanoTime() - lastRead[w] < 30_000_000L ? lastRpm[w] : rpm(w);

@@ -432,14 +432,28 @@ public class DashboardServer {
         json.put("opModes", host.opModes());
         json.put("active", host.activeOpMode());
         json.put("state", host.opModeState());
-        double volts = host.batteryVolts();
-        json.put("battery", Double.isNaN(volts) ? JSONObject.NULL : (Object) round(volts, 2));
+        json.put("battery", battery());
         json.put("hardwareMap", host.activeHardwareMap());
         json.put("settingsStatus", host.settings().status());
         json.put("locked", lock.locked());
         json.put("load", load);
         json.put("time", Dash.now());
         return json;
+    }
+
+    /**
+     * While an OpMode runs, the server never reads the hubs itself: its reads make the OpMode's
+     * hub calls wait (seen on the robot: ~40 ms loop spikes every 500 ms, the state message's
+     * rate). It shows the "Battery V" the OpMode sends instead, and reads the hubs only when
+     * nothing is running.
+     */
+    private Object battery() {
+        if (!host.activeOpMode().isEmpty()) {
+            Double sent = Dash.latestNumber("Battery V", 2.0);
+            return sent == null ? JSONObject.NULL : (Object) round(sent, 2);
+        }
+        double volts = host.batteryVolts();
+        return Double.isNaN(volts) ? JSONObject.NULL : (Object) round(volts, 2);
     }
 
     private JSONObject settingsJson() throws JSONException {

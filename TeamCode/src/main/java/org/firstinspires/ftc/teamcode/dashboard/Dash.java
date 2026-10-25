@@ -130,6 +130,21 @@ public final class Dash {
         return result;
     }
 
+    /** The newest value of a number sent in the last {@code maxAgeSeconds}, or null. */
+    public static Double latestNumber(String key, double maxAgeSeconds) {
+        double oldest = now() - maxAgeSeconds;
+        synchronized (LOCK) {
+            java.util.Iterator<Frame> newestFirst = FRAMES.descendingIterator();
+            while (newestFirst.hasNext()) {
+                Frame frame = newestFirst.next();
+                if (frame.t < oldest) return null;
+                Double value = frame.numbers.get(key);
+                if (value != null) return value;
+            }
+        }
+        return null;
+    }
+
     /** Sequence number of the newest frame, 0 if none. */
     public static long latestSeq() {
         synchronized (LOCK) {

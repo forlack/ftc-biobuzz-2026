@@ -39,11 +39,29 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   dashboard CPU 1.8% of a core, whole app 86% of a core (~21% of the hub). Deploy issue that day:
   `installDebug` "Adb connection Error:EOF" with Android Studio open (it manages adb too); fixed
   by quitting Studio. Old flywheel tuner gave identical wheels P 30 vs 100 (see below).
+- **Loop spikes found and fixed (2026-10-24):** on the robot `Loop ms` averaged ~20 ms with
+  spikes to 55-77 ms every ~0.5 s, in `Time drive ms` and `Time intake+servos ms` (sections that
+  are only hub calls) at once. Cause: the dashboard's state message (every 500 ms while any
+  browser is open) read every hub's battery voltage on the server thread, so the OpMode's hub
+  calls waited. Now `DashboardServer.battery()` never touches the hubs while an OpMode runs (it
+  shows the OpMode's `Battery V` via `Dash.latestNumber`), and AndroidDashboard caches the
+  active hardware map name for 5 s. **Rule: nothing on a dashboard thread may make hub calls
+  while an OpMode runs.** Not yet re-measured on the robot.
 - **Loop time (2026-10-24):** teleop uses `LynxModule` bulk caching (MANUAL, cleared at the top
   of each loop) and sends section timers `Time drive ms` (incl. IMU), `Time intake+servos ms`,
   `Time shooter ms`, `Time sensors+telemetry ms` (incl. bulk reads). Not yet run on the robot:
   compare `Loop ms` to 23.4 ms and see which section dominates before optimising further
   (suspects: Control Hub IMU read; repeated servo/target writes, which the SDK may already skip).
+- **Flywheel tuner, second version (2026-10-24, after a robot run):** the first rebuild chose
+  P 25 (its lowest) and I = D = 0 on the robot while I 3 and D 5 (its highest) still lowered
+  the cost. Now: both wheels' scores pooled into one shared answer (applied to both); P coarse
+  {5,10,20,35,50} then narrowing in (and past an end); I from 3 and D from 5, growing x1.6
+  while the cost keeps falling (cap 60, at least 3 tries); then P re-checked at x0.7 and x1.4
+  with the chosen I and D; a value must beat the noise (2 x combined standard error, at least
+  0.1%) to win, ties go to the gentler setting; reports the range of P that is "just as good".
+  ~19 trials, ~2.5 min. The model now integrates I per second (the robot's I kept helping up
+  to 3, which the per-cycle model contradicted); the sim's motor model too.
+  Details of the first rebuild, still true where not replaced:
 - **Flywheel tuner rebuilt (2026-10-24):** procedure in plain-Java `lib/FlywheelTuning` (Rig
   interface), OpMode `helpers/FlywheelTuner` is the hardware Rig; desktop check
   `tests/java/FlywheelTuningCheck.java` runs the same procedure on a model (hub PIDF every 20 ms,
