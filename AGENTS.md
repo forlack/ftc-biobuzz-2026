@@ -6,7 +6,7 @@ Last updated: 2026-10-25
 
 ---
 
-## Total Chaos Dashboard + simulator — 2026-10-23 (branch `dashboard`, not merged)
+## Total Chaos Dashboard + simulator — 2026-10-23 (built on branch `dashboard`; **merged into `main` 2026-10-25**, a56f46e)
 
 Built while the robot was with another team member; verified only against the simulator.
 Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-TEST.md`.
