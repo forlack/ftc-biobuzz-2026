@@ -22,27 +22,28 @@ const LEGEND = {
     ['RB', 'hold: gates open'], ['LB', 'hold: stinger down']],
 };
 
+// PS5 / Logitech F310 layout: D-pad and A B X Y on top, the two sticks side by side below.
 const SVG = `
 <svg class="pad-svg" id="pad-svg" viewBox="0 0 520 270" aria-label="Virtual gamepad">
   <rect class="pad-key trigger" data-axis="lt" x="80" y="6" width="100" height="20" rx="6"/><text x="130" y="21">LT</text>
   <rect class="pad-key trigger" data-axis="rt" x="340" y="6" width="100" height="20" rx="6"/><text x="390" y="21">RT</text>
   <rect class="pad-key" data-btn="lb" x="70" y="32" width="118" height="22" rx="10"/><text x="129" y="48">LB</text>
   <rect class="pad-key" data-btn="rb" x="332" y="32" width="118" height="22" rx="10"/><text x="391" y="48">RB</text>
-  <path class="pad-body" d="M120 60 H400 C450 60 480 90 492 140 C505 195 510 245 470 255 C440 262 415 235 395 205 H125 C105 235 80 262 50 255 C10 245 15 195 28 140 C40 90 70 60 120 60 Z"/>
-  <g class="pad-stick" data-stick="left"><circle class="well" cx="145" cy="118" r="42"/><circle class="knob" cx="145" cy="118" r="22"/><text class="small" x="145" y="122">L</text></g>
-  <g class="pad-stick" data-stick="right"><circle class="well" cx="318" cy="190" r="42"/><circle class="knob" cx="318" cy="190" r="22"/><text class="small" x="318" y="194">R</text></g>
-  <rect class="pad-key" data-btn="up" x="194" y="155" width="22" height="24" rx="3"/>
-  <rect class="pad-key" data-btn="down" x="194" y="201" width="22" height="24" rx="3"/>
-  <rect class="pad-key" data-btn="left" x="170" y="179" width="24" height="22" rx="3"/>
-  <rect class="pad-key" data-btn="right" x="216" y="179" width="24" height="22" rx="3"/>
-  <rect class="pad-center" x="194" y="179" width="22" height="22"/>
-  <rect class="pad-key" data-btn="back" x="216" y="106" width="28" height="14" rx="7"/><text class="tiny" x="230" y="135">BACK</text>
-  <rect class="pad-key" data-btn="start" x="276" y="106" width="28" height="14" rx="7"/><text class="tiny" x="290" y="135">START</text>
-  <circle class="pad-key" data-btn="guide" cx="260" cy="80" r="11"/>
-  <circle class="pad-key face y" data-btn="y" cx="380" cy="84" r="15"/><text x="380" y="89">Y</text>
-  <circle class="pad-key face x" data-btn="x" cx="348" cy="116" r="15"/><text x="348" y="121">X</text>
-  <circle class="pad-key face b" data-btn="b" cx="412" cy="116" r="15"/><text x="412" y="121">B</text>
-  <circle class="pad-key face a" data-btn="a" cx="380" cy="148" r="15"/><text x="380" y="153">A</text>
+  <path class="pad-body" d="M120 60 H400 C450 60 480 90 492 140 C505 195 510 245 470 255 C440 262 418 248 398 238 H122 C102 248 80 262 50 255 C10 245 15 195 28 140 C40 90 70 60 120 60 Z"/>
+  <rect class="pad-key" data-btn="up" x="114" y="85" width="22" height="24" rx="3"/>
+  <rect class="pad-key" data-btn="down" x="114" y="131" width="22" height="24" rx="3"/>
+  <rect class="pad-key" data-btn="left" x="90" y="109" width="24" height="22" rx="3"/>
+  <rect class="pad-key" data-btn="right" x="136" y="109" width="24" height="22" rx="3"/>
+  <rect class="pad-center" x="114" y="109" width="22" height="22"/>
+  <text class="tiny" x="226" y="90">BACK</text><rect class="pad-key" data-btn="back" x="212" y="96" width="28" height="14" rx="7"/>
+  <text class="tiny" x="294" y="90">START</text><rect class="pad-key" data-btn="start" x="280" y="96" width="28" height="14" rx="7"/>
+  <circle class="pad-key" data-btn="guide" cx="260" cy="132" r="11"/>
+  <circle class="pad-key face y" data-btn="y" cx="395" cy="88" r="15"/><text x="395" y="93">Y</text>
+  <circle class="pad-key face x" data-btn="x" cx="363" cy="120" r="15"/><text x="363" y="125">X</text>
+  <circle class="pad-key face b" data-btn="b" cx="427" cy="120" r="15"/><text x="427" y="125">B</text>
+  <circle class="pad-key face a" data-btn="a" cx="395" cy="152" r="15"/><text x="395" y="157">A</text>
+  <g class="pad-stick" data-stick="left"><circle class="well" cx="200" cy="190" r="40"/><circle class="knob" cx="200" cy="190" r="21"/><text class="small" x="200" y="194">L</text></g>
+  <g class="pad-stick" data-stick="right"><circle class="well" cx="320" cy="190" r="40"/><circle class="knob" cx="320" cy="190" r="21"/><text class="small" x="320" y="194">R</text></g>
 </svg>`;
 
 export class GamepadDrawer {
