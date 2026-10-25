@@ -12,6 +12,7 @@ import org.firstinspires.ftc.teamcode.lib.Actions;
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
 import org.firstinspires.ftc.teamcode.lib.Button;
+import org.firstinspires.ftc.teamcode.lib.StickCurve;
 import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
 import org.firstinspires.ftc.teamcode.lib.Mechanisms;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
@@ -230,8 +231,10 @@ public final class SimOpModes {
             if (resetFront.down()) headingZero = world.pose()[2];
         }
 
+        /** Deadzone, then expo when MecanumDrive.EXPO_CONTROLS is on (as MecanumDrive does). */
         private static double ignoreDrift(double value) {
-            return Math.abs(value) < MecanumDrive.STICK_DEADZONE ? 0.0 : value;
+            if (Math.abs(value) < MecanumDrive.STICK_DEADZONE) return 0.0;
+            return MecanumDrive.EXPO_CONTROLS ? StickCurve.expo(value) : value;
         }
 
         @Override public void stop() {

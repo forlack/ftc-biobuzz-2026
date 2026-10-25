@@ -106,12 +106,15 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   Wi-Fi adbd on the Control Hub** (ROBOT-TEST check 15). User reported: laptop-side adb reset
   never helps when it sticks; logcat showed no frequent GC lines (ART only logs slow GCs, so
   GC is unlikely to be the 0.5 s loop spikes).
-- **Answered, not built (2026-10-25):** path speed: routes support `maxSpeed` (in/s, Foresight
-  `maxVelocityConstraint`) per path in AutoRoute, but the path editor has no field for it
-  and does not export/import it (hand-edit the JSON). Path time limit: Pedro's
+- **Path top speed and expo (2026-10-25):** Auton Sequence pencil on a "follow" row sets the
+  path's `maxSpeed` (in/s; Visualizer `maxSpeed` on atomic paths, exported/imported, used in
+  the time estimate; robot: Foresight `maxVelocityConstraint`, sim verified ≤ 25.3 at 25).
+  `MecanumDrive.EXPO_CONTROLS` (one Tune flag, default off; curve in plain-Java
+  `lib/StickCurve`, 0.3·x + 0.7·x³, after the deadzone, on strafe/forward/turn; the sim uses
+  it too). User declined path time limits. Path time limit (not built, user's call): Pedro's
   `timeoutConstraint` only limits end-of-path correcting; AutoSequence's follow step waits
   for `!follower.isBusy()` with no time limit, so a robot blocked mid-path waits until the
-  30 s end. Drive sticks are linear (deadzone only), no expo.
+  30 s end.
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -167,7 +170,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (118
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (123
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

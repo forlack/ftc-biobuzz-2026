@@ -170,6 +170,23 @@ try {
   await sleep(700);
   const stopped2 = parsePose(await b.eval(`document.getElementById('pose-text').textContent`));
   check(Math.hypot(stopped2[0] - stopped1[0], stopped2[1] - stopped1[1]) < 0.5, 'and the robot stops');
+  // Expo (MecanumDrive.EXPO_CONTROLS): half stick drives much slower with it on.
+  const halfStick = async () => {
+    const start = parsePose(await b.eval(`document.getElementById('pose-text').textContent`));
+    await mouse('mousePressed', knob.x, knob.y);
+    await mouse('mouseMoved', knob.x, knob.y - knob.h * 0.26);   // half of the stick's travel
+    await sleep(1200);
+    const end = parsePose(await b.eval(`document.getElementById('pose-text').textContent`));
+    await mouse('mouseReleased', knob.x, knob.y);
+    await sleep(1500);
+    return Math.hypot(end[0] - start[0], end[1] - start[1]);
+  };
+  const linear = await halfStick();
+  await api('/api/settings', { method: 'POST', body: { group: 'MecanumDrive', name: 'EXPO_CONTROLS', value: true } });
+  const withExpo = await halfStick();
+  await api('/api/settings', { method: 'POST', body: { group: 'MecanumDrive', name: 'EXPO_CONTROLS', value: false } });
+  check(linear > 5 && withExpo < linear * 0.7,
+    `EXPO_CONTROLS on the Tune tab softens the sticks: half stick drove ${linear.toFixed(1)} in linear, ${withExpo.toFixed(1)} in with expo`);
   // Operator buttons: gamepad 2, A turns the flywheels off.
   await b.eval(`document.querySelector('#pad-seg [data-pad="2"]').click()`);
   await b.waitFor(`document.querySelector('#pad-take').textContent === 'Take control' && document.querySelector('#pad-pill').hidden`);
@@ -504,6 +521,14 @@ try {
   check(/of 30 s/.test(time), `timeline estimate includes the waits: ${time}`);
   const markers = await b.eval(`${frame}.querySelectorAll('[id^="robot-event-"]').length`);
   check(markers === 2, 'both on-path functions show as markers on the field');
+  // A path's top speed: path2 at most 25 in/s (pencil on its "follow" row).
+  const path2Row = `[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].find((li) => /follow\\s+path2/.test(li.innerText))`;
+  check(await b.eval(`${path2Row}.querySelector('[data-testid=path-speed-text]').textContent === 'full speed'`), 'paths go at full speed unless you set one');
+  await b.eval(`${path2Row}.querySelector('[data-testid=path-speed-edit]').click()`);
+  await b.waitFor(`${frame}.querySelector('[data-testid=path-speed]')`);
+  await setIn('path-speed', 25);
+  await b.eval(`${frame}.querySelector('[data-testid=path-speed-done]').click()`);
+  check(await b.eval(`${path2Row}.querySelector('[data-testid=path-speed-text]').textContent === 'max 25 in/s'`), 'the pencil on a path sets its top speed: path2 max 25 in/s');
   await b.screenshot(join(OUT, '4-paths.png'));
   await b.eval(`${frame}.querySelector('[data-testid=route-save]').click()`);
   await b.waitFor(`${frame}.querySelector('[data-testid=route-message]').innerText.includes('Saved autos/saturday.json')`);
@@ -513,6 +538,7 @@ try {
     && path2.events[1].action === 'deployStinger' && path2.events[1].at === 0.45,
     'the saved route has flywheels on at 20% and stinger down at 45% of path2, in order');
   check(route.steps[0].action === 'wait' && route.steps[0].params.seconds === 0.5, 'and the edited wait of 0.5 s');
+  check(path2.maxSpeed === 25 && route.paths[0].maxSpeed === undefined, 'and path2\'s top speed (25 in/s; path1 has none, full speed)');
   check(route.steps[route.steps.length - 1].action === 'stowStinger', 'and "stinger up" as the last step');
   check(route.paths[1].points.length === 3 && route.start.heading === 270, 'geometry and start pose survive the round trip');
   check(route.robot && route.robot.width > 0 && route.robot.length > 0 && route.robot.safetyMargin >= 0,
@@ -585,7 +611,7 @@ try {
   await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
   const { WebSocket: _ } = globalThis;
   const ws = new WebSocket(`ws://localhost:${PORT}/ws`);
-  const seen = { steps: new Set(), stinger: new Set(), last: null };
+  const seen = { steps: new Set(), stinger: new Set(), last: null, path2Peak: 0, mark: null };
   const decoder = new FrameDecoder();
   ws.onmessage = (event) => {
     const telemetry = decoder.handle(JSON.parse(event.data));
@@ -594,6 +620,16 @@ try {
       if (f.s && f.s.Step) seen.steps.add(f.s.Step.replace(/^\d+\/\d+\s+/, ''));
       if (f.n.Stinger !== undefined) seen.stinger.add(f.n.Stinger);
       if (f.n.X !== undefined) seen.last = f;
+      // Speed on path2, over 0.25 s steps.
+      const onPath2 = f.s && f.s.Step ? /follow path2/.test(f.s.Step) : seen.onPath2;
+      seen.onPath2 = onPath2;
+      if (onPath2 && f.n.X !== undefined) {
+        if (!seen.mark) seen.mark = f;
+        else if (f.t - seen.mark.t >= 0.25) {
+          seen.path2Peak = Math.max(seen.path2Peak, Math.hypot(f.n.X - seen.mark.n.X, f.n.Y - seen.mark.n.Y) / (f.t - seen.mark.t));
+          seen.mark = f;
+        }
+      } else seen.mark = null;
     }
   };
   const deadline = Date.now() + 25000;
@@ -603,6 +639,7 @@ try {
   check(seen.steps.has('follow path1') && seen.steps.has('feed on') && seen.steps.has('stinger up'),
     `it ran the steps from the file: ${[...seen.steps].join(' → ')}`);
   check(seen.stinger.has(saved.FieldCentricJava.STINGER_DOWN), 'the stinger went down part way along path2');
+  check(seen.path2Peak > 5 && seen.path2Peak <= 25 * 1.15, `on path2 the robot keeps to its 25 in/s top speed (fastest ${seen.path2Peak.toFixed(1)} in/s)`);
   const { X, Y, Heading } = seen.last.n;
   check(Math.abs(X - 13.2) < 1.5 && Math.abs(Y - 96.07) < 1.5 && Math.abs(Heading - 90) < 5,
     `Pedro drove the simulated robot to the park pose: (${X.toFixed(2)}, ${Y.toFixed(2)}, ${Heading.toFixed(0)}°)`);
