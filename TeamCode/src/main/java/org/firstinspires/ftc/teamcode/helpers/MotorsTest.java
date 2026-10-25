@@ -1,7 +1,5 @@
 package org.firstinspires.ftc.teamcode.helpers;
 
-import com.bylazar.telemetry.PanelsTelemetry;
-import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
@@ -9,6 +7,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
+import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
 
 /**
@@ -68,7 +67,8 @@ public class MotorsTest extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        TelemetryManager panels = PanelsTelemetry.INSTANCE.getTelemetry();
+        // Everything sent to telemetry also reaches the Total Chaos Dashboard.
+        telemetry = new DashboardTelemetry(telemetry);
 
         DcMotor frontLeft = hardwareMap.get(DcMotor.class, "frontLeft");
         DcMotor backLeft = hardwareMap.get(DcMotor.class, "backLeft");
@@ -79,8 +79,8 @@ public class MotorsTest extends LinearOpMode {
         Follower follower = Constants.create(hardwareMap);
         follower.setPose(new Pose(72, 72, 0));
 
-        panels.addLine("Motors Test ready. Clear floor / stand. Press PLAY.");
-        panels.update(telemetry);
+        telemetry.addLine("Motors Test ready. Clear floor / stand. Press PLAY.");
+        telemetry.update();
         waitForStart();
 
 
@@ -144,23 +144,23 @@ public class MotorsTest extends LinearOpMode {
 
             Pose pose = follower.pose();
 
-            panels.addLine(">>> " + TEST_NAMES[selected]);
-            panels.addLine("EXPECT: " + EXPECTED[selected]);
-            panels.addLine("");
-            panels.addData("running", running ? "YES (holding A)" : "no - hold A (btn 2)");
-            panels.addData("power", POWER);
-            panels.addLine("");
-            panels.addData("pose x", round(pose.x()));
-            panels.addData("pose y", round(pose.y()));
-            panels.addData("heading deg", round(Math.toDegrees(pose.heading())));
-            panels.addData("dx since press", round(pose.x() - startPose.x()));
-            panels.addData("dy since press", round(pose.y() - startPose.y()));
+            telemetry.addLine(">>> " + TEST_NAMES[selected]);
+            telemetry.addLine("EXPECT: " + EXPECTED[selected]);
+            telemetry.addLine("");
+            telemetry.addData("running", running ? "YES (holding A)" : "no - hold A (btn 2)");
+            telemetry.addData("power", POWER);
+            telemetry.addLine("");
+            telemetry.addData("pose x", round(pose.x()));
+            telemetry.addData("pose y", round(pose.y()));
+            telemetry.addData("heading deg", round(Math.toDegrees(pose.heading())));
+            telemetry.addData("dx since press", round(pose.x() - startPose.x()));
+            telemetry.addData("dy since press", round(pose.y() - startPose.y()));
             if (motorTest) {
-                panels.addLine("(motor test: pose not driven by follower)");
+                telemetry.addLine("(motor test: pose not driven by follower)");
             }
-            panels.addLine("");
-            panels.addLine("D-pad = pick test | A(2) hold = run | B(3) = reset pose");
-            panels.update(telemetry);
+            telemetry.addLine("");
+            telemetry.addLine("D-pad = pick test | A(2) hold = run | B(3) = reset pose");
+            telemetry.update();
         }
 
         for (DcMotor m : motors) {

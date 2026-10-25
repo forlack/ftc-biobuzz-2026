@@ -2,11 +2,271 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-24
+Last updated: 2026-10-25
 
 ---
 
+## Total Chaos Dashboard + simulator — 2026-10-23 (branch `dashboard`, not merged)
+
+Built while the robot was with another team member; verified only against the simulator.
+Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-TEST.md`.
+
+**Handoff / state (2026-10-23):**
+- Name: **Total Chaos Dashboard** (team Total Chaos 24621; BIOBUZZ is the season's game).
+  Visible strings renamed; internal names (`org.biobuzz.sim`, `biobuzz.*` storage keys,
+  `assets/biobuzz/`, Visualizer branch `biobuzz`, the BIOBUZZ field image) deliberately kept.
+- The event on 2026-10-24 runs `main`. The first robot test of this branch is after that:
+  follow ROBOT-TEST.md exactly and fill in its log. Merge into `main` only when the user asks,
+  after a passing robot test. Leave the local checkout on `main` when not working on the branch.
+- Unverified on hardware: everything. Specific unknowns: dashboard load on the Control Hub
+  (`./dashboard-load`), Panels coexisting at :8001, `useHardwareMap` on Android (returns the
+  Driver Station steps; switching via `RobotConfigFileManager` + robot restart is untested), the
+  sim on the Mac (needs Java, e.g. Android Studio's JBR as JAVA_HOME).
+- **Teleop telemetry** (2026-10-23): all of it in `FieldCentricJava.updateTelemetry()`, each
+  motor speed read once per loop (was 3 hub reads per motor); `telemetry.addData` for lines
+  shown on both, `Dash.put` for chart-only values (targets, `Flywheels on/ready`, sticks,
+  `Loop ms`). Names match PedroAutonomous and the sim. Next idea after the first robot
+  baseline: `LynxModule` bulk caching (AUTO) to cut hub reads further; compare with
+  `./dashboard-load`.
+- **Memory:** `Dash` ring buffer is 1,000 frames (~2 MB measured on the JVM with the teleop's
+  ~23 values; it was 4,000 / 7-10 MB). Control Hub: RK3328 quad Cortex-A53, **1 GB RAM**
+  shared with Android. Each loop still allocates two small maps (~2 KB of garbage per loop,
+  ~200 KB/s at 100 Hz, even with no viewer); if robot loop times show GC spikes, reuse maps.
+- Flywheel Tuner on this branch also feeds the Live tab's Flywheels chart (RPM only, no target
+  lines); results still applied with A and saved to robot.json.
+- **First robot test (2026-10-24, from Linux):** dashboard works on the hub. Load card with
+  Field Centric running and nobody on Live: loop 23.4 ms (43/s), Dashboard in loop 0.28 ms,
+  dashboard CPU 1.8% of a core, whole app 86% of a core (~21% of the hub). Deploy issue that day:
+  `installDebug` "Adb connection Error:EOF" with Android Studio open (it manages adb too); fixed
+  by quitting Studio. Old flywheel tuner gave identical wheels P 30 vs 100 (see below).
+- **Loop spikes found and fixed (2026-10-24):** on the robot `Loop ms` averaged ~20 ms with
+  spikes to 55-77 ms every ~0.5 s, in `Time drive ms` and `Time intake+servos ms` (sections that
+  are only hub calls) at once. Cause: the dashboard's state message (every 500 ms while any
+  browser is open) read every hub's battery voltage on the server thread, so the OpMode's hub
+  calls waited. Now `DashboardServer.battery()` never touches the hubs while an OpMode runs (it
+  shows the OpMode's `Battery V` via `Dash.latestNumber`), and AndroidDashboard caches the
+  active hardware map name for 5 s. **Rule: nothing on a dashboard thread may make hub calls
+  while an OpMode runs.** Not yet re-measured on the robot.
+- **Loop time (2026-10-24):** teleop uses `LynxModule` bulk caching (MANUAL, cleared at the top
+  of each loop) and sends section timers `Time drive ms` (incl. IMU), `Time intake+servos ms`,
+  `Time shooter ms`, `Time sensors+telemetry ms` (incl. bulk reads). Not yet run on the robot:
+  compare `Loop ms` to 23.4 ms and see which section dominates before optimising further
+  (suspects: Control Hub IMU read; repeated servo/target writes, which the SDK may already skip).
+- **Flywheel Tuner is now a hand-tuning loop (2026-10-24, user's call):** two automatic
+  versions (procedure + desktop model, in git history before this change: `lib/FlywheelTuning`,
+  `tests/java/FlywheelTuningCheck.java`, commit 0962556) disagreed with the robot: they chose
+  P 25 while P 50 visibly reached the setpoint faster. Their score weighted steady wobble; what
+  matters is recovering quickly after a shot. Now `helpers/FlywheelTuner` cycles both wheels
+  between LOW_PERCENT (70) of target for LOW_SECONDS (1) and the target for HIGH_SECONDS (2)
+  until STOP, applying the Tune tab's FLYWHEEL_F (compensated) and per-wheel P/I/D live, and
+  reports per cycle: time to ready (within RPM_TOLERANCE, teleop's "ready"; avg of last 5),
+  overshoot, average error over the last 0.5 s (DS + dashboard; `… time to ready s` and
+  `… overshoot RPM` chartable). Save with the Tune tab. Per-wheel `*_FLYWHEEL_I` settings stay.
+- **Tune tab hiding (2026-10-24):** `@Configurable.Hidden` (nested in `dashboard/Configurable`)
+  on a class lists it under "Hidden" at the bottom of the Tune tab (FlywheelTuner has it);
+  every group has Hide, hidden ones have Show; overrides per browser in localStorage
+  `biobuzz.hiddenGroups`. Display only: hidden settings still load and save. RobotSettings
+  describe() sends `hidden`; the sim's mirror generator copies the annotation.
+- **Live telemetry table clears** when the active OpMode stops or changes (app.js showState →
+  `live.clearTelemetry(state.time)`); frames older than that robot time still reach the charts
+  but not the table (they are in flight when Stop returns). Charts keep their history.
+- **Loop spikes still there after the battery-read fix (user deployed 0962556):** so the
+  dashboard was not the cause. Next evidence: `adb logcat -v time | grep -iE "GC|art"` during
+  teleop (GC pauses ~2/s would explain it), else the SDK's own periodic hub traffic.
+- **Virtual gamepad built (2026-10-25), sim-verified only.** Drawer at the bottom of every tab
+  (`web/js/gamepad.js`; handle "Gamepad", G toggles, lights up when a laptop controller is
+  detected via the browser Gamepad API; SVG controller with draggable sticks, buttons, LT/RT;
+  right-click latches a button; per-pad legend of Field Centric's controls). Robot side:
+  `dashboard/VirtualGamepads` (shared core, static like Dash): one owner (websocket connection
+  id) per pad, inputs older than 0.25 s read as nothing, control ends when the active OpMode
+  changes/stops, when the browser's socket closes, and on Lock (also refused while locked).
+  Websocket messages: `{type:control,pad,take}` → reply `{type:control,pad,owner,error}`;
+  `{type:gamepad,pad,axes[6],buttons bits}` at 20/s; subscribe `gamepads:true` while the drawer
+  is open gets `{type:gamepads,pads:[…]}` (DS + virtual combined, on change, built by the one
+  broadcaster thread); `hello` carries the connection `id`; state has `gamepads:[owner1,owner2]`.
+  The DS mirror is `RobotHost.driverStationGamepad` (Android: the active OpMode's
+  gamepad1/2 fields, memory only, no hub call). Teleop: `lib/DashboardGamepads.combine(gamepad1, 1)`
+  (Android-only; returns the real Gamepad untouched when nobody drives, else a reused copy:
+  stronger stick, OR of buttons). The browser releases control when its tab is hidden.
+  Sim teleop now reads VirtualGamepads with Field Centric's button map (lib/Button is now in
+  the sim build) and field-centric math; the demo driver runs only while nobody drives. Needs
+  the robot test (ROBOT-TEST check 14).
+- **Text telemetry is re-sent once a second** (TelemetryStream): before, unchanged text was
+  sent only once, so after the table cleared on Stop, re-running an OpMode left unchanged text
+  rows (Intake ON, Driver…) missing until they changed.
+- **2026-10-25 (later):** drawer redrawn PS5 / Logitech F310 style (team uses Logitech;
+  labels stay A B X Y). Deploy scripts print the dashboard URL (:8686), not Panels'.
+  Auton Sequence "Add" form shows the function's settings (wait seconds, shoot time…) to fill
+  in before adding (visualizer `addValues`, per function). **Restart adb** (Robot tab card,
+  `GET /api/adb`, `POST /api/adb/restart`, RobotHost.adbStatus/restartAdb): Android toggles
+  `Settings.Global.ADB_ENABLED` 0 → 1 (always back to 1 in finally; AndroidDashboard.start
+  also re-enables it if found 0) and waits for port 5555. Needs WRITE_SECURE_SETTINGS
+  (TeamCode manifest) granted once with `adb shell pm grant com.qualcomm.ftcrobotcontroller
+  android.permission.WRITE_SECURE_SETTINGS`; **unverified whether the toggle revives a stuck
+  Wi-Fi adbd on the Control Hub** (ROBOT-TEST check 15). User reported: laptop-side adb reset
+  never helps when it sticks; logcat showed no frequent GC lines (ART only logs slow GCs, so
+  GC is unlikely to be the 0.5 s loop spikes).
+- **Path top speed (2026-10-25):** Auton Sequence pencil on a "follow" row sets the
+  path's `speedPercent` (1-99, % of Foresight `maxAchievableForwardVelocity`, so it follows
+  Pedro recalibration; replaced the short-lived in/s `maxSpeed`; exported/imported, used in the
+  time estimate; robot: `maxVelocityConstraint` = top × %/100; sim 27.1 in/s at 40% = 27.4). **Verified on the robot 2026-10-25** (user: worked and validated).
+  Drive expo (`MecanumDrive.EXPO_CONTROLS`, `lib/StickCurve`) was built, robot-tested and
+  removed the same day: the user did not like it; drive sticks stay linear (deadzone only).
+  Path time limit (not built, user's call): Pedro's
+  `timeoutConstraint` only limits end-of-path correcting; AutoSequence's follow step waits
+  for `!follower.isBusy()` with no time limit, so a robot blocked mid-path waits until the
+  30 s end.
+- **Mechanisms refactor (2026-10-25), sim-verified only:** `mechanisms/` holds `Intake`,
+  `Flywheels` (both wheels + transports, voltage-compensated F, `compensatedF`), `Feeder`
+  (triggers), `Stinger`, and `Robot` (public final fields of each, battery read at 4 Hz,
+  `update()`, `telemetry()`, bulk-read helpers, static `batteryVoltage`). FieldCentricJava keeps
+  only buttons, drive and the section timers (same names); PedroAutonomous builds `Robot` and
+  calls `robot.update()` each loop (INIT still only sets stinger up and triggers off).
+  Teleop's `Flywheels.FLYWHEELS_ON` switch stays teleop-only (auton sets the instance state;
+  auton stop must not switch the next teleop's flywheels off). Settings moved out of
+  FieldCentricJava (same field names) into Intake / Flywheels / Stinger with
+  `@RobotSettings.MovedFrom("FieldCentricJava")`: load and the Tune tab's "in file" fall back
+  to the old section; the next Save writes the new layout. `lib/Mechanisms` and
+  `PedroAutonomous.RobotMechanisms` are gone. **Auton functions** = `@AutoFunction` methods
+  (`lib/AutoFunction`, registry `lib/AutoFunctions`: reflection over Robot's public final
+  fields; void = action, boolean = condition, `listed=false` hidden (feedOn/feedOff), double
+  params with `@AutoFunction.Param`; listed ones sorted by label). `StandardActions.create(AutoFunctions)`
+  adds wait + the listed functions + steps (waitForFlywheels, shoot, turnTo) that use function
+  names. AndroidDashboard lists via `AutoFunctions.describe(Robot.class)` (no hardware). Sim:
+  the mirror generator also copies each `@AutoFunction` signature with an empty body
+  (conditions return true) and `@RobotSettings.MovedFrom`, and generates `RobotStub` from
+  Robot.java's `public final X y;` lines; `SimOpModes.functions()` =
+  `AutoFunctions.of(new RobotStub()).override(simMechanisms)` (override throws on a name the
+  robot lacks). Reflection needs `setAccessible(true)` (SimMechanisms is not public). e2e 125
+  incl. old-robot.json migration and the unchanged function list. Robot test: ROBOT-TEST 4, 17.
+- **Tune/files round (2026-10-25):** live switches (`@RobotSettings.NotSaved`) reset to their
+  code values at every `RobotSettings.load()` (INIT); `reload()` (dashboard) does not reset
+  them. `@RobotSettings.Renamed("OLD")` on a field reads the old key (load + "in file").
+  `MecanumDrive.DRIVE_SPEED` (renamed from INITIAL_SPEED) is read live by getDefaultSpeed();
+  the unused changeDefaultSpeed/SPEED_STEP/MIN_/MAX_ALLOWED_SPEED were removed (a saved value
+  only warns until the next Save). `Intake.INTAKE_I` added (sim too). Tune rows: "code default
+  X · robot.json: Y", and ↶ undo on yellow rows (sets inFile, else default). `DELETE
+  /api/file` (autons and maps; refuses robot.json and the active map; history kept) with a
+  Delete button in the Robot tab's Files list. Hardware map renamed in the repo:
+  `robot-config/24621-Biobuzz.xml` (+ `24621-Biobuzz-backup.xml`); sim default map and tests
+  follow. On the robot the user must make the copies (Robot tab Save as copy), Activate
+  24621-Biobuzz on the DS, then Delete the old maps. "practice1"/"auton practice" autons on
+  the robot were not made by our code or tests (someone used Save as new).
+- **INTAKE_ON replaces INTAKE_ENABLED (2026-10-25, user's choice):** the intake now works like
+  the flywheels: `Intake.INTAKE_ON` is teleop's on/off live switch (NotSaved, true at every
+  INIT), flipped by operator X and the Tune tab alike; teleop calls `robot.intake.set(INTAKE_ON)`
+  each loop. No master "disabled" lock any more (auton uses the instance state via
+  intakeOn/intakeOff, unaffected by the switch). Tune tab redraws when the robot's settings
+  fingerprint (state `settingsFingerprint`) differs from what it shows. e2e 137; the test sim
+  starts with `--no-seed` and only 24621-Biobuzz.xml + autos/saturday.json.
+- Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
+  Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
+- Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
+  and a Pedro add-on); robot pose on the field in teleop once Pinpoint coordinates are trusted;
+  a per-viewer Detail selector; min/max thinning; listing USB cameras from the robot.
+
+Key facts for agents:
+
+- **Shared plain-Java core** (compiled into the app AND the desktop sim):
+  `dashboard/{DashboardServer,Dash,RobotHost,Base64Codec,VirtualGamepads}`, `lib/{RobotFiles,RobotSettings,
+  Actions,StandardActions,AutoFunction,AutoFunctions,AutoRoute,AutoSequence}`, `pedro/ForesightConstants`.
+  No Android or FTC SDK imports in these, Java 8 syntax, Android 7 APIs only (no
+  java.nio.file, no java.util.Base64, no String.join). `-Pdashboard` lint: no NewApi.
+- `RobotFiles.root()` is /sdcard/FIRST, or the sim's SD card (`biobuzz.storage` property).
+- **Server** on port 8686: static page + JSON API + websocket telemetry (`Dash.put`/`frame`,
+  every loop, ring buffer). Files API limited to settings/robot.json, autos/*.json,
+  root *.xml (history/ and snapshots/ read-only); PUT validates (routes are fully built against the action list) and supports
+  `X-Base-Hash` conflict refusal. Missing page files fall back to `visualizer/<path>`
+  because the visualizer requests `/fields/...` etc. at the root.
+- **Panels removed on this branch (2026-10-23)**: no `com.bylazar` dependency or Maven repo
+  (verified: 0 references in the APK; `-Ptuning` still resolves). The dashboard replaces it and
+  is in **every** build (`-Pdashboard` / `--dashboard` still accepted, no effect). Lost with
+  Panels: the browser virtual gamepad (replaced 2026-10-25 by the Gamepad drawer) and the
+  `SAVE_TO_ROBOT` switch (use the Tune tab's Save).
+- **Developer API** (guide: `dashboard/DEVELOPER.md`, modelled on FTC Dashboard/Panels):
+  `@Configurable` (`teamcode.dashboard.Configurable`) marks settings classes;
+  `TeamCode/build.gradle` generates `teamcode.generated.ConfigurableClasses.ALL` from sources
+  containing a `@Configurable` line, and `new RobotSettings()` uses it (no runtime scanning; a
+  DexFile scan was rejected because TeamCode classes span 7 dex files in debug APKs). The sim
+  build generates its own list + mirrors the same way (`sim/build.gradle`). Telemetry:
+  `telemetry = new DashboardTelemetry(telemetry)` (implements the SDK `Telemetry`, delegates
+  to the Driver Station, `addData` → `Dash.put`, `update` → `Dash.frame`; the SDK skips its
+  internal auto-update for non-`TelemetryInternal` telemetry, like FTC Dashboard's
+  MultipleTelemetry, so one frame per `update()`). New `Mechanisms` methods should be
+  `default` no-ops so the sim needs no change.
+- **Android hook** `TeamCode/src/dashboard/java/.../AndroidDashboard` (`@OnCreateEventLoop`,
+  starts after 5 s, all errors swallowed). Page packed as `assets/biobuzz/` (originally to
+  avoid Panels' `assets/web/`; kept).
+- **Routes** `autos/*.json` v2 (`lib/AutoRoute`): start, paths (points = start, controls, end;
+  heading linear/constant/tangential; speedPercent; events {at, action, params}), steps
+  ({follow} | {action, params}). `PedroAutonomous.ROUTE` (a robot.json setting) picks the file,
+  D-pad at INIT cycles; no file → INIT shows the problem (the old `paths/` Java-export
+  reader, `update-paths` and their tests were removed on this branch 2026-10-23).
+- **Simulator** `sim/` (own Gradle build, `./simulate`): compiles the shared core from TeamCode
+  plus generated mirrors of the settings classes (same simple names, so robot.json is shared;
+  regenerated from the real sources every build). Physics: hub velocity PIDF formula, 20 ms
+  velocity sampling, voltage-dependent motor, shots, battery sag, mecanum chassis with Pedro's
+  real Follower/Foresight through `SimPedro` Localizer/Drivetrain adapters.
+- **Visualizer fork** github.com/forlack/Visualizer branch `biobuzz`: `src/lib/robot/`
+  (RobotPanel, route export/import, field markers), `robotEvents` on paths, `robotAction` on
+  sequence wait items, service worker removed (it cached the dashboard's `/`). Side panel
+  has two tabs (2026-10-24): **Paths** (start point, selected path) and **Auton Sequence**
+  (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
+  `dashboard/web/visualizer/` by `./build-visualizer` (committed).
+- `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (137
+  browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
+  Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
+  the agent's own shell). The user's `./simulate` runs from a private copy of the build, so
+  rebuilding never crashes it, but it must be restarted to pick up changes.
+- **Hardware maps** (`web/js/hardware.js`): any `*.xml` on the robot can be opened (picker marks
+  the active one "(in use)", read from `RobotConfigFileManager.getActiveConfig()`); New map
+  (Control Hub + IMU, optional Expansion Hub at an address, default 2), Save as copy, add/remove
+  the one Expansion Hub, Control Hub always listed first (file order kept), webcams and other
+  root-level USB devices shown for renaming (serials come from a Driver Station scan). Saving
+  an unchanged map reproduces 2222-Config.xml byte for byte (checked 2026-10-23).
+  `POST /api/hardware/active` → `RobotHost.useHardwareMap`: the sim switches (remembered in
+  `<sdcard>/.sim-active-config`); Android returns Driver Station steps. `REQUIRED` in
+  hardware.js lists the device names the Java code needs; keep it in step.
+- **Adding things** (settings, Dash values, auton functions via Mechanisms + StandardActions +
+  SimMechanisms): see "Adding things" in dashboard/README.md.
+- **Robot cost: measured by the dashboard itself, in loop ms.** Dash times its own put/pose/
+  frame calls and adds `Dashboard ms` to every frame (`Dash.COST_KEY`; direct in-loop cost).
+  The user cares about loop time, not CPU %: the Live toolbar shows `Loop X ms · dashboard +Y ms
+  · KB/s`. `/api/state` "load" (Robot tab Load card): viewers, loopMs, dashboardMs, KB/s, and
+  for diagnosis dashboard CPU (send thread, % of one core) and whole-app CPU (/proc/self/stat,
+  % of one core, assumes 100 ticks/s). `Loop ms` itself is still sent by each OpMode (a
+  central one in Dash.frame would also time the sim's 20 Hz idle frames). `./dashboard-load [--url ...]` prints 0/1/2 viewers. Sim on
+  the desktop after the stream rewrite: ~0.3% of a core total for 1-3 viewers, 14 KB/s
+  (~145 B/loop) per viewer (was 40 KB/s, 410 B/loop), no loop-time change (the sim paces
+  itself at 100 Hz, so only the robot can show a loop-time cost). Not yet measured on
+  the Control Hub. Knob (setting, Tune tab): `DashboardConfig.MAX_SAMPLES_PER_SECOND` (0 = every
+  loop). Stream (`TelemetryStream`): one thread builds each batch once (20/s) for all viewers;
+  names sent once per connection then values by position, text only on change; viewers not on
+  the Live tab send `{type:subscribe, frames:false}` and get status only. Browser decoder:
+  `dashboard/web/js/frames.js`. Teleop battery read throttled to
+  4 Hz (a voltage read is a hub transaction).
+
 ## Competition update — 2026-10-24
+
+**Merged into `dashboard` on 2026-10-24** (merge of main `3d9495f`): compensation and
+STINGER_DOWN 0.42 brought over; the formula is in `lib/FlywheelCompensation.java` (plain Java,
+shared with the simulator; FieldCentricJava.compensatedFlywheelF delegates). On this branch
+the "Panels" settings below are on the Tune tab; teleop's one 4 Hz battery read (lowest hub)
+feeds both the F and `Battery V`; teleop and auton show `Flywheel compensated F`. The route
+changes went into `autos/saturday.json` (start y 9, path2 end heading 90°); the main-only
+Pedro export reader (`PedroPathExport`, `paths/`) stays removed here. Check the robot's saved
+robot.json: a saved `FLYWHEEL_F = 12` overrides the new 11 default. **`FLYWHEEL_FIXED_F` removed
+on this branch** (user's call, 2026-10-24): compensation off now uses `FLYWHEEL_F` at every
+voltage (11, not main's 12; set FLYWHEEL_F = 12 for the pre-competition behaviour). A saved
+FLYWHEEL_FIXED_F in robot.json only gives a settings warning; the next Save drops it. FlywheelTuner still writes
+one FLYWHEEL_F (now meaning F at 12.5 V).
+
+**Drive velocity mode removed on this branch** (2026-10-24, user's request): it was never
+reachable (no button toggled it, START_IN_VELOCITY_MODE was false), so `MecanumDrive` lost
+START_IN_VELOCITY_MODE, TUNE_PIDF and VEL_P/I/D/F; the drive motors are always
+RUN_WITHOUT_ENCODER (raw power), as before. The Driver Station "Drive mode" line went with it.
+Saved values for those names only give a settings warning until the next Save.
 
 Local competition main now applies voltage-compensated flywheel F in TeleOp and
 PedroAutonomous: linear F=11 at 12.5 V, F=12 at 10 V, clamped outside this range.
@@ -36,14 +296,15 @@ into dashboard themselves. Dashboard branch has not been deployed or merged here
   file's mtime changed, so unsaved Panels edits survive re-INIT. Bad values warn and keep
   the default; an unreadable file falls back to `robot.json.bak`, then to code defaults.
   `@RobotSettings.NotSaved` marks live switches (`FLYWHEELS_ON`). Repo copy:
-  `settings/robot.json` via `./robot-settings pull|push`. Details: `settings/README.md`.
+  `settings/robot.json` via `./robot-sync pull|push`. Details: `settings/README.md`.
 - **AutoTune is opt-in.** Its NanoHTTPD server starts unconditionally whenever the
   `tuning` library is in the APK (a Sinister `OnCreateEventLoop` hook; no off switch), and it
   crashed the RC app at boot once. `Tuning.java` and `procedures/` moved to
   `TeamCode/src/tuning/java`; `TeamCode/build.gradle` adds that folder and the dependency
   only with `-Ptuning`. Deploy with `./deploy-linux --tuning` (or `./deploy --tuning`) to tune;
   a normal deploy removes it again. Verified: normal APK has no autotune classes.
-- **Flywheel Tuner** (`helpers/FlywheelTuner`, Diagnostics): both flywheels at their
+- **Flywheel Tuner** (`helpers/FlywheelTuner`, Diagnostics): *superseded on branch
+  `dashboard` 2026-10-24 (see the top section); this describes main's.* Both flywheels at their
   robot.json target RPMs. F from a two-point speed-vs-power line (0.4 and 0.8 power, no
   encoder) solved for the power at target: F = 32767 × power / target ticks/s. P from step
   tests (70% → 100%) at 0.25–3× the current P: fastest settle within 2% with overshoot ≤ 5%
@@ -54,32 +315,13 @@ into dashboard themselves. Dashboard branch has not been deployed or merged here
 - **Roadmap** for autos as JSON and our own Pedro visualizer with robot actions on paths:
   `ROADMAP.md`.
 
-## Current desktop handoff — 2026-10-22
+## Desktop handoff — 2026-10-22 (main; superseded on branch `dashboard`)
 
-- User confirmed the exported-path autonomous works on the robot after redeployment.
-- Pull main on the desktop before edits. Mac/Linux helpers both upload
-  `paths/auto.java.txt` and `paths/auto.json` before APK install. `./update-paths`
-  uploads both without restarting; stop first, then INIT to read new files.
-- Geometry is the user's exact Pedro Java export (not executed/compiled at INIT).
-  JSON contains version 1, startupWaitSeconds=1, shootSeconds=3.5, speedLimits={}.
-  Current sequence: path1, shoot, path2 to park; stinger stays up. Start (56,8,270°),
-  path1 end (60,16,270°), path2 control (15.6919,29.3313), end (13.2008,96.0738,180°).
-  Any number of named paths can be parsed, but adding actions requires Java sequence edits.
-- Intake default 700 RPM. TeleOp auto-queue targets Field Centric (Java); DS setting
-  and timed run required. All current mechanism tuning remains in FieldCentricJava.
-- Current competition hub is reported by install logs as Control Hub v1.0 / Android
-  7.1.2; older hardware table below describes prior devices. FileInputStream fixes
-  the Android 7 INIT crash caused by java.nio.file.Files (Android 8+).
-- Linux desktop: save robot Wi-Fi in NetworkManager, use
-  `./deploy-linux -r 24621-RC --stay` from the user's terminal, never an agent session.
-  Gradle output now uses --console=auto (colors/progress when attached to a terminal).
-- Both path files and robot-config/2222-Config.xml are tracked. The latter includes
-  stinger on Expansion Hub servo port 2; hub was not connected for a fresh XML pull
-  at this handoff. Never invent hardware changes. Private Wi-Fi settings and passwords
-  stay outside Git and need separate setup on each computer.
-- Validation: Android assembleDebug, 35 Python tests, standalone real-Pedro parser
-  check (tests/java/PedroPathExportCheck.java): exact geometry, six named paths,
-  cubic curve, constant heading, invalid/unsupported exports rejected.
+On `main` the auton is the pasted Pedro export in `paths/` (auto.java.txt + auto.json,
+uploaded by deploy and `./update-paths`). On `dashboard` those are removed: `autos/*.json`
+holds whole autons and deploy uploads only autons the robot does not have. Hub is Android
+7.1.2: use FileInputStream, never java.nio.file. Intake default 700 RPM. Run deploy-linux
+from the user's terminal, never an agent session. Never invent hardware changes.
 
 ## Hardware
 
@@ -305,6 +547,9 @@ same bump, so this is sanctioned, not a hack.
 ---
 
 ## Panels dashboard
+
+> **Branch `dashboard`:** Panels is removed there (replaced by the Total Chaos Dashboard).
+> This section describes `main`.
 
 Auto-starts — **no glue code required**. `com.bylazar.panels.Panels` carries
 `@WebHandlerRegistrar`, `@OnCreateEventLoop`, and `@OpModeRegistrar`, so the SDK's
@@ -732,7 +977,7 @@ after deployment to validate these values on hardware.
 | `FieldCentricJava` | Field Centric (Java) | Drive | Java port of the Blocks teleop |
 | `helpers.MotorsTest` | Motors Test | Diagnostics | Robot- and motor-level direction checks |
 | `helpers.LocalizationCheck` | Localization Check | Diagnostics | Pinpoint direction and distance check |
-| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Measures flywheel F and P; A saves to `robot.json` |
+| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Cycles the flywheels low/target until STOP; tune F, P, I, D live on the Tune tab |
 | `PedroAutonomous` | Pedro Pathing Autonomous | — | Out-and-back path, state machine |
 | `pedroPathing.Tuning` | Tuning | — | Official Pedro tuning suite (menu of routines) |
 
@@ -956,7 +1201,7 @@ tunables, and the Panels virtual gamepad via `asCombinedFTCGamepad(gamepad1)` �
 to plain `gamepad1` when no browser gamepad is connected.
 
 As of the 2026-08-27 refactor the math lives in `lib/MecanumDrive.drive()` and the
-tunables (`SLOW_SPEED`, `INITIAL_SPEED`, `VEL_*`, …) are `@Configurable` statics on
+tunables (`SLOW_SPEED`, `INITIAL_SPEED`, …) are `@Configurable` statics on
 `MecanumDrive`, not on the OpMode. Panels finds them either way — its `ClassFinder` scans the
 whole classpath for `@Configurable`, it does not look only inside OpModes (verified against
 `configurables-1.0.5.aar`).
@@ -970,24 +1215,10 @@ whole classpath for `@Configurable`, it does not look only inside OpModes (verif
 
 ## Autonomous framework (`lib/AutoSequence`)
 
-### SD-card path data (2026-10-22)
+### Auton files
 
-`PedroAutonomous` loads `/sdcard/FIRST/paths/auto.json` settings and
-`auto.java.txt` Pedro export at each INIT through `lib/AutoPathFile` and
-`lib/PedroPathExport`. Paste only the exported Java snippet into
-`paths/auto.java.txt`; no importer or on-robot Java compilation. The reader accepts
-named poses, lines, multi-control curves, linear/constant headings and rejects
-unsupported text. JSON holds version 1, startup/shoot waits and optional named
-`speedLimits` in inches/second. Both deploy helpers upload both files before
-installing the app. `./update-paths` uploads without network switching or restart;
-upload while stopped, then re-INIT. Missing/invalid files stop initialization.
-Deploy logs identify the current hub as Android 7.1.2: use FileInputStream,
-not java.nio.file.Files (Android 8+), for runtime file loading.
-Any number of named paths can be read; action order remains Java: path1, shoot,
-path2 to park, optional path3. Additional paths need sequence edits to execute.
-Stinger stays up. Current route ends at (13.2008, 96.0738, 180 degrees).
-Autonomous preselects Field Centric (Java); DS OpMode Auto Queue must be enabled.
-Intake target default is 700 RPM. See paths/README.md.
+`PedroAutonomous` reads `autos/<ROUTE>.json` (lib/AutoRoute) at INIT; see the dashboard
+section at the top of this file. Android 7: FileInputStream only.
 
 Built 2026-10-03 for Pedro 3. Same rule as teleop: **never block** — `update()` once per loop
 advances when the current step finishes.

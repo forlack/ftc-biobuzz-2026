@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""Keep the robot's files and the repo in step: settings, autons, hardware map.
+
+  ./robot-sync status          what differs, and which side changed
+  ./robot-sync pull            robot -> repo, for files changed on the robot (then commit);
+                               also copies the robot's history/ and snapshots/ folders
+  ./robot-sync push            repo -> robot, for files changed in the repo
+
+  --url http://localhost:8686  talk to the simulator (default: the robot's dashboard,
+                               falling back to adb when the dashboard is not running)
+  --force                      also copy files that changed on BOTH sides (the side you copy
+                               from wins; the other side's change is lost)
+
+The robot holds the live copy; Git holds the history. A file that changed on both sides
+since the last sync is a conflict and is never copied without --force. history/ (every saved
+version) and snapshots/ (known-good copies) are made on the robot and only ever pulled.
+"""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
+
+# ROBOT_SYNC_ROOT lets the tests sync into a scratch copy instead of this repo.
+ROOT = Path(os.environ.get('ROBOT_SYNC_ROOT') or Path(__file__).resolve().parent).resolve()
+STATE = ROOT / '.robot-sync.json'
+ROBOT_URL = 'http://192.168.43.1:8686'
+ROBOT_SERIAL = '192.168.43.1:5555'
+REMOTE_ROOT = '/sdcard/FIRST'
+
+
+def fingerprint(data):
+    """Same as RobotFiles.hash on the robot: the first 8 bytes of SHA-1, in hex."""
+    return hashlib.sha1(data).hexdigest()[:16]
+
+
+def is_archive(path):
+    return path.startswith('history/') or path.startswith('snapshots/')
+
+
+def repo_path(robot_path):
+    """Where a robot file lives in the repo. Hardware maps live in robot-config/."""
+    return ROOT / ('robot-config/' + robot_path if robot_path.endswith('.xml') and '/' not in robot_path
+                   else robot_path)
+
+
+def repo_files():
+    found = {}
+    for pattern, to_robot in [('settings/robot.json', lambda p: p), ('autos/*.json', lambda p: p),
+                              ('robot-config/*.xml', lambda p: p.split('/', 1)[1])]:
+        for path in sorted(ROOT.glob(pattern)):
+            relative = path.relative_to(ROOT).as_posix()
+            if path.is_file() and not path.name.startswith('.') and 'README' not in path.name:
+                found[to_robot(relative)] = path.read_bytes()
+    return found
+
+
+# ---- Robot access: dashboard HTTP API, or adb -------------------------------------------
+
+class HttpRobot:
+    def __init__(self, url):
+        self.url = url.rstrip('/')
+
+    def _open(self, path, data=None, method='GET', headers=None):
+        request = urllib.request.Request(self.url + path, data=data, method=method, headers=headers or {})
+        return urllib.request.urlopen(request, timeout=10)
+
+    def reachable(self):
+        try:
+            with self._open('/api/state') as response:
+                return response.status == 200
+        except (OSError, urllib.error.URLError):
+            return False
+
+    def list(self):
+        with self._open('/api/files?all=1') as response:
+            return {item['path']: item['hash'] for item in json.load(response)}
+
+    def read(self, path):
+        with self._open('/api/file?path=' + urllib.parse.quote(path)) as response:
+            return response.read()
+
+    def write(self, path, data, base):
+        try:
+            with self._open('/api/file?path=' + urllib.parse.quote(path), data=data, method='PUT',
+                            headers={'X-Base-Hash': base or 'new', 'Content-Type': 'application/octet-stream'}):
+                pass
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode(errors='replace')
+            try:
+                detail = json.loads(detail).get('error', detail)
+            except ValueError:
+                pass
+            raise RuntimeError(f'{path}: {detail}') from None
+
+    def describe(self):
+        return f'dashboard at {self.url}'
+
+
+class AdbRobot:
+    def __init__(self, serial):
+        self.serial = serial
+        self.adb = find_adb()
+
+    def run(self, *args, check=True):
+        return subprocess.run([self.adb, '-s', self.serial, *args], check=check, capture_output=True, timeout=30)
+
+    def connect(self):
+        subprocess.run([self.adb, 'kill-server'], capture_output=True, timeout=10)
+        if ':' in self.serial:
+            subprocess.run([self.adb, 'connect', self.serial], capture_output=True, timeout=15)
+        return self.run('get-state', check=False).returncode == 0
+
+    def list(self):
+        listing = self.run('shell', f'cd {REMOTE_ROOT} && ls settings/robot.json autos/*.json *.xml 2>/dev/null; '
+                           'find history snapshots -type f 2>/dev/null', check=False).stdout.decode().split()
+        return {path: fingerprint(self.read(path)) for path in listing if path}
+
+    def read(self, path):
+        with tempfile.TemporaryDirectory() as folder:
+            local = Path(folder) / 'file'
+            self.run('pull', f'{REMOTE_ROOT}/{path}', str(local))
+            return local.read_bytes()
+
+    def write(self, path, data, base):
+        with tempfile.TemporaryDirectory() as folder:
+            local = Path(folder) / 'file'
+            local.write_bytes(data)
+            remote = f'{REMOTE_ROOT}/{path}'
+            self.run('shell', 'mkdir', '-p', remote.rsplit('/', 1)[0])
+            self.run('push', str(local), remote + '.tmp')
+            self.run('shell', f'[ -f {remote} ] && cp {remote} {remote}.bak; mv {remote}.tmp {remote} && touch {remote}')
+
+    def describe(self):
+        return f'adb {self.serial}'
+
+
+def find_adb():
+    properties = ROOT / 'local.properties'
+    if properties.exists():
+        for line in properties.read_text().splitlines():
+            if line.startswith('sdk.dir='):
+                candidate = Path(line.split('=', 1)[1].strip()) / 'platform-tools' / 'adb'
+                if candidate.is_file():
+                    return str(candidate)
+    adb = shutil.which('adb')
+    if not adb:
+        sys.exit('adb not found, and the dashboard did not answer.')
+    return adb
+
+
+def connect(args):
+    robot = HttpRobot(args.url or ROBOT_URL)
+    if robot.reachable():
+        return robot
+    if args.url:
+        sys.exit(f'Nothing answered at {args.url}. Is ./simulate (or the robot dashboard) running?')
+    robot = AdbRobot(args.serial)
+    if not robot.connect():
+        sys.exit('Cannot reach the robot: join its Wi-Fi first (or plug in USB and use -s SERIAL).')
+    return robot
+
+
+# ---- Comparing -----------------------------------------------------------------------
+
+def load_state(target):
+    try:
+        return json.loads(STATE.read_text()).get(target, {})
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(target, synced):
+    try:
+        everything = json.loads(STATE.read_text())
+    except (OSError, ValueError):
+        everything = {}
+    everything[target] = synced
+    STATE.write_text(json.dumps(everything, indent=2, sort_keys=True) + '\n')
+
+
+def compare(robot_hashes, repo, base):
+    """Each file's situation: same, robot, repo, both, robot-only, repo-only."""
+    result = {}
+    for path in sorted(set(robot_hashes) | set(repo)):
+        on_robot = robot_hashes.get(path)
+        in_repo = fingerprint(repo[path]) if path in repo else None
+        was = base.get(path)
+        if on_robot == in_repo:
+            result[path] = 'same'
+        elif on_robot is None:
+            result[path] = 'repo-only'
+        elif in_repo is None:
+            result[path] = 'robot-only'
+        elif was == in_repo:
+            result[path] = 'robot'          # only the robot changed since the last sync
+        elif was == on_robot:
+            result[path] = 'repo'           # only the repo changed
+        else:
+            result[path] = 'both'           # changed on both sides, or never synced
+    return result
+
+
+LABELS = {
+    'same': 'in sync',
+    'robot': 'changed on the robot   -> pull',
+    'repo': 'changed in the repo    -> push',
+    'both': 'CHANGED ON BOTH SIDES  (conflict: --force to choose)',
+    'robot-only': 'only on the robot      -> pull',
+    'repo-only': 'only in the repo       -> push',
+}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0],
+                                     formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
+    parser.add_argument('command', choices=['status', 'pull', 'push'])
+    parser.add_argument('--url', help='dashboard address, for example http://localhost:8686 for the simulator')
+    parser.add_argument('-s', '--serial', default=ROBOT_SERIAL, help='adb serial when the dashboard is not running')
+    parser.add_argument('--force', action='store_true', help='also copy files changed on both sides')
+    args = parser.parse_args()
+
+    robot = connect(args)
+    target = args.url or 'robot'
+    everything = robot.list()
+    archive = {path: h for path, h in everything.items() if is_archive(path)}
+    robot_hashes = {path: h for path, h in everything.items() if not is_archive(path)}
+    repo = repo_files()
+    base = load_state(target)
+    situation = compare(robot_hashes, repo, base)
+    print(f'Robot: {robot.describe()}')
+
+    synced = dict(base)
+    for path, state in situation.items():
+        if state == 'same':
+            synced[path] = robot_hashes[path]
+
+    copied = conflicts = 0
+    for path, state in situation.items():
+        shown = repo_path(path).relative_to(ROOT).as_posix()
+        if args.command == 'status':
+            print(f'  {shown:34} {LABELS[state]}')
+            continue
+        pulling = args.command == 'pull'
+        wanted = ('robot', 'robot-only') if pulling else ('repo', 'repo-only')
+        if state == 'both' and not args.force:
+            conflicts += 1
+            print(f'  {shown:34} skipped: changed on both sides (use --force to {args.command} anyway)')
+            continue
+        if state not in wanted and state != 'both':
+            continue
+        if pulling:
+            data = robot.read(path)
+            destination = repo_path(path)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(data)
+            synced[path] = fingerprint(data)
+            print(f'  {shown:34} pulled')
+        else:
+            data = repo[path]
+            robot.write(path, data, robot_hashes.get(path) or 'new')
+            synced[path] = fingerprint(data)
+            print(f'  {shown:34} pushed')
+        copied += 1
+    # history/ and snapshots/: made on the robot, copied into the repo, never pushed back.
+    new_archive = [path for path, h in archive.items()
+                   if not (ROOT / path).is_file() or fingerprint((ROOT / path).read_bytes()) != h]
+    if args.command == 'status':
+        if new_archive:
+            print(f'  {"history/ and snapshots/":34} {len(new_archive)} new file(s) on the robot -> pull')
+    elif args.command == 'pull':
+        for path in new_archive:
+            destination = ROOT / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(robot.read(path))
+        if new_archive:
+            print(f'  {"history/ and snapshots/":34} {len(new_archive)} file(s) pulled')
+            copied += len(new_archive)
+
+    save_state(target, synced)
+    if args.command != 'status':
+        print(f'{copied} file(s) {args.command}ed' + (f', {conflicts} conflict(s) left alone' if conflicts else '') + '.')
+        if args.command == 'pull' and copied:
+            print('Now commit them:  git add settings autos robot-config history snapshots && git commit')
+        if args.command == 'push' and copied:
+            print('Press INIT on the robot to use them. A changed hardware map needs an app restart.')
+    sys.exit(1 if conflicts else 0)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except RuntimeError as error:
+        sys.exit(str(error))

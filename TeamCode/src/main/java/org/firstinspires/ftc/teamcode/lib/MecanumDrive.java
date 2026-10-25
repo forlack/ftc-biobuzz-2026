@@ -1,6 +1,6 @@
 package org.firstinspires.ftc.teamcode.lib;
 
-import com.bylazar.configurables.annotations.Configurable;
+import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -31,39 +31,18 @@ public class MecanumDrive {
     /** Speed while slow mode is held down. */
     public static double SLOW_SPEED = 0.25;
     public static double TURBO_SPEED = 1.0;
-    /** The speed the robot drives at when the OpMode starts. The driver can change it. */
-    public static double INITIAL_SPEED = 0.75;
-    /** How much one changeDefaultSpeed() step moves it. */
-    public static double SPEED_STEP = 0.05;
-    /** The driver can never set the default speed outside these. */
-    public static double MIN_ALLOWED_SPEED = 0.10;
-    public static double MAX_ALLOWED_SPEED = 1.00;
+    /** Normal driving speed, 0 to 1 (slow and turbo override it while held). Changes apply live. */
+    @RobotSettings.Renamed("INITIAL_SPEED")
+    public static double DRIVE_SPEED = 0.75;
 
-    /** VELOCITY mode lets the motors correct their own speed using the encoders. */
-    public static boolean START_IN_VELOCITY_MODE = false;
     /** BRAKE mode makes the robot stop hard instead of rolling when the sticks are released. */
     public static boolean START_IN_BRAKE_MODE = true;
-
-    // The hub's own velocity PIDF, used only in VELOCITY mode. Not Pedro's PIDs.
-    public static boolean TUNE_PIDF = false;
-    public static double VEL_P = 10.0;
-    public static double VEL_I = 3.0;
-    public static double VEL_D = 0.0;
-    public static double VEL_F = 12.0;
 
     private final DcMotorEx frontLeft, frontRight, backLeft, backRight;
     private final DcMotorEx[] motors;
     private final IMU imu;
-    private final String factoryPidf;
 
-    private double defaultSpeed = INITIAL_SPEED;
-    private boolean velocityMode = START_IN_VELOCITY_MODE;
     private boolean brakeMode = START_IN_BRAKE_MODE;
-
-    // The PIDF numbers currently loaded in the motors. Kept so we can tell when Panels has
-    // changed one and skip re-sending numbers the motors already have.
-    private double motorP = Double.NaN, motorI = Double.NaN;
-    private double motorD = Double.NaN, motorF = Double.NaN;
 
     // Saved from the last drive() call so the dashboard can show what the robot was told.
     private double lastStrafe, lastForward, lastTurn;
@@ -87,15 +66,16 @@ public class MecanumDrive {
         frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
         backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        applyRunMode();
+        // Raw power: the stick sets the motor power directly, no encoder speed control.
+        for (DcMotorEx motor : motors) {
+            motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        }
         applyZeroPowerBehavior();
-
-        factoryPidf = readFactoryPidf();
     }
 
     /** Drives at the driver's current default speed. */
     public void drive(double strafe, double forward, double turn) {
-        drive(strafe, forward, turn, defaultSpeed);
+        drive(strafe, forward, turn, getDefaultSpeed());
     }
 
     /**
@@ -109,8 +89,6 @@ public class MecanumDrive {
      *                clamps it to the default, so turbo really can go faster.
      */
     public void drive(double strafe, double forward, double turn, double speed) {
-        applyPidfTuning();
-
         strafe = ignoreDrift(strafe);
         forward = ignoreDrift(forward);
         turn = ignoreDrift(turn);
@@ -165,43 +143,9 @@ public class MecanumDrive {
         return lastHeadingRadians;
     }
 
-    /** Moves the default speed by whole steps, e.g. +1 to speed up, -1 to slow down. */
-    public void changeDefaultSpeed(int steps) {
-        double moved = defaultSpeed + steps * SPEED_STEP;
-        defaultSpeed = Math.max(MIN_ALLOWED_SPEED, Math.min(MAX_ALLOWED_SPEED, moved));
-    }
-
-    public void toggleVelocityMode() {
-        velocityMode = !velocityMode;
-        applyRunMode();
-    }
-
     public void toggleBrakeMode() {
         brakeMode = !brakeMode;
         applyZeroPowerBehavior();
-    }
-
-    /** Sends PIDF numbers edited in Panels to the motors, but only when one actually changed. */
-    private void applyPidfTuning() {
-        if (!TUNE_PIDF || (VEL_P == motorP && VEL_I == motorI
-                && VEL_D == motorD && VEL_F == motorF)) {
-            return;
-        }
-        for (DcMotorEx motor : motors) {
-            motor.setVelocityPIDFCoefficients(VEL_P, VEL_I, VEL_D, VEL_F);
-        }
-        motorP = VEL_P;
-        motorI = VEL_I;
-        motorD = VEL_D;
-        motorF = VEL_F;
-    }
-
-    private void applyRunMode() {
-        for (DcMotorEx motor : motors) {
-            motor.setMode(velocityMode
-                    ? DcMotor.RunMode.RUN_USING_ENCODER
-                    : DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        }
     }
 
     private void applyZeroPowerBehavior() {
@@ -217,44 +161,19 @@ public class MecanumDrive {
         return Math.abs(stickValue) < STICK_DEADZONE ? 0.0 : stickValue;
     }
 
-    private String readFactoryPidf() {
-        try {
-            return frontLeft.getPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER).toString();
-        } catch (Exception e) {
-            return "unavailable (" + e.getClass().getSimpleName() + ")";
-        }
-    }
-
     // ---- Things the dashboard asks about -------------------------------------
 
     public DcMotorEx[] getMotors() {
         return motors;
     }
 
-    /** The speed the three-argument drive() uses. */
+    /** The speed the three-argument drive() uses: DRIVE_SPEED, kept within 0 to 1. */
     public double getDefaultSpeed() {
-        return defaultSpeed;
-    }
-
-    public boolean isVelocityMode() {
-        return velocityMode;
+        return Math.max(0, Math.min(1, DRIVE_SPEED));
     }
 
     public boolean isBrakeMode() {
         return brakeMode;
-    }
-
-    public boolean isTuningPidf() {
-        return TUNE_PIDF;
-    }
-
-    public String getFactoryPidf() {
-        return factoryPidf;
-    }
-
-    /** The PIDF numbers currently loaded in the motors. */
-    public String getMotorPidf() {
-        return motorP + " / " + motorI + " / " + motorD + " / " + motorF;
     }
 
     public double getLastStrafe() { return lastStrafe; }

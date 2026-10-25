@@ -1,0 +1,17 @@
+{
+  "name": "Pedro Pathing Visualizer",
+  "short_name": "Path Viz",
+  "description": "Design and export autonomous Pedro Pathing trajectories.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#171717",
+  "theme_color": "#171717",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

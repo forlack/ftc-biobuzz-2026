@@ -1,13 +1,12 @@
 package org.firstinspires.ftc.teamcode.helpers;
 
-import com.bylazar.telemetry.PanelsTelemetry;
-import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
+import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
 
 /**
@@ -30,13 +29,14 @@ import org.firstinspires.ftc.teamcode.pedro.Constants;
 public class LocalizationCheck extends LinearOpMode {
     @Override
     public void runOpMode() {
-        TelemetryManager panels = PanelsTelemetry.INSTANCE.getTelemetry();
+        // Everything sent to telemetry also reaches the Total Chaos Dashboard.
+        telemetry = new DashboardTelemetry(telemetry);
         Follower follower = Constants.create(hardwareMap);
         GoBildaPinpointDriver pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "pinpoint");
         follower.setPose(new Pose(0, 0, 0));
 
-        panels.addLine("Push by hand. Motors are off. A = reset to 0.");
-        panels.update(telemetry);
+        telemetry.addLine("Push by hand. Motors are off. A = reset to 0.");
+        telemetry.update();
         waitForStart();
         follower.update();
         int rawForward0 = pinpoint.getEncoderX();
@@ -50,15 +50,15 @@ public class LocalizationCheck extends LinearOpMode {
                 rawStrafe0 = pinpoint.getEncoderY();
             }
             Pose p = follower.pose();
-            panels.addLine("FRONT = POD END");
-            panels.addData("x  (forward +)", Math.round(p.x() * 10) / 10.0);
-            panels.addData("y  (left +)", Math.round(p.y() * 10) / 10.0);
-            panels.addData("heading deg (CCW +)", Math.round(Math.toDegrees(p.heading()) * 10) / 10.0);
-            panels.addLine("");
-            panels.addLine("RAW (what AutoTune sees, both FORWARD):");
-            panels.addData("raw forward ticks", pinpoint.getEncoderX() - rawForward0);
-            panels.addData("raw strafe ticks", pinpoint.getEncoderY() - rawStrafe0);
-            panels.update(telemetry);
+            telemetry.addLine("FRONT = POD END");
+            telemetry.addData("x  (forward +)", Math.round(p.x() * 10) / 10.0);
+            telemetry.addData("y  (left +)", Math.round(p.y() * 10) / 10.0);
+            telemetry.addData("heading deg (CCW +)", Math.round(Math.toDegrees(p.heading()) * 10) / 10.0);
+            telemetry.addLine("");
+            telemetry.addLine("RAW (what AutoTune sees, both FORWARD):");
+            telemetry.addData("raw forward ticks", pinpoint.getEncoderX() - rawForward0);
+            telemetry.addData("raw strafe ticks", pinpoint.getEncoderY() - rawStrafe0);
+            telemetry.update();
         }
     }
 }

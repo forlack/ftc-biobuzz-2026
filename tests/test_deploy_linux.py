@@ -79,11 +79,11 @@ class LinuxDeployTests(unittest.TestCase):
         self.assertTrue(all(i < install for i in pushes))
         self.assertEqual(commands[pushes[0]][-1], '/sdcard/FIRST/')
 
-    def test_paths_replaced_before_install(self):
+    def test_new_autos_uploaded_before_install(self):
         _, commands, error = self.deploy()
         self.assertIsNone(error)
-        push = next(i for i, c in enumerate(commands) if 'push' in c and c[-1].endswith('auto.json.tmp'))
-        rename = next(i for i, c in enumerate(commands) if 'mv' in c)
+        push = next(i for i, c in enumerate(commands) if 'push' in c and c[-1].endswith('/autos/saturday.json.tmp'))
+        rename = next(i for i, c in enumerate(commands) if 'mv' in c and c[-1].endswith('/autos/saturday.json'))
         install = next(i for i, c in enumerate(commands) if ':TeamCode:installDebug' in c)
         self.assertLess(push, rename)
         self.assertLess(rename, install)
@@ -107,6 +107,7 @@ class LinuxDeployTests(unittest.TestCase):
         install = next(c for c in commands if ':TeamCode:installDebug' in c)
         self.assertNotIn('-Ptuning', install)
         self.assertEqual(module.tuning_flag(SimpleNamespace(tuning=True)), ['-Ptuning'])
+        self.assertEqual(module.tuning_flag(SimpleNamespace(dashboard=True)), ['-Pdashboard'])
 
     def test_adb_server_restarted_before_connecting(self):
         _, commands, _ = self.deploy()

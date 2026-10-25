@@ -89,3 +89,10 @@ lint/generated/
 lint/outputs/
 lint/tmp/
 # lint/reports/
+
+# Total Chaos simulator and sync state (local only)
+sim/sdcard/
+sim/build/
+sim/.gradle/
+.robot-sync.json
+tests/e2e/out/

@@ -6,23 +6,23 @@ code. Changing the file needs **no build**.
 
 ## Tune and save
 
-1. Run **Field Centric (Java)** and open Panels at <http://192.168.43.1:8001>.
-2. Change numbers live, as before.
-3. When they are right, turn on **`RobotSettings` → `SAVE_TO_ROBOT`**. It turns itself off,
-   and telemetry shows `Settings: saved 18:42:07`.
+1. Run **Field Centric (Java)** and open the dashboard at <http://192.168.43.1:8686>, Tune tab.
+2. Change numbers live.
+3. When they are right, press **Save to robot**. Every dot turns green, and the save is kept in
+   History.
 4. Copy the file into the repo and commit it:
    ```bash
-   ./robot-settings pull
+   ./robot-sync pull
    git add settings/robot.json && git commit -m "Tune flywheels" && git push
    ```
 
-Unsaved Panels changes still disappear when the Robot Controller app restarts. Save first.
+Unsaved changes still disappear when the Robot Controller app restarts. Save first.
 
 ## What happens at INIT
 
 - **No file:** the code's values are used. Nothing breaks.
 - **File changed since last time:** its values replace the code's.
-- **File unchanged:** nothing is reloaded, so unsaved Panels edits survive a re-INIT.
+- **File unchanged:** nothing is reloaded, so unsaved Tune tab edits survive a re-INIT.
 - **A bad value** (typo, a word where a number goes, a name the code no longer has): that
   value keeps the code default, and a `Settings warning` line says which one.
 - **The whole file is unreadable:** the backup from the save before, `robot.json.bak`, is
@@ -33,7 +33,7 @@ Unsaved Panels changes still disappear when the Robot Controller app restarts. S
 Edit `settings/robot.json` in any editor, then send it while on the robot Wi-Fi:
 
 ```bash
-./robot-settings push      # the robot's old file becomes robot.json.bak
+./robot-sync push      # the robot's old file becomes robot.json.bak
 ```
 
 Press INIT to use it. The file groups values by class:
@@ -50,8 +50,9 @@ A value missing from the file keeps its code default, so a file may list only a 
 
 ## For programmers
 
-Every `public static` (not `final`) number, boolean or String in `FieldCentricJava` and
-`MecanumDrive` is a setting (the list is `FieldCentricJava.SETTINGS`). A new one is saved
-automatically. Mark a live switch that should not be saved, like `FLYWHEELS_ON`, with
-`@RobotSettings.NotSaved`. Renaming a variable makes old files warn about the old name;
+Every `public static` (not `final`) number, boolean or String in a class marked
+`@Configurable` is a setting (today `FieldCentricJava`, `MecanumDrive`, `PedroAutonomous`,
+`DashboardConfig`; the build lists them). A new one is saved automatically. Mark a live switch
+that should not be saved, like `FLYWHEELS_ON`, with `@RobotSettings.NotSaved`. More:
+`dashboard/DEVELOPER.md`. Renaming a variable makes old files warn about the old name;
 re-save to clear it.

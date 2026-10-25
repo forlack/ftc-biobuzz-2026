@@ -12,7 +12,7 @@ Everything outside `TeamCode/` is FIRST's code, unmodified except for two build 
 | Android Studio | Narwhal 3 Feature Drop or later |
 | Pedro Pathing | revhub 3.0.1 / tuning 1.0.1 |
 | Gradle / AGP | 9.1.0 / 8.13.2 |
-| Panels dashboard | 1.0.17 |
+| Dashboard | Total Chaos Dashboard (ours, port 8686; Panels removed on this branch) |
 | JDK | Android Studio Embedded JDK (17+; JBR 25 verified) |
 
 For FIRST's own documentation and SDK release notes, go to the source rather than a stale
@@ -25,34 +25,23 @@ copy here:
 Current tuning targets the competition robot. Historical test-platform measurements
 in AGENTS.md must not replace the current values in `pedro/Constants.java`.
 
-## Desktop handoff — 2026-10-22
+## Robot data files (this branch)
 
-The SD-card autonomous reader is **tested on the robot**. Pull `main` on the desktop
-before editing. Paste Pedro's complete Java export into `paths/auto.java.txt`;
-`paths/auto.json` keeps timing and named speed limits. Both files are versioned.
-See [the path workflow](paths/README.md) for supported syntax and upload instructions.
+Three kinds of file, all edited from the dashboard and kept in Git with `./robot-sync pull`:
 
-Current autonomous starts at **(56, 8, 270°)**, drives to **(60, 16, 270°)**,
-shoots for **3.5 seconds**, then follows the curve to **(13.2008, 96.0738, 180°)**
-to park. Startup wait is 1 second. The stinger stays up; intake defaults to 700 RPM.
-TeleOp auto-selection requires Driver Station **OpMode Auto Queue** and the timed auto run.
+| On the robot (`/sdcard/FIRST/`) | In the repo | What it is |
+|---|---|---|
+| `settings/robot.json` | `settings/robot.json` | Tunable variables (RPMs, PIDF, stinger, drive speeds, which auton to run) |
+| `autos/<name>.json` | `autos/<name>.json` | One auton each: start pose, paths, functions on paths, sequence |
+| `24621-Biobuzz.xml` | `robot-config/24621-Biobuzz.xml` | Hardware map (plus `24621-Biobuzz-backup.xml`, an untouched copy) |
 
-On the Linux desktop, save the robot Wi-Fi connection in NetworkManager once, then
-run `./deploy-linux -r 24621-RC --stay` from your terminal. Deploy uploads both path
-files automatically; `-m` additionally uploads the versioned hardware XML.
-For path-only edits, join robot Wi-Fi and run `./update-paths`, then re-INIT.
-No rebuild or app restart is needed. Both deploy helpers preserve Gradle colors and
-live progress in a terminal. Normal full deploy starts on internet Wi-Fi to build first.
+Plus `history/` (every saved version) and `snapshots/` (known good copies), made on the robot.
+The old `paths/auto.java.txt` + `paths/auto.json` export is gone on this branch;
+`autos/saturday.json` is the same Saturday route.
 
-Wi-Fi credentials remain in each machine's private configuration outside Git and
-must be set up separately. `local.properties` and Android Studio settings are also
-local. The robot identifies as **Control Hub v1.0, Android 7.1.2** in install logs;
-file loading uses FileInputStream for compatibility. Do not replace it with
-`java.nio.file.Files`, which needs Android 8.
-
-Hardware config remains `robot-config/2222-Config.xml` (including `stinger` on
-Expansion Hub servo port 2). No fresh hub XML was available during this handoff;
-pull it after any Driver Station hardware configuration changes.
+On the Linux desktop, save the robot Wi-Fi connection in NetworkManager once, then run
+`./deploy-linux -r 24621-RC --stay` from your terminal. Deploy uploads autons the robot does
+not have yet (never replacing one); `-m` also uploads the hardware XML.
 
 ## Getting started
 
@@ -68,11 +57,10 @@ pull it after any Driver Station hardware configuration changes.
 ```bash
 cd FtcRobotController
 ./gradlew :TeamCode:installDebug              # compile + push
-adb forward tcp:8001 tcp:8001                 # Panels — forwards drop on every install
-adb forward tcp:8002 tcp:8002
+adb forward tcp:8686 tcp:8686                 # dashboard; forwards drop on every install
 ```
 
-Dashboard at <http://localhost:8001>.
+Dashboard at <http://localhost:8686>.
 
 ### Deploy over the robot's Wi-Fi
 
@@ -125,12 +113,12 @@ spaces, or punctuation.
 Normal deploys leave AutoTune out, because its web server once crashed the robot at boot; the
 next normal deploy removes it again.
 
-**To stay on the robot's network afterwards** — for Panels, logs, or quick re-deploys — add
+**To stay on the robot's network afterwards** — for the dashboard, logs, or quick re-deploys — add
 `--stay` (or `-s`):
 
 ```bash
 ./deploy --stay
-# Panels at http://192.168.43.1:8001, adb still connected
+# dashboard at http://192.168.43.1:8686, adb still connected
 ```
 
 It still builds on your normal Wi-Fi first, so dependencies download while you have
@@ -159,7 +147,7 @@ so the script never handles one. Join the robot network once from the Wi-Fi menu
 ```bash
 ./deploy-linux -r "ROBOT WIFI" --check   # first time: name the saved connection, dry run
 ./deploy-linux                           # build, deploy, come back to your Wi-Fi
-./deploy-linux --stay                    # ...or stay on the robot network for Panels
+./deploy-linux --stay                    # ...or stay on the robot network for the dashboard
 ```
 
 The robot network name is remembered in `~/.config/ftc/deploy-wifi.json` (names only, no
@@ -176,7 +164,7 @@ robot. Unplug USB first, then join the robot's network:
 ```bash
 adb connect 192.168.43.1:5555
 ./gradlew --offline :TeamCode:installDebug
-# Panels dashboard: http://192.168.43.1:8001   (no adb forward on this network)
+# dashboard: http://192.168.43.1:8686   (no adb forward on this network)
 ```
 
 `--offline` is required: the robot's network has no internet, and without it Gradle stalls
@@ -223,7 +211,7 @@ adb pull /sdcard/FIRST ~/ftc/backups/$(date +%Y%m%d-%H%M%S)-controlhub
 ### The robot config is in the repo
 
 The robot config — which device is on which port, under which name — normally lives only on
-the hub. A copy is kept in `robot-config/2222-Config.xml` so it travels with the code.
+the hub. A copy is kept in `robot-config/24621-Biobuzz.xml` so it travels with the code.
 
 **Load it onto a hub** (a new hub, one that lost its config, or after editing the XML here) —
 add `-m` / `--hardware-map` to a deploy, which uploads every `robot-config/*.xml` before
@@ -240,10 +228,10 @@ app — no build, so it works with no internet or while already on the robot net
 ./update-hardware-map          # Mac or Linux; add --stay to stay on the robot Wi-Fi
 ```
 
-or by hand: `adb -s <serial> push robot-config/2222-Config.xml /sdcard/FIRST/`
+or by hand: `adb -s <serial> push robot-config/24621-Biobuzz.xml /sdcard/FIRST/`
 
-If `2222-Config` is already the active config, the app restart from the deploy loads the new
-file. Otherwise, on the Driver Station: **⋮ → Configure Robot → `2222-Config` → Activate.**
+If `24621-Biobuzz` is already the active config, the app restart from the deploy loads the new
+file. Otherwise, on the Driver Station: **⋮ → Configure Robot → `24621-Biobuzz` → Activate.**
 Copying the file does not make it active.
 
 The file records **wiring**. If the other robot's devices are on different ports, the names
@@ -252,17 +240,29 @@ load fine but point at the wrong hardware — run **Motors Test** before driving
 **After changing the config on the Driver Station,** save it back so GitHub stays current:
 
 ```bash
-adb pull /sdcard/FIRST/2222-Config.xml robot-config/
+adb pull /sdcard/FIRST/24621-Biobuzz.xml robot-config/
 git add robot-config && git commit -m "Update robot config" && git push
 ```
 
+## Total Chaos Dashboard and simulator (branch `dashboard`)
+
+Our own dashboard: live charts, settings, the path editor with robot actions, OpMode control
+and the hardware map. Try it with no robot at all:
+
+```bash
+./simulate          # then open http://localhost:8686
+```
+
+On the robot: `./deploy-linux --stay` (Mac: `./deploy --stay`; the dashboard is in every build on this branch), then
+<http://192.168.43.1:8686>. Test it with the repeatable checklist in
+[dashboard/ROBOT-TEST.md](dashboard/ROBOT-TEST.md).
+`./robot-sync pull|push|status` keeps the robot's files and Git in step.
+Everything else: [dashboard/README.md](dashboard/README.md).
+
 ## What's here
 
-Autonomous paths can be edited and uploaded without rebuilding. See
-[paths/README.md](paths/README.md) for the Pedro export and JSON settings format, first setup, and `./update-paths`.
-
-Tunable numbers (RPMs, PIDF, stinger, drive speeds) can be saved on the robot from Panels and
-copied with `./robot-settings pull|push`, also without rebuilding. See
+Tunable numbers (RPMs, PIDF, stinger, drive speeds) are tuned and saved on the robot from
+the dashboard's Tune tab and copied with `./robot-sync pull|push`, without rebuilding. See
 [settings/README.md](settings/README.md). Where this is heading: [ROADMAP.md](ROADMAP.md).
 
 All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
@@ -272,7 +272,7 @@ All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
 | `FieldCentricJava` | Field Centric (Java) | Drive | Main teleop |
 | `helpers.MotorsTest` | Motors Test | Diagnostics | Per-motor and robot-level direction checks |
 | `helpers.LocalizationCheck` | Localization Check | Diagnostics | Pinpoint direction and distance check |
-| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Measures flywheel F and P; A saves to `robot.json` |
+| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Cycles the flywheels low/target until STOP; tune F, P, I, D live on the Tune tab and watch time to ready |
 | `PedroAutonomous` | Pedro Pathing Autonomous | Autonomous | SD-card Pedro export: shoot, then park |
 | `pedroPathing.Tuning` | Tuning | — | Official Pedro tuning suite |
 
@@ -283,7 +283,8 @@ All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
 ```
 lib/Button.java          down() is a state, pressed()/released() are events
 lib/MecanumDrive.java    motors, IMU, field-centric math, speed, PIDF
-lib/DriveDashboard.java  all Panels wiring
+lib/DriveDashboard.java  the drive lines of the telemetry; ends each loop's telemetry
+lib/DashboardTelemetry.java  telemetry to the Driver Station AND the dashboard
 ```
 
 A teleop is one loop that **never waits**:
@@ -297,19 +298,23 @@ while (opModeIsActive()) {
 }
 ```
 
-To add something to the robot, write an `updateXxx()` method, have it publish its own
-telemetry with `dashboard.addData(...)`, and add one call to the loop.
+To add a mechanism, write one class in `mechanisms/` (hardware, settings, `@AutoFunction`
+methods for the auton, `update()`, `telemetry()`) and add it to `mechanisms/Robot`; the teleop
+and the autonomous both use `Robot`. Telemetry: `telemetry.addData(...)` shows on the Driver Station
+and the Total Chaos Dashboard (numbers can be charted); `Dash.put(...)` is for a number only
+the dashboard needs. New settings: `public static` fields in a `@Configurable` class. The
+developer guide: [dashboard/DEVELOPER.md](dashboard/DEVELOPER.md).
 
 **The one rule: never block the loop.** No `sleep()`, no `while (motor.isBusy())`. The Robot
 Controller will stop the robot if the loop stops turning over, and gamepads only refresh
 between iterations. Use a state machine instead — `PedroAutonomous` is the worked example.
 
-`FieldCentricJava.java` is the worked example to add to.
+`FieldCentricJava.java` (buttons) and `mechanisms/` (what they control) are the worked examples.
 
 ## More detail
 
 [AGENTS.md](AGENTS.md) is the real documentation — hardware and wiring, the toolchain,
-tuning results and how they were measured, Pedro setup, Panels, naming and comment
+tuning results and how they were measured, Pedro setup, naming and comment
 conventions, and the gotchas that have already cost us time.
 
 ## License

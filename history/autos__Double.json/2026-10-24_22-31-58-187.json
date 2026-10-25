@@ -1,0 +1,120 @@
+{
+  "version": 2,
+  "name": "Double",
+  "start": {
+    "x": 56,
+    "y": 9,
+    "heading": 270
+  },
+  "robot": {
+    "width": 18,
+    "length": 18,
+    "safetyMargin": 1
+  },
+  "paths": [
+    {
+      "name": "path1",
+      "points": [
+        [
+          56,
+          9
+        ],
+        [
+          60,
+          16
+        ]
+      ],
+      "heading": {
+        "type": "linear",
+        "start": 270,
+        "end": 270
+      },
+      "events": []
+    },
+    {
+      "name": "path2",
+      "points": [
+        [
+          60,
+          16
+        ],
+        [
+          5.7163,
+          27.5151
+        ],
+        [
+          9.38,
+          9.091
+        ]
+      ],
+      "heading": {
+        "type": "linear",
+        "start": 270,
+        "end": 270
+      },
+      "events": []
+    },
+    {
+      "name": "path3",
+      "points": [
+        [
+          9.38,
+          9.091
+        ],
+        [
+          44.4632,
+          23.1291
+        ],
+        [
+          12.3911,
+          117.8756
+        ],
+        [
+          57.3913,
+          125.1184
+        ]
+      ],
+      "heading": {
+        "type": "linear",
+        "start": 270,
+        "end": 90
+      },
+      "events": []
+    }
+  ],
+  "steps": [
+    {
+      "action": "wait",
+      "params": {
+        "seconds": 1
+      }
+    },
+    {
+      "follow": "path1"
+    },
+    {
+      "action": "shoot",
+      "params": {
+        "seconds": 3.5
+      }
+    },
+    {
+      "follow": "path2"
+    },
+    {
+      "action": "wait",
+      "params": {
+        "seconds": 1
+      }
+    },
+    {
+      "follow": "path3"
+    },
+    {
+      "action": "shoot",
+      "params": {
+        "seconds": 3.5
+      }
+    }
+  ]
+}
