@@ -21,7 +21,7 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   suspect the SDK's own periodic hub traffic); browser does not reconnect by itself after a
   Wi-Fi drop (a refresh is needed; fix proposed: reconnect when no message for ~3 s); "Use
   this map" on the robot still gives Driver Station steps (switching from the app is unbuilt);
-  ROBOT-TEST checks 2, 9 (./dashboard-load), 11, 13 not yet run.
+  ROBOT-TEST checks 2, 9 (./dashboard-load, optional), 11 not yet run.
 - Next agreed later: strip unneeded visualizer features.
 
 **Handoff / state (2026-10-23, history):**
