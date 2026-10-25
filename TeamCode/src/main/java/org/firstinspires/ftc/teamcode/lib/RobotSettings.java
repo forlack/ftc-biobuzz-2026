@@ -83,7 +83,11 @@ public class RobotSettings {
         }
     }
 
-    /** Marks a public static field that is a live switch, not a setting, so it is never saved. */
+    /**
+     * Marks a public static field that is a live switch, not a setting: never saved, and back to
+     * its value in the code at every INIT ({@link #load}), so a switch turned off for a test
+     * cannot stay off by accident.
+     */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.FIELD)
     public @interface NotSaved {}
@@ -100,14 +104,46 @@ public class RobotSettings {
         String value();
     }
 
+    /**
+     * The setting used to have another name in the same class, such as
+     * {@code @RobotSettings.Renamed("INITIAL_SPEED")}: a robot.json saved before the rename still
+     * gives its value. The next Save writes the new name.
+     */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    public @interface Renamed {
+        String value();
+    }
+
     /** The value robot.json has for this setting: its own section, else where it moved from. */
     private static Object inFile(JSONObject file, Class<?> settingsClass, String name) {
         if (file == null) return null;
         JSONObject section = file.optJSONObject(settingsClass.getSimpleName());
+        String old = oldName(settingsClass, name);
         if (section != null && section.has(name)) return section.opt(name);
+        if (section != null && old != null && section.has(old)) return section.opt(old);
         MovedFrom moved = settingsClass.getAnnotation(MovedFrom.class);
-        JSONObject old = moved == null ? null : file.optJSONObject(moved.value());
-        return old == null ? null : old.opt(name);
+        JSONObject previous = moved == null ? null : file.optJSONObject(moved.value());
+        return previous == null ? null : previous.opt(name);
+    }
+
+    /** The field's name before a rename, or null. */
+    private static String oldName(Class<?> settingsClass, String name) {
+        try {
+            Renamed renamed = settingsClass.getField(name).getAnnotation(Renamed.class);
+            return renamed == null ? null : renamed.value();
+        } catch (NoSuchFieldException error) {
+            return null;
+        }
+    }
+
+    /** The field renamed from {@code oldName}, or null. */
+    private static String newName(Class<?> settingsClass, String oldName) {
+        for (Field field : settingsFields(settingsClass)) {
+            Renamed renamed = field.getAnnotation(Renamed.class);
+            if (renamed != null && renamed.value().equals(oldName)) return field.getName();
+        }
+        return null;
     }
 
     /** When the file was last read or written, so an unchanged file is not read again. */
@@ -149,12 +185,32 @@ public class RobotSettings {
     }
 
     /**
-     * Reads robot.json (or its backup) into the settings classes. Never throws.
+     * For INIT: live switches back to their code values, then robot.json (or its backup) into
+     * the settings classes. Never throws.
      *
      * Only reads when the file changed since the last load or save. Unsaved edits therefore
      * survive a re-INIT; a newly uploaded file wins at the next INIT.
      */
     public synchronized RobotSettings load() {
+        resetLiveSwitches();
+        return readFile();
+    }
+
+    /** Every @RobotSettings.NotSaved switch back to its value in the code. */
+    private void resetLiveSwitches() {
+        for (Class<?> settingsClass : classes) {
+            for (Field field : allFields(settingsClass)) {
+                if (!isLive(field)) continue;
+                Object fallback;
+                synchronized (DEFAULTS) {
+                    fallback = DEFAULTS.get(key(settingsClass, field.getName()));
+                }
+                if (fallback != null) apply(settingsClass, field.getName(), fallback, true);
+            }
+        }
+    }
+
+    private RobotSettings readFile() {
         warnings.clear();
         File location = location();
         if (!location.isFile()) {
@@ -183,7 +239,12 @@ public class RobotSettings {
                 Iterator<String> names = section.keys();
                 while (names.hasNext()) {
                     String name = names.next();
-                    String problem = apply(settingsClass, name, section.opt(name), false);
+                    String renamed = newName(settingsClass, name);
+                    if (renamed != null) {
+                        if (section.has(renamed)) continue;   // the new name wins
+                        name = renamed;
+                    }
+                    String problem = apply(settingsClass, name, section.opt(renamed != null ? oldName(settingsClass, renamed) : name), false);
                     if (problem == null) {
                         applied++;
                     } else {
@@ -209,7 +270,7 @@ public class RobotSettings {
     /** Re-reads robot.json even if it looks unchanged, such as after a dashboard upload. */
     public synchronized RobotSettings reload() {
         loadedStamp = -1;
-        return load();
+        return readFile();   // not an INIT: live switches stay as they are
     }
 
     /**

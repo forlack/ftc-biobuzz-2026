@@ -220,8 +220,12 @@ try {
   await b.screenshot(join(OUT, '1-gamepad.png'));
   await b.eval(`document.querySelector('#pad-handle').click()`);
   check(await b.eval(`document.querySelector('#pad-body').hidden`), 'the handle closes the drawer');
-  await api('/api/settings', { method: 'POST', body: { group: 'Flywheels', name: 'FLYWHEELS_ON', value: true } });
+  // Live switches turned off for a test go back on at the next INIT (never saved, never stuck).
+  await api('/api/settings', { method: 'POST', body: { group: 'Flywheels', name: 'FLYWHEELS_ON', value: false } });
+  await api('/api/settings', { method: 'POST', body: { group: 'Intake', name: 'INTAKE_ENABLED', value: false } });
   await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Field Centric (Java)' } });
+  const switches = (await api('/api/settings')).data.items.filter((i) => ['FLYWHEELS_ON', 'INTAKE_ENABLED'].includes(i.name));
+  check(switches.length === 2 && switches.every((i) => i.value === true), 'live switches (FLYWHEELS_ON, INTAKE_ENABLED) turned off go back on at the next INIT');
   await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
   await b.waitFor(`document.getElementById('tab-live').innerText.includes('Flywheel compensated F')`, 5000);
 
@@ -284,11 +288,14 @@ try {
   console.log('Tune tab');
   // A robot.json saved before the settings moved into mechanisms/ still loads.
   await api('/api/file?path=settings/robot.json', { method: 'PUT', headers: { 'X-Base-Hash': '*' },
-    body: JSON.stringify({ version: 1, FieldCentricJava: { STINGER_DOWN: 0.4 } }, null, 2) });
+    body: JSON.stringify({ version: 1, FieldCentricJava: { STINGER_DOWN: 0.4 }, MecanumDrive: { INITIAL_SPEED: 0.6 } }, null, 2) });
   await api('/api/settings/reload', { method: 'POST' });
   const moved = (await api('/api/settings')).data.items.find((i) => i.group === 'Stinger' && i.name === 'STINGER_DOWN');
   check(moved.value === 0.4 && moved.inFile === 0.4,
     'an older robot.json (stinger under FieldCentricJava) still loads into the Stinger mechanism\'s settings');
+  const driveSpeed = (await api('/api/settings')).data.items.find((i) => i.group === 'MecanumDrive' && i.name === 'DRIVE_SPEED');
+  check(driveSpeed.value === 0.6 && driveSpeed.inFile === 0.6, 'and its INITIAL_SPEED becomes DRIVE_SPEED (renamed; it now applies live)');
+  check((await api('/api/settings')).data.items.some((i) => i.group === 'Intake' && i.name === 'INTAKE_I'), 'the intake has an I to tune (INTAKE_I)');
   await b.eval(`document.querySelector('[data-tab="tune"]').click()`);
   await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]')`);
   check(await b.eval(`document.querySelectorAll('#settings .dot.unsaved').length === 0 && document.querySelectorAll('#settings .dot.synced').length > 20`),
@@ -329,8 +336,19 @@ try {
   await b.waitFor(`document.querySelectorAll('#settings .dot.unsaved').length === 0`);
   check(true, 'after Save to robot every dot is green again');
   check(!('FLYWHEELS_ON' in saved.Flywheels) && !('INTAKE_ENABLED' in saved.Intake) && !('Simulator' in saved), 'live switches are not saved');
+  check(saved.MecanumDrive.DRIVE_SPEED === 0.6 && !('INITIAL_SPEED' in saved.MecanumDrive), 'Save writes DRIVE_SPEED, not the old INITIAL_SPEED');
   check(!('FieldCentricJava' in saved) && saved.Stinger.STINGER_DOWN === 0.4, 'Save writes the moved settings under their mechanisms (Stinger.STINGER_DOWN 0.4), not FieldCentricJava');
   await b.screenshot(join(OUT, '2-tune.png'));
+
+  // Undo (↶) on a yellow value puts the saved one back.
+  await b.eval(`(() => { const i = document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]');
+    i.value = '1234'; i.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await b.waitFor(`document.querySelectorAll('#settings .dot.unsaved').length === 1 && document.querySelector('[data-undo="Flywheels.POLLEN_FLYWHEEL_RPM"]')`);
+  check((await b.eval(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]').closest('.setting-row').querySelector('small').textContent`)) === 'code default 3400 · robot.json: 3000',
+    'each setting shows its code default and what robot.json sets instead');
+  await b.eval(`document.querySelector('[data-undo="Flywheels.POLLEN_FLYWHEEL_RPM"]').click()`);
+  await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]').value === '3000' && document.querySelectorAll('#settings .dot.unsaved').length === 0`);
+  check(true, 'the undo button next to a yellow value puts back the saved value (3000)');
 
   // History: a second save, then the Tune tab's History button shows both and restores the first.
   await b.eval(`(() => { const i = document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]');
@@ -367,7 +385,7 @@ try {
   await b.eval(`document.querySelector('[data-tab="robot"]').click()`);
   await b.waitFor(`document.querySelectorAll('table.devices tr[data-m]').length > 10`);
   const devices = await b.eval(`document.querySelectorAll('table.devices tr[data-m]').length`);
-  const inFile = (readFileSync(join(REPO, 'robot-config/2222-Config.xml'), 'utf8').match(/<(?!Lynx)\w+ name="[^"]+" port=/g) || []).length;
+  const inFile = (readFileSync(join(REPO, 'robot-config/24621-Biobuzz.xml'), 'utf8').match(/<(?!Lynx)\w+ name="[^"]+" port=/g) || []).length;
   check(devices === inFile, `hardware map shows all ${devices} devices on both hubs`);
   check(await b.eval(`document.querySelector('#hw-problems').children.length === 0`), 'the real map has no problems');
   await b.waitFor(`document.querySelector('#load').innerText.includes('Viewers')`);
@@ -391,7 +409,7 @@ try {
   // Several hardware maps: Control Hub first, new map with an Expansion Hub, webcams, Use this map.
   check((await b.eval(`document.querySelector('.hub-title').innerText`)).startsWith('Control Hub'),
     'the Control Hub is listed first, though the file has the Expansion Hub first');
-  check((await b.eval(`document.querySelector('#hw-map').selectedOptions[0].textContent`)) === '2222-Config (in use)',
+  check((await b.eval(`document.querySelector('#hw-map').selectedOptions[0].textContent`)) === '24621-Biobuzz (in use)',
     'the map picker opens the map the robot uses, marked (in use)');
   await b.eval(`document.querySelector('#hw-new').click()`);
   await b.eval(`(() => { document.querySelector('#hw-new-name').value = 'TestBot'; document.querySelector('#hw-new-create').click(); })()`);
@@ -406,6 +424,16 @@ try {
   check((await b.eval(`[...document.querySelectorAll('.hub-title')].map((h) => h.innerText).join('|')`)).includes('Expansion Hub 3'),
     '+ Expansion Hub adds one at the address you give');
   await b.screenshot(join(OUT, '3b-new-map.png'));
+  // Delete: autons and maps not in use (robot.json and the map in use cannot be deleted).
+  check((await api('/api/file?path=24621-Biobuzz.xml', { method: 'DELETE' })).status === 400, 'the hardware map in use cannot be deleted');
+  check((await api('/api/file?path=settings/robot.json', { method: 'DELETE' })).status === 400, 'nor can robot.json');
+  await b.eval(`document.querySelector('#files-refresh').click()`);
+  await b.waitFor(`document.querySelector('[data-delete="TestBot.xml"]')`);
+  check(await b.eval(`!document.querySelector('[data-delete="24621-Biobuzz.xml"]') && !document.querySelector('[data-delete="settings/robot.json"]')`),
+    'the Files list offers Delete only where it is allowed');
+  await b.eval(`(() => { window.confirm = () => true; document.querySelector('[data-delete="TestBot.xml"]').click(); })()`);
+  await b.waitFor(`!document.querySelector('[data-delete="TestBot.xml"]') && document.querySelector('#toast').textContent.includes('Deleted')`);
+  check((await api('/api/file?path=TestBot.xml')).status === 400 || (await api('/api/file?path=TestBot.xml')).status === 404, 'Delete removes a map that is not in use (TestBot)');
   await api('/api/file?path=CamBot.xml', { method: 'PUT', body: testBot.replace('</Robot>',
     '    <Webcam name="Webcam 1" serialNumber="UVC:046d:0825:A1B2C3" />\n</Robot>') });
   await b.eval(`document.querySelector('#files-refresh').click()`);
@@ -418,7 +446,7 @@ try {
   check((await api('/api/state')).data.hardwareMap === 'CamBot.xml', 'Use this map switches the map the (simulated) robot uses');
   await b.waitFor(`document.getElementById('adb-status').textContent.includes('simulator has no adb')`);
   check(await b.eval(`document.getElementById('adb-restart').disabled`), 'the adb card says the simulator has no adb, and Restart adb is off');
-  await api('/api/hardware/active', { method: 'POST', body: { path: '2222-Config.xml' } });
+  await api('/api/hardware/active', { method: 'POST', body: { path: '24621-Biobuzz.xml' } });
 
   // ---- 4. Path editor: robot actions on the route --------------------------------------------------
   console.log('Paths tab');

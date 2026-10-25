@@ -35,7 +35,7 @@ public interface RobotHost {
     /** Battery voltage, or NaN when unknown. */
     double batteryVolts();
 
-    /** File name of the active hardware map, such as "2222-Config.xml", or "". */
+    /** File name of the active hardware map, such as "24621-Biobuzz.xml", or "". */
     String activeHardwareMap();
 
     /**

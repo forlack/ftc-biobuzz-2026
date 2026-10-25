@@ -34,7 +34,7 @@ Imports: `org.firstinspires.ftc.teamcode.dashboard.Configurable`,
 | I want to… | Write | Where it shows |
 |---|---|---|
 | Tune a number live and save it | `@Configurable` on the class, `public static double X = 1;` | Tune tab, `robot.json` |
-| A live switch that is never saved | `@RobotSettings.NotSaved` on the field | Tune tab |
+| A live switch that is never saved | `@RobotSettings.NotSaved` on the field (back to the code value at every INIT) | Tune tab |
 | Settings only needed sometimes (a tuner) | `@Configurable.Hidden` on the class as well | Tune tab, under **Hidden** until you click Show |
 | Load saved values at INIT | `new RobotSettings().load();` | — |
 | Show a value to drivers and chart it | `telemetry.addData("Name", value)` | Driver Station + Live tab |
@@ -144,7 +144,9 @@ seconds) are written in `lib/StandardActions.java` with the function names.
 
 Settings saved before a class existed: when settings move from one class to another with the
 same names, `@RobotSettings.MovedFrom("OldClass")` keeps older robot.json files working (that is
-how the intake, flywheel and stinger settings left `FieldCentricJava`).
+how the intake, flywheel and stinger settings left `FieldCentricJava`). A setting renamed in the
+same class: `@RobotSettings.Renamed("OLD_NAME")` on the field (`MecanumDrive.DRIVE_SPEED` was
+`INITIAL_SPEED`).
 
 ## How it works (for the curious)
 

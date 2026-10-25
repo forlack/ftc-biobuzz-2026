@@ -139,6 +139,19 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   `AutoFunctions.of(new RobotStub()).override(simMechanisms)` (override throws on a name the
   robot lacks). Reflection needs `setAccessible(true)` (SimMechanisms is not public). e2e 125
   incl. old-robot.json migration and the unchanged function list. Robot test: ROBOT-TEST 4, 17.
+- **Tune/files round (2026-10-25):** live switches (`@RobotSettings.NotSaved`) reset to their
+  code values at every `RobotSettings.load()` (INIT); `reload()` (dashboard) does not reset
+  them. `@RobotSettings.Renamed("OLD")` on a field reads the old key (load + "in file").
+  `MecanumDrive.DRIVE_SPEED` (renamed from INITIAL_SPEED) is read live by getDefaultSpeed();
+  the unused changeDefaultSpeed/SPEED_STEP/MIN_/MAX_ALLOWED_SPEED were removed (a saved value
+  only warns until the next Save). `Intake.INTAKE_I` added (sim too). Tune rows: "code default
+  X · robot.json: Y", and ↶ undo on yellow rows (sets inFile, else default). `DELETE
+  /api/file` (autons and maps; refuses robot.json and the active map; history kept) with a
+  Delete button in the Robot tab's Files list. Hardware map renamed in the repo:
+  `robot-config/24621-Biobuzz.xml` (+ `24621-Biobuzz-backup.xml`); sim default map and tests
+  follow. On the robot the user must make the copies (Robot tab Save as copy), Activate
+  24621-Biobuzz on the DS, then Delete the old maps. "practice1"/"auton practice" autons on
+  the robot were not made by our code or tests (someone used Save as new).
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -194,7 +207,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (125
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (135
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

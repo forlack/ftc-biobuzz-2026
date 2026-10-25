@@ -65,10 +65,13 @@ export class RobotTab {
           <td class="r">${new Date(f.modified).toLocaleString()}</td>
           <td class="r"><button class="btn small" data-edit="${escapeHtml(f.path)}">Open</button>
             <button class="btn small" data-history="${escapeHtml(f.path)}">History</button>
-            <a class="btn small" href="/api/file?path=${encodeURIComponent(f.path)}" download="${escapeHtml(f.path.split('/').pop())}">Download</a></td>
+            <a class="btn small" href="/api/file?path=${encodeURIComponent(f.path)}" download="${escapeHtml(f.path.split('/').pop())}">Download</a>
+            ${deletable(f.path, this.hardwareMap) ? `<button class="btn small danger" data-delete="${escapeHtml(f.path)}" title="Delete it from the robot (its history stays)">Delete</button>` : ''}</td>
         </tr>`).join('') || '<tr><td class="muted">No files yet.</td></tr>';
       document.querySelectorAll('[data-edit]').forEach((button) =>
         button.addEventListener('click', () => this.edit(button.dataset.edit)));
+      document.querySelectorAll('[data-delete]').forEach((button) =>
+        button.addEventListener('click', () => this.remove(button.dataset.delete)));
       document.querySelectorAll('[data-history]').forEach((button) =>
         button.addEventListener('click', () => this.history.open(button.dataset.history)));
       this.refreshSnapshots();
@@ -78,6 +81,19 @@ export class RobotTab {
       if (!this.hardware.path || !maps.includes(this.hardware.path)) this.hardware.load(this.hardwareMap || maps[0]);
     } catch (error) {
       toast(`Could not list files: ${error.message}`, true);
+    }
+  }
+
+  /** Deletes an auton or an unused hardware map, after asking. */
+  async remove(path) {
+    if (!window.confirm(`Delete ${path} from the robot? Its saved versions stay in history (and in Git after robot-sync).`)) return;
+    try {
+      await api(`/api/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+      toast(`Deleted ${path}`);
+      if (this.hardware.path === path) this.hardware.path = null;
+      this.refresh();
+    } catch (error) {
+      toast(error.message, true);
     }
   }
 
@@ -165,4 +181,10 @@ export class RobotTab {
 
 function size(bytes) {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+/** Autons and hardware maps can be deleted; robot.json and the map in use cannot. */
+function deletable(path, activeMap) {
+  if (path === 'settings/robot.json' || path.startsWith('history/') || path.startsWith('snapshots/')) return false;
+  return path !== activeMap;
 }

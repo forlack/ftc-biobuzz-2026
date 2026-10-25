@@ -88,8 +88,10 @@ tasks.register('generateMirrors') {
             lines.eachWithIndex { line, i ->
                 def m = line =~ field
                 if (m.find()) {
-                    def liveOnly = i > 0 && lines[i - 1].contains('@RobotSettings.NotSaved')
-                    if (liveOnly) body << '    @RobotSettings.NotSaved\n'
+                    // The field's @RobotSettings annotations (NotSaved, Renamed) come along.
+                    def above = []
+                    for (int j = i - 1; j >= 0 && lines[j].trim().startsWith('@'); j--) above.add(0, lines[j].trim())
+                    above.findAll { it.startsWith('@RobotSettings.') }.each { body << "    ${it}\n" }
                     body << "    public static ${m.group(1)} ${m.group(2)} = ${m.group(3)};\n"
                 }
             }

@@ -31,7 +31,7 @@ class CompareTests(unittest.TestCase):
         self.assertFalse(is_archive('settings/robot.json'))
 
     def test_hardware_maps_live_in_robot_config(self):
-        self.assertTrue(str(repo_path('2222-Config.xml')).endswith('robot-config/2222-Config.xml'))
+        self.assertTrue(str(repo_path('24621-Biobuzz.xml')).endswith('robot-config/24621-Biobuzz.xml'))
         self.assertTrue(str(repo_path('autos/saturday.json')).endswith('autos/saturday.json'))
 
 

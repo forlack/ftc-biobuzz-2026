@@ -94,12 +94,18 @@ export class TuneTab {
     } else if (inSync(item)) {
       tag = `<span class="dot synced" title="${item.inFile === null ? 'Same as the code: nothing to save' : 'Same as robot.json on the robot'}"></span>`;
     } else {
-      tag = '<span class="dot unsaved" title="Changed on the robot but not saved: press Save to robot to keep it"></span>';
+      const savedValue = item.inFile !== null ? item.inFile : item.default;
+      tag = `<span class="unsaved-cell"><button class="undo" data-undo="${escapeHtml(key)}"
+          title="Undo: back to the saved value (${escapeHtml(format(savedValue))})">↶</button>
+        <span class="dot unsaved" title="Changed on the robot but not saved: press Save to robot to keep it"></span></span>`;
     }
-    const notDefault = item.default !== null && !same(item.value, item.default);
+    // The code's value, and what robot.json sets instead (robot.json wins at every INIT).
+    const inFileDiffers = item.saved && item.inFile !== null && !same(item.inFile, item.default);
     row.innerHTML = `<div class="setting-name" title="${escapeHtml(key)}">${escapeHtml(item.name)}
-        <small>default ${escapeHtml(format(item.default))}${notDefault ? ' · changed' : ''}</small></div>
+        <small>code default ${escapeHtml(format(item.default))}${inFileDiffers ? ` · robot.json: ${escapeHtml(format(item.inFile))}` : ''}</small></div>
       <div class="control"></div>${tag}`;
+    const undo = row.querySelector('[data-undo]');
+    if (undo) undo.addEventListener('click', () => this.set(item, item.inFile !== null ? item.inFile : item.default));
     const control = row.querySelector('.control');
     if (item.group === 'PedroAutonomous' && item.name === 'ROUTE') {
       // Which auton file runs at INIT: pick from the autons on the robot.

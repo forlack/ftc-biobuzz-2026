@@ -33,7 +33,7 @@ Three kinds of file, all edited from the dashboard and kept in Git with `./robot
 |---|---|---|
 | `settings/robot.json` | `settings/robot.json` | Tunable variables (RPMs, PIDF, stinger, drive speeds, which auton to run) |
 | `autos/<name>.json` | `autos/<name>.json` | One auton each: start pose, paths, functions on paths, sequence |
-| `2222-Config.xml` | `robot-config/2222-Config.xml` | Hardware map |
+| `24621-Biobuzz.xml` | `robot-config/24621-Biobuzz.xml` | Hardware map (plus `24621-Biobuzz-backup.xml`, an untouched copy) |
 
 Plus `history/` (every saved version) and `snapshots/` (known good copies), made on the robot.
 The old `paths/auto.java.txt` + `paths/auto.json` export is gone on this branch;
@@ -211,7 +211,7 @@ adb pull /sdcard/FIRST ~/ftc/backups/$(date +%Y%m%d-%H%M%S)-controlhub
 ### The robot config is in the repo
 
 The robot config — which device is on which port, under which name — normally lives only on
-the hub. A copy is kept in `robot-config/2222-Config.xml` so it travels with the code.
+the hub. A copy is kept in `robot-config/24621-Biobuzz.xml` so it travels with the code.
 
 **Load it onto a hub** (a new hub, one that lost its config, or after editing the XML here) —
 add `-m` / `--hardware-map` to a deploy, which uploads every `robot-config/*.xml` before
@@ -228,10 +228,10 @@ app — no build, so it works with no internet or while already on the robot net
 ./update-hardware-map          # Mac or Linux; add --stay to stay on the robot Wi-Fi
 ```
 
-or by hand: `adb -s <serial> push robot-config/2222-Config.xml /sdcard/FIRST/`
+or by hand: `adb -s <serial> push robot-config/24621-Biobuzz.xml /sdcard/FIRST/`
 
-If `2222-Config` is already the active config, the app restart from the deploy loads the new
-file. Otherwise, on the Driver Station: **⋮ → Configure Robot → `2222-Config` → Activate.**
+If `24621-Biobuzz` is already the active config, the app restart from the deploy loads the new
+file. Otherwise, on the Driver Station: **⋮ → Configure Robot → `24621-Biobuzz` → Activate.**
 Copying the file does not make it active.
 
 The file records **wiring**. If the other robot's devices are on different ports, the names
@@ -240,7 +240,7 @@ load fine but point at the wrong hardware — run **Motors Test** before driving
 **After changing the config on the Driver Station,** save it back so GitHub stays current:
 
 ```bash
-adb pull /sdcard/FIRST/2222-Config.xml robot-config/
+adb pull /sdcard/FIRST/24621-Biobuzz.xml robot-config/
 git add robot-config && git commit -m "Update robot config" && git push
 ```
 

@@ -48,7 +48,7 @@ Tick each one; write down anything that fails.
 | 2 | No Panels | <http://192.168.43.1:8001> does **not** load (Panels was removed on this branch); the Driver Station telemetry looks as before |
 | 3 | Dashboard | <http://192.168.43.1:8686> loads, says **Total Chaos 24621**, no SIMULATOR badge, top right **live** |
 | 4 | Tune tab | Groups Flywheels, Intake, MecanumDrive, PedroAutonomous, Stinger, DashboardConfig with green dots (no FieldCentricJava group: its settings moved to the mechanisms, and values saved under it before still load: check FLYWHEEL_F, STINGER_DOWN and the RPMs are your tuned ones, then **Save to robot** once); **FlywheelTuner under Hidden** at the bottom (Show / Hide work); **no Simulator group**; no "No settings found" warning on the Driver Station |
-| 5 | Robot tab | Map **2222-Config (in use)**, no red problems |
+| 5 | Robot tab | Map **24621-Biobuzz (in use)**, no red problems |
 | 6 | OpMode bar | Init then Start **Field Centric (Java)** from the dashboard; Stop stops it |
 | 7 | Live tab | Flywheel, intake, battery and loop charts move; telemetry table fills. **+ Add chart** offers `Flywheels ready`, `Feeding`, `Drive forward`…; toggling flywheels / holding feed shows on them. Driver Station lines read cleanly (one line per RPM with % off). (The field stays empty in teleop: teleop does not send its position yet.) |
 | 7b | Flywheel F | Telemetry shows **Flywheel compensated F** between 11 and 12 (11 on a full battery, rising as it drops). Tune tab: `FLYWHEEL_F` is **11** and `STINGER_DOWN` **0.42** (if the robot's saved robot.json still says 12 / 0.45, those win: set them, Save. A settings warning about `FLYWHEEL_FIXED_F` is expected once: that setting is gone, Save clears it) |
@@ -64,6 +64,7 @@ Tick each one; write down anything that fails.
 | 15 | Restart adb | Once, while adb works (right after a reboot): `adb shell pm grant com.qualcomm.ftcrobotcontroller android.permission.WRITE_SECURE_SETTINGS`. Robot tab, **adb** card: says **Listening**, Restart adb is enabled. Next time adb sticks: note what the card says (Listening / Not listening), press **Restart adb**, then `adb disconnect; adb connect 192.168.43.1:5555` and `adb devices`. Write down whether it worked; if not, power-cycle as before |
 | 16 | Path speed | Paths tab: pencil on a **follow** step, set a speed (say 40%), Save, run the auton: that path is visibly slower |
 | 17 | Mechanisms refactor | Teleop: every button as before (intake X / D-pad down, flywheels A, gates RB, stinger LB, force shoot A+RB), Driver Station lines as before, loop time about the same. Auton: `saturday` runs exactly as before (intake and flywheels on, shoot, stinger down on path2, park). Paths tab, Add to the sequence: same functions as before |
+| 18 | Tune and files | Turn `INTAKE_ENABLED` off, Save to robot, Stop, Init again: it is back on. Change `DRIVE_SPEED` while driving: the speed changes at once (your old INITIAL_SPEED carried over). `INTAKE_I` is there. Change a value: ↶ puts back the saved one. Robot tab: **Delete** an auton you do not want; robot.json and the map in use have no Delete |
 
 Load measurement for check 9 (Field Centric running, robot on blocks or driven gently):
 

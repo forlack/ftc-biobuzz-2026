@@ -16,6 +16,7 @@ import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 public class Intake {
     public static double INTAKE_RPM = 700;
     public static double INTAKE_P = 15;
+    public static double INTAKE_I = 0;
     public static double INTAKE_F = 15;
     /** Off: the intake never runs (teleop and auton), whatever the buttons say. A switch, not saved. */
     @RobotSettings.NotSaved
@@ -26,7 +27,7 @@ public class Intake {
 
     public Intake(HardwareMap hardwareMap) {
         motor = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD, 145.1);
-        motor.setPIDF(INTAKE_P, motor.getI(), motor.getD(), INTAKE_F);
+        motor.setPIDF(INTAKE_P, INTAKE_I, motor.getD(), INTAKE_F);
     }
 
     @AutoFunction(name = "intakeOn", label = "intake on", help = "Start the intake.")
@@ -44,8 +45,8 @@ public class Intake {
 
     /** Once per loop: the Tune tab's PIDF, and the speed for on / off / reverse. */
     public void update() {
-        if (INTAKE_P != motor.getP() || INTAKE_F != motor.getF()) {
-            motor.setPIDF(INTAKE_P, motor.getI(), motor.getD(), INTAKE_F);
+        if (INTAKE_P != motor.getP() || INTAKE_I != motor.getI() || INTAKE_F != motor.getF()) {
+            motor.setPIDF(INTAKE_P, INTAKE_I, motor.getD(), INTAKE_F);
         }
         double rpm = 0;
         if (!INTAKE_ENABLED) {

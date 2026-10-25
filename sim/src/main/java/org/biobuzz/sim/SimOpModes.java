@@ -125,7 +125,7 @@ public final class SimOpModes {
                     Flywheels.FLYWHEEL_F, Flywheels.FLYWHEEL_F_AT_10V);
             world.pollen.setPIDF(Flywheels.POLLEN_FLYWHEEL_P, Flywheels.POLLEN_FLYWHEEL_I, Flywheels.POLLEN_FLYWHEEL_D, flywheelF);
             world.nectar.setPIDF(Flywheels.NECTAR_FLYWHEEL_P, Flywheels.NECTAR_FLYWHEEL_I, Flywheels.NECTAR_FLYWHEEL_D, flywheelF);
-            world.intake.setPIDF(Intake.INTAKE_P, 0, 0, Intake.INTAKE_F);
+            world.intake.setPIDF(Intake.INTAKE_P, Intake.INTAKE_I, 0, Intake.INTAKE_F);
             world.pollen.setTargetRPM(flywheelsOn ? Flywheels.POLLEN_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
             world.nectar.setTargetRPM(flywheelsOn ? Flywheels.NECTAR_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
             world.intake.setTargetRPM(intakeTarget(), SimWorld.INTAKE_TICKS_PER_REV);
@@ -202,7 +202,7 @@ public final class SimOpModes {
                 driveFieldCentric();
             } else if (Simulator.DEMO_DRIVING && !operating) {
                 // Pretend driver: a gentle loop around the field.
-                follower.manual(0.35 * MecanumDrive.INITIAL_SPEED, 0.0, 0.25);
+                follower.manual(0.35 * MecanumDrive.DRIVE_SPEED, 0.0, 0.25);
             } else {
                 follower.manual(0, 0, 0);
             }
@@ -242,7 +242,7 @@ public final class SimOpModes {
             double forward = ignoreDrift(-drive[VirtualGamepads.LEFT_STICK_Y]);
             double turn = ignoreDrift(drive[VirtualGamepads.RIGHT_STICK_X]);
             double speed = slowMode.down() ? MecanumDrive.SLOW_SPEED
-                    : turboMode.down() ? MecanumDrive.TURBO_SPEED : MecanumDrive.INITIAL_SPEED;
+                    : turboMode.down() ? MecanumDrive.TURBO_SPEED : MecanumDrive.DRIVE_SPEED;
             double yaw = world.pose()[2] - headingZero;
             double right = strafe * Math.cos(yaw) + forward * Math.sin(yaw);
             double ahead = -strafe * Math.sin(yaw) + forward * Math.cos(yaw);

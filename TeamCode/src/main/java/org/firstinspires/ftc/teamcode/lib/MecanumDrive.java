@@ -31,13 +31,9 @@ public class MecanumDrive {
     /** Speed while slow mode is held down. */
     public static double SLOW_SPEED = 0.25;
     public static double TURBO_SPEED = 1.0;
-    /** The speed the robot drives at when the OpMode starts. The driver can change it. */
-    public static double INITIAL_SPEED = 0.75;
-    /** How much one changeDefaultSpeed() step moves it. */
-    public static double SPEED_STEP = 0.05;
-    /** The driver can never set the default speed outside these. */
-    public static double MIN_ALLOWED_SPEED = 0.10;
-    public static double MAX_ALLOWED_SPEED = 1.00;
+    /** Normal driving speed, 0 to 1 (slow and turbo override it while held). Changes apply live. */
+    @RobotSettings.Renamed("INITIAL_SPEED")
+    public static double DRIVE_SPEED = 0.75;
 
     /** BRAKE mode makes the robot stop hard instead of rolling when the sticks are released. */
     public static boolean START_IN_BRAKE_MODE = true;
@@ -46,7 +42,6 @@ public class MecanumDrive {
     private final DcMotorEx[] motors;
     private final IMU imu;
 
-    private double defaultSpeed = INITIAL_SPEED;
     private boolean brakeMode = START_IN_BRAKE_MODE;
 
     // Saved from the last drive() call so the dashboard can show what the robot was told.
@@ -80,7 +75,7 @@ public class MecanumDrive {
 
     /** Drives at the driver's current default speed. */
     public void drive(double strafe, double forward, double turn) {
-        drive(strafe, forward, turn, defaultSpeed);
+        drive(strafe, forward, turn, getDefaultSpeed());
     }
 
     /**
@@ -148,12 +143,6 @@ public class MecanumDrive {
         return lastHeadingRadians;
     }
 
-    /** Moves the default speed by whole steps, e.g. +1 to speed up, -1 to slow down. */
-    public void changeDefaultSpeed(int steps) {
-        double moved = defaultSpeed + steps * SPEED_STEP;
-        defaultSpeed = Math.max(MIN_ALLOWED_SPEED, Math.min(MAX_ALLOWED_SPEED, moved));
-    }
-
     public void toggleBrakeMode() {
         brakeMode = !brakeMode;
         applyZeroPowerBehavior();
@@ -178,9 +167,9 @@ public class MecanumDrive {
         return motors;
     }
 
-    /** The speed the three-argument drive() uses. */
+    /** The speed the three-argument drive() uses: DRIVE_SPEED, kept within 0 to 1. */
     public double getDefaultSpeed() {
-        return defaultSpeed;
+        return Math.max(0, Math.min(1, DRIVE_SPEED));
     }
 
     public boolean isBrakeMode() {

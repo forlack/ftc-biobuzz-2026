@@ -54,6 +54,8 @@ import javax.xml.parsers.DocumentBuilderFactory;
  *                                       settings/robot.json, autos/*.json, hardware maps (*.xml)
  *   GET  /api/file?path=...             raw file, with its hash in X-Hash
  *   PUT  /api/file?path=...             replace a file; send X-Base-Hash to refuse if it changed
+ *   DELETE /api/file?path=...           delete an auton or a hardware map (not robot.json, not
+ *                                       the map in use); its history stays
  *   POST /api/opmode                    {action: init|start|stop, name}
  *   GET  /api/history?path=...          saved versions of a file; /api/history/file?path=&id=
  *   POST /api/history/restore           {path, id}
@@ -358,7 +360,7 @@ public class DashboardServer {
         head.append("Cache-Control: no-store\r\n");
         head.append("Access-Control-Allow-Origin: *\r\n");
         head.append("Access-Control-Allow-Headers: Content-Type, X-Base-Hash\r\n");
-        head.append("Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS\r\n");
+        head.append("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n");
         head.append("Access-Control-Expose-Headers: X-Hash\r\n");
         for (Map.Entry<String, String> entry : response.headers.entrySet()) {
             head.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
@@ -414,6 +416,7 @@ public class DashboardServer {
                 case "GET /api/actions": return Response.json(200, host.actions().catalog());
                 case "GET /api/files": return Response.json(200, listFiles(request.param("all") != null));
                 case "GET /api/file": return getFile(request.param("path"));
+                case "DELETE /api/file": return deleteFile(request.param("path"));
                 case "PUT /api/file":
                 case "POST /api/file": return putFile(request);
                 case "POST /api/opmode": return opMode(request.json());
@@ -579,6 +582,25 @@ public class DashboardServer {
             }
         }
         return save(relative, request.body);
+    }
+
+    /**
+     * Deletes an auton or a hardware map. Every saved version stays in history/ (so robot-sync
+     * and snapshots still have it). Never robot.json, and never the hardware map in use.
+     */
+    private synchronized Response deleteFile(String path) throws Exception {
+        String relative = checkPath(path);
+        if (relative.equals("settings/robot.json")) return Response.error(400, "robot.json cannot be deleted");
+        if (relative.equals(host.activeHardwareMap())) {
+            return Response.error(400, relative + " is the hardware map in use. Activate another one on the Driver Station first.");
+        }
+        File file = RobotFiles.file(relative);
+        if (!file.isFile()) return Response.error(404, "No file " + relative);
+        if (!file.delete()) return Response.error(500, "Could not delete " + relative);
+        JSONObject json = new JSONObject();
+        json.put("ok", true);
+        json.put("path", relative);
+        return Response.json(200, json);
     }
 
     /** Checks a file, then saves it (which also records it in the history). */
