@@ -107,8 +107,9 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   never helps when it sticks; logcat showed no frequent GC lines (ART only logs slow GCs, so
   GC is unlikely to be the 0.5 s loop spikes).
 - **Path top speed and expo (2026-10-25):** Auton Sequence pencil on a "follow" row sets the
-  path's `maxSpeed` (in/s; Visualizer `maxSpeed` on atomic paths, exported/imported, used in
-  the time estimate; robot: Foresight `maxVelocityConstraint`, sim verified ≤ 25.3 at 25).
+  path's `speedPercent` (1-99, % of Foresight `maxAchievableForwardVelocity`, so it follows
+  Pedro recalibration; replaced the short-lived in/s `maxSpeed`; exported/imported, used in the
+  time estimate; robot: `maxVelocityConstraint` = top × %/100; sim 27.1 in/s at 40% = 27.4).
   `MecanumDrive.EXPO_CONTROLS` (one Tune flag, default off; curve in plain-Java
   `lib/StickCurve`, 0.3·x + 0.7·x³, after the deadzone, on strafe/forward/turn; the sim uses
   it too). User declined path time limits. Path time limit (not built, user's call): Pedro's
@@ -154,7 +155,7 @@ Key facts for agents:
   starts after 5 s, all errors swallowed). Page packed as `assets/biobuzz/` (originally to
   avoid Panels' `assets/web/`; kept).
 - **Routes** `autos/*.json` v2 (`lib/AutoRoute`): start, paths (points = start, controls, end;
-  heading linear/constant/tangential; maxSpeed; events {at, action, params}), steps
+  heading linear/constant/tangential; speedPercent; events {at, action, params}), steps
   ({follow} | {action, params}). `PedroAutonomous.ROUTE` (a robot.json setting) picks the file,
   D-pad at INIT cycles; no file → INIT shows the problem (the old `paths/` Java-export
   reader, `update-paths` and their tests were removed on this branch 2026-10-23).
