@@ -109,7 +109,7 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
 - **Path top speed (2026-10-25):** Auton Sequence pencil on a "follow" row sets the
   path's `speedPercent` (1-99, % of Foresight `maxAchievableForwardVelocity`, so it follows
   Pedro recalibration; replaced the short-lived in/s `maxSpeed`; exported/imported, used in the
-  time estimate; robot: `maxVelocityConstraint` = top × %/100; sim 27.1 in/s at 40% = 27.4).
+  time estimate; robot: `maxVelocityConstraint` = top × %/100; sim 27.1 in/s at 40% = 27.4). **Verified on the robot 2026-10-25** (user: worked and validated).
   Drive expo (`MecanumDrive.EXPO_CONTROLS`, `lib/StickCurve`) was built, robot-tested and
   removed the same day: the user did not like it; drive sticks stay linear (deadzone only).
   Path time limit (not built, user's call): Pedro's
