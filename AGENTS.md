@@ -106,13 +106,13 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   Wi-Fi adbd on the Control Hub** (ROBOT-TEST check 15). User reported: laptop-side adb reset
   never helps when it sticks; logcat showed no frequent GC lines (ART only logs slow GCs, so
   GC is unlikely to be the 0.5 s loop spikes).
-- **Path top speed and expo (2026-10-25):** Auton Sequence pencil on a "follow" row sets the
+- **Path top speed (2026-10-25):** Auton Sequence pencil on a "follow" row sets the
   path's `speedPercent` (1-99, % of Foresight `maxAchievableForwardVelocity`, so it follows
   Pedro recalibration; replaced the short-lived in/s `maxSpeed`; exported/imported, used in the
   time estimate; robot: `maxVelocityConstraint` = top × %/100; sim 27.1 in/s at 40% = 27.4).
-  `MecanumDrive.EXPO_CONTROLS` (one Tune flag, default off; curve in plain-Java
-  `lib/StickCurve`, 0.3·x + 0.7·x³, after the deadzone, on strafe/forward/turn; the sim uses
-  it too). User declined path time limits. Path time limit (not built, user's call): Pedro's
+  Drive expo (`MecanumDrive.EXPO_CONTROLS`, `lib/StickCurve`) was built, robot-tested and
+  removed the same day: the user did not like it; drive sticks stay linear (deadzone only).
+  Path time limit (not built, user's call): Pedro's
   `timeoutConstraint` only limits end-of-path correcting; AutoSequence's follow step waits
   for `!follower.isBusy()` with no time limit, so a robot blocked mid-path waits until the
   30 s end.
@@ -171,7 +171,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (123
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (122
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

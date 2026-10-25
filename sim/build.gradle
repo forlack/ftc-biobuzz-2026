@@ -35,7 +35,6 @@ sourceSets {
             include 'org/firstinspires/ftc/teamcode/lib/AutoRoute.java'
             include 'org/firstinspires/ftc/teamcode/lib/FlywheelCompensation.java'
             include 'org/firstinspires/ftc/teamcode/lib/Button.java'
-            include 'org/firstinspires/ftc/teamcode/lib/StickCurve.java'
             include 'org/firstinspires/ftc/teamcode/pedro/ForesightConstants.java'
         }
     }

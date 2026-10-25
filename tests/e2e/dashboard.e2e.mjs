@@ -170,23 +170,6 @@ try {
   await sleep(700);
   const stopped2 = parsePose(await b.eval(`document.getElementById('pose-text').textContent`));
   check(Math.hypot(stopped2[0] - stopped1[0], stopped2[1] - stopped1[1]) < 0.5, 'and the robot stops');
-  // Expo (MecanumDrive.EXPO_CONTROLS): half stick drives much slower with it on.
-  const halfStick = async () => {
-    const start = parsePose(await b.eval(`document.getElementById('pose-text').textContent`));
-    await mouse('mousePressed', knob.x, knob.y);
-    await mouse('mouseMoved', knob.x, knob.y - knob.h * 0.26);   // half of the stick's travel
-    await sleep(1200);
-    const end = parsePose(await b.eval(`document.getElementById('pose-text').textContent`));
-    await mouse('mouseReleased', knob.x, knob.y);
-    await sleep(1500);
-    return Math.hypot(end[0] - start[0], end[1] - start[1]);
-  };
-  const linear = await halfStick();
-  await api('/api/settings', { method: 'POST', body: { group: 'MecanumDrive', name: 'EXPO_CONTROLS', value: true } });
-  const withExpo = await halfStick();
-  await api('/api/settings', { method: 'POST', body: { group: 'MecanumDrive', name: 'EXPO_CONTROLS', value: false } });
-  check(linear > 5 && withExpo < linear * 0.7,
-    `EXPO_CONTROLS on the Tune tab softens the sticks: half stick drove ${linear.toFixed(1)} in linear, ${withExpo.toFixed(1)} in with expo`);
   // Operator buttons: gamepad 2, A turns the flywheels off.
   await b.eval(`document.querySelector('#pad-seg [data-pad="2"]').click()`);
   await b.waitFor(`document.querySelector('#pad-take').textContent === 'Take control' && document.querySelector('#pad-pill').hidden`);

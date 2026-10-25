@@ -28,12 +28,6 @@ public class MecanumDrive {
      */
     public static double STICK_DEADZONE = 0.1;
 
-    /**
-     * Expo on the drive and turn sticks (see StickCurve): small stick movements move the robot
-     * much less, for aiming; full stick is still full power. Off: straight line.
-     */
-    public static boolean EXPO_CONTROLS = false;
-
     /** Speed while slow mode is held down. */
     public static double SLOW_SPEED = 0.25;
     public static double TURBO_SPEED = 1.0;
@@ -103,11 +97,6 @@ public class MecanumDrive {
         strafe = ignoreDrift(strafe);
         forward = ignoreDrift(forward);
         turn = ignoreDrift(turn);
-        if (EXPO_CONTROLS) {
-            strafe = StickCurve.expo(strafe);
-            forward = StickCurve.expo(forward);
-            turn = StickCurve.expo(turn);
-        }
 
         // One IMU read per loop -- it is a real sensor read, so don't ask for it twice.
         YawPitchRollAngles angles = imu.getRobotYawPitchRollAngles();
