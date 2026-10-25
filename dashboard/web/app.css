@@ -293,3 +293,6 @@ body.locked #pad-take { opacity: .4; pointer-events: none; }
   .pad-content { grid-template-columns: 1fr; }
   .pad-legend { display: none; }
 }
+.ok-text { color: var(--green); }
+.bad-text { color: var(--red); }
+body.locked #adb-restart { opacity: .4; pointer-events: none; }

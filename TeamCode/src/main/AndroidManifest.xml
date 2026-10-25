@@ -6,6 +6,13 @@
 
 <!-- The package name here determines the package for your R class and your BuildConfig class -->
 <manifest
-    xmlns:android="http://schemas.android.com/apk/res/android">
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Lets the dashboard's Robot tab restart adb when it gets stuck (AndroidDashboard).
+         Android only gives it after a one-time grant over adb:
+         adb shell pm grant com.qualcomm.ftcrobotcontroller android.permission.WRITE_SECURE_SETTINGS
+         Without the grant nothing changes and the Robot tab shows that command. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
     <application/>
 </manifest>

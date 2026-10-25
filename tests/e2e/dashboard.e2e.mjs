@@ -408,6 +408,8 @@ try {
   await b.eval(`document.querySelector('#hw-use').click()`);
   await b.waitFor(`document.querySelector('#hw-map').selectedOptions[0].textContent === 'CamBot (in use)'`);
   check((await api('/api/state')).data.hardwareMap === 'CamBot.xml', 'Use this map switches the map the (simulated) robot uses');
+  await b.waitFor(`document.getElementById('adb-status').textContent.includes('simulator has no adb')`);
+  check(await b.eval(`document.getElementById('adb-restart').disabled`), 'the adb card says the simulator has no adb, and Restart adb is off');
   await api('/api/hardware/active', { method: 'POST', body: { path: '2222-Config.xml' } });
 
   // ---- 4. Path editor: robot actions on the route --------------------------------------------------
@@ -447,6 +449,17 @@ try {
   // "Function": stinger up, after the last step.
   await b.eval(`${frame}.querySelector('[data-testid=add-mode-function]').click()`);
   await b.waitFor(`${frame}.querySelector('[data-testid=fn-action]')`);
+  // Its settings are filled in before adding: a 1.25 s wait at the end (then removed again).
+  await setIn('fn-action', 'wait');
+  await b.waitFor(`${frame}.querySelector('[data-testid=fn-param]')`);
+  check(await b.eval(`${frame}.querySelector('[data-testid=fn-param]').value === '0.5'`), 'Add shows the function\'s settings with their defaults (wait: 0.5 s)');
+  await setIn('fn-param', 1.25, 'input');
+  await b.eval(`${frame}.querySelector('[data-testid=fn-add]').click()`);
+  await sleep(300);
+  const added = await b.eval(`[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].pop().innerText`);
+  check(/wait/.test(added) && /1\.25 s/.test(added), `a wait set to 1.25 s before adding is added as 1.25 s (${added.replace(/\s+/g, ' ').trim()})`);
+  await b.eval(`[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].pop().querySelector('[title=Remove]').click()`);
+  await sleep(200);
   await setIn('fn-action', 'stowStinger');
   await b.eval(`${frame}.querySelector('[data-testid=fn-add]').click()`);
   await sleep(300);

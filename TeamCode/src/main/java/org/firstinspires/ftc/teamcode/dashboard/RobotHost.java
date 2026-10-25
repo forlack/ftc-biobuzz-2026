@@ -57,6 +57,19 @@ public interface RobotHost {
         return false;
     }
 
+    /**
+     * adb on the robot, for the Robot tab: {"listening": true|false|null, "canRestart": bool,
+     * "note": "..."}. Null means not available (the simulator).
+     */
+    default org.json.JSONObject adbStatus() {
+        return null;
+    }
+
+    /** Restarts adb on the robot. Returns null when it is listening again, or what went wrong. */
+    default String restartAdb() {
+        return "Only the real robot has adb.";
+    }
+
     RobotSettings settings();
 
     /** The autonomous actions the path editor may use. */

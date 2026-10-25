@@ -94,6 +94,24 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
 - **Text telemetry is re-sent once a second** (TelemetryStream): before, unchanged text was
   sent only once, so after the table cleared on Stop, re-running an OpMode left unchanged text
   rows (Intake ON, Driver…) missing until they changed.
+- **2026-10-25 (later):** drawer redrawn PS5 / Logitech F310 style (team uses Logitech;
+  labels stay A B X Y). Deploy scripts print the dashboard URL (:8686), not Panels'.
+  Auton Sequence "Add" form shows the function's settings (wait seconds, shoot time…) to fill
+  in before adding (visualizer `addValues`, per function). **Restart adb** (Robot tab card,
+  `GET /api/adb`, `POST /api/adb/restart`, RobotHost.adbStatus/restartAdb): Android toggles
+  `Settings.Global.ADB_ENABLED` 0 → 1 (always back to 1 in finally; AndroidDashboard.start
+  also re-enables it if found 0) and waits for port 5555. Needs WRITE_SECURE_SETTINGS
+  (TeamCode manifest) granted once with `adb shell pm grant com.qualcomm.ftcrobotcontroller
+  android.permission.WRITE_SECURE_SETTINGS`; **unverified whether the toggle revives a stuck
+  Wi-Fi adbd on the Control Hub** (ROBOT-TEST check 15). User reported: laptop-side adb reset
+  never helps when it sticks; logcat showed no frequent GC lines (ART only logs slow GCs, so
+  GC is unlikely to be the 0.5 s loop spikes).
+- **Answered, not built (2026-10-25):** path speed: routes support `maxSpeed` (in/s, Foresight
+  `maxVelocityConstraint`) per path in AutoRoute, but the path editor has no field for it
+  and does not export/import it (hand-edit the JSON). Path time limit: Pedro's
+  `timeoutConstraint` only limits end-of-path correcting; AutoSequence's follow step waits
+  for `!follower.isBusy()` with no time limit, so a robot blocked mid-path waits until the
+  30 s end. Drive sticks are linear (deadzone only), no expo.
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -149,7 +167,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (115
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (118
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

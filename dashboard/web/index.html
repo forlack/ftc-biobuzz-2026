@@ -109,6 +109,15 @@
           <div id="hardware"></div>
         </div>
         <div class="side-stack">
+        <div class="card" id="adb-card">
+          <div class="card-head"><h3>adb (deploy and logs)</h3>
+            <span><button class="btn small" id="adb-refresh">Refresh</button>
+              <button class="btn small primary" id="adb-restart">Restart adb</button></span></div>
+          <div id="adb-status" class="muted">…</div>
+          <div class="muted">When <code>adb connect 192.168.43.1:5555</code> stops working (offline, or
+            "waiting for device"), Restart adb turns it off and on again on the hub, instead of a power cycle.
+            Then reconnect from the laptop: <code>adb disconnect; adb connect 192.168.43.1:5555</code>.</div>
+        </div>
         <div class="card">
           <div class="card-head"><h3>Load</h3><span class="muted">this second</span></div>
           <table class="kv" id="load"></table>

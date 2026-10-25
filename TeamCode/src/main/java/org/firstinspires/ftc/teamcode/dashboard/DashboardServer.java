@@ -61,6 +61,9 @@ import javax.xml.parsers.DocumentBuilderFactory;
  *   POST /api/snapshots/restore         {id}
  *   POST /api/lock                      {action: lock|unlock, pin}. While locked, every change
  *                                       is refused with 423 until unlocked.
+ *   GET  /api/adb                       adb on the robot: {listening, canRestart, note}
+ *   POST /api/adb/restart               turn adb off and on (needs a one-time grant, see
+ *                                       AndroidDashboard); answers with the new status
  *   GET  /ws                            websocket: telemetry frames and state; also the
  *                                       virtual gamepads (see VirtualGamepads):
  *                                       {type: control, pad, take: true|false} answered with
@@ -422,6 +425,8 @@ public class DashboardServer {
                 case "POST /api/snapshots/restore": return restoreSnapshot(request.json().getString("id"));
                 case "POST /api/lock": return lockAction(request.json());
                 case "POST /api/hardware/active": return useHardwareMap(request.json());
+                case "GET /api/adb": return adb(null);
+                case "POST /api/adb/restart": return adb(host.restartAdb());
                 default: return Response.error(404, "no such API: " + method + " " + path);
             }
         }
@@ -674,6 +679,19 @@ public class DashboardServer {
     }
 
     /** Switches the active hardware map, where the host can; otherwise says how. */
+    /** adb status, plus the result of a restart when {@code problem} came from one. */
+    private Response adb(String problem) throws JSONException {
+        JSONObject status = host.adbStatus();
+        if (status == null) {
+            status = new JSONObject();
+            status.put("listening", JSONObject.NULL);
+            status.put("canRestart", false);
+            status.put("note", "The simulator has no adb.");
+        }
+        if (problem != null) status.put("error", problem);
+        return Response.json(200, status);
+    }
+
     private Response useHardwareMap(JSONObject body) throws JSONException {
         String path = body.optString("path", "");
         if (!path.matches("[A-Za-z0-9_ .-]+\\.xml") || !RobotFiles.file(path).isFile()) {

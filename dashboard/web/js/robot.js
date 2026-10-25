@@ -15,10 +15,48 @@ export class RobotTab {
     document.getElementById('files-refresh').addEventListener('click', () => this.refresh());
     document.getElementById('editor-cancel').addEventListener('click', () => this.close());
     document.getElementById('editor-save').addEventListener('click', () => this.save());
+    document.getElementById('adb-refresh').addEventListener('click', () => this.refreshAdb());
+    document.getElementById('adb-restart').addEventListener('click', () => this.restartAdb());
+  }
+
+  // ---- adb on the hub ---------------------------------------------------------------
+
+  showAdb(status) {
+    let html;
+    if (status.listening == null) html = escapeHtml(status.note || '');
+    else {
+      html = status.listening
+        ? '<b class="ok-text">Listening</b> on port 5555. If the laptop still cannot connect, try Restart adb anyway, then the laptop reset.'
+        : '<b class="bad-text">Not listening</b> on port 5555: adb on the hub is down. Restart adb.';
+      if (status.note) html += `<br>${escapeHtml(status.note)}`;
+    }
+    document.getElementById('adb-status').innerHTML = html;
+    document.getElementById('adb-restart').disabled = !status.canRestart;
+  }
+
+  async refreshAdb() {
+    try { this.showAdb(await api('/api/adb')); } catch (error) { document.getElementById('adb-status').textContent = error.message; }
+  }
+
+  async restartAdb() {
+    const button = document.getElementById('adb-restart');
+    button.disabled = true;
+    button.textContent = 'Restarting…';
+    try {
+      const status = await api('/api/adb/restart', { method: 'POST', body: {} });
+      this.showAdb(status);
+      if (status.error) toast(status.error, true); else toast('adb restarted. Reconnect: adb connect 192.168.43.1:5555');
+    } catch (error) {
+      toast(error.message, true);
+      this.refreshAdb();
+    } finally {
+      button.textContent = 'Restart adb';
+    }
   }
 
   async refresh(hardwareMap) {
     if (hardwareMap !== undefined) this.hardwareMap = hardwareMap;
+    this.refreshAdb();
     try {
       const files = await api('/api/files');
       document.getElementById('files').innerHTML = files.map((f) => `<tr>

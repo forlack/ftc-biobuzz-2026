@@ -1,6 +1,9 @@
 package org.firstinspires.ftc.teamcode.dashboard.android;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.provider.Settings;
 
 import com.qualcomm.ftccommon.FtcEventLoop;
 import com.qualcomm.ftccommon.configuration.RobotConfigFile;
@@ -29,6 +32,8 @@ import org.json.JSONObject;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 
 /**
  * Starts the Total Chaos Dashboard inside the Robot Controller app, on port 8686.
@@ -64,6 +69,7 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
         Thread starter = new Thread(() -> {
             try {
                 Thread.sleep(5000);   // let the Robot Controller finish starting first
+                ensureAdbOn(context.getApplicationContext());
                 synchronized (AndroidDashboard.class) {
                     if (instance != null) instance.server.stop();
                     instance = new AndroidDashboard(context.getApplicationContext(), eventLoop.getOpModeManager());
@@ -166,6 +172,78 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
         for (int i = 0; i < down.length; i++) if (down[i]) bits |= 1 << i;
         buttons[0] = bits;
         return true;
+    }
+
+    // ---- adb (Robot tab: "Restart adb") ---------------------------------------------
+
+    private static final int ADB_PORT = 5555;
+    private static final String GRANT = "adb shell pm grant com.qualcomm.ftcrobotcontroller "
+            + "android.permission.WRITE_SECURE_SETTINGS";
+
+    private static boolean canChangeAdb(Context context) {
+        return context.checkCallingOrSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** Is adb taking Wi-Fi connections on the hub (something answers on port 5555)? */
+    private static boolean adbListening() {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress("127.0.0.1", ADB_PORT), 300);
+            return true;
+        } catch (IOException error) {
+            return false;
+        }
+    }
+
+    /** Safety net: if a restart was cut off half way, adb would stay off. Turn it back on. */
+    private static void ensureAdbOn(Context context) {
+        try {
+            if (canChangeAdb(context)
+                    && Settings.Global.getInt(context.getContentResolver(), Settings.Global.ADB_ENABLED, 1) == 0) {
+                Settings.Global.putInt(context.getContentResolver(), Settings.Global.ADB_ENABLED, 1);
+            }
+        } catch (Throwable ignored) {
+            // nothing more we can do
+        }
+    }
+
+    @Override public JSONObject adbStatus() {
+        JSONObject json = new JSONObject();
+        try {
+            boolean allowed = canChangeAdb(context);
+            json.put("listening", adbListening());
+            json.put("canRestart", allowed);
+            json.put("note", allowed ? "" : "To allow Restart adb, run this once while adb works (after a reboot): " + GRANT);
+        } catch (JSONException ignored) {
+        }
+        return json;
+    }
+
+    /** adb off, then on again: Android stops adbd and starts a fresh one. */
+    @Override public synchronized String restartAdb() {
+        if (!canChangeAdb(context)) return "Not allowed yet. Run this once while adb works: " + GRANT;
+        android.content.ContentResolver resolver = context.getContentResolver();
+        try {
+            Settings.Global.putInt(resolver, Settings.Global.ADB_ENABLED, 0);
+            Thread.sleep(2000);
+        } catch (Throwable error) {
+            return "Could not turn adb off: " + error;
+        } finally {
+            try {
+                Settings.Global.putInt(resolver, Settings.Global.ADB_ENABLED, 1);   // always back on
+            } catch (Throwable ignored) {
+            }
+        }
+        for (int i = 0; i < 20; i++) {   // up to 10 s for it to come back
+            if (adbListening()) return null;
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException error) {
+                break;
+            }
+        }
+        return "adb is on again but not answering on port " + ADB_PORT + " yet. Wait a few seconds and Refresh; "
+                + "if it stays off, power-cycle the hub.";
     }
 
     @Override public RobotSettings settings() { return settings; }

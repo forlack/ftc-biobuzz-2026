@@ -280,7 +280,7 @@ def deploy(args, interface, previous, previous_router, adb, env, passwords):
         raise error
     if staying:
         print(f'Staying on {args.ssid}. ADB stays connected to {target}.')
-        print(f'Panels: http://{args.robot_ip}:8001')
+        print(f'Total Chaos Dashboard: http://{args.robot_ip}:8686')
 
 
 def main():
@@ -295,7 +295,7 @@ def main():
                         help='Wi-Fi to come back to; defaults to the one you are on')
     parser.add_argument('--interface', help='Wi-Fi interface (normally en0; autodetected)')
     parser.add_argument('-s', '--stay', action='store_true',
-                        help='stay on the robot Wi-Fi after deploying (for Panels and logs)')
+                        help='stay on the robot Wi-Fi after deploying (for the dashboard and logs)')
     parser.add_argument('-m', '--hardware-map', action='store_true',
                         help='also upload robot-config/*.xml to the hub (restart applies it)')
     parser.add_argument('--map-only', action='store_true',
