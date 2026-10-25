@@ -35,7 +35,8 @@ import java.util.Map;
  *
  * points: the path's start, any control points, then its end, in inches. Headings are in
  * degrees: linear (start, end), constant (degrees) or tangential (reverse true/false).
- * A path may set "maxSpeed" in inches per second.
+ * A path may set "speedPercent" (1 to 100): its top speed as a % of the robot's calibrated
+ * top speed (Foresight maxAchievableForwardVelocity). Absent: full speed.
  */
 public class AutoRoute {
     public static final int VERSION = 2;
@@ -149,12 +150,13 @@ public class AutoRoute {
             throw new IllegalArgumentException(pathName + ": unknown heading type \"" + type + "\"");
         }
 
-        if (item.has("maxSpeed") && !item.isNull("maxSpeed")) {
-            double speed = item.getDouble("maxSpeed");
-            if (!(speed > 0)) {
-                throw new IllegalArgumentException(pathName + ": maxSpeed must be positive");
+        if (item.has("speedPercent") && !item.isNull("speedPercent")) {
+            double percent = item.getDouble("speedPercent");
+            if (!(percent > 0 && percent <= 100)) {
+                throw new IllegalArgumentException(pathName + ": speedPercent must be from 1 to 100");
             }
-            path = path.with(ForesightConstants.config.maxVelocityConstraint.at(speed));
+            double top = ForesightConstants.config.maxAchievableForwardVelocity.get();
+            path = path.with(ForesightConstants.config.maxVelocityConstraint.at(top * percent / 100));
         }
         return path;
     }

@@ -521,14 +521,14 @@ try {
   check(/of 30 s/.test(time), `timeline estimate includes the waits: ${time}`);
   const markers = await b.eval(`${frame}.querySelectorAll('[id^="robot-event-"]').length`);
   check(markers === 2, 'both on-path functions show as markers on the field');
-  // A path's top speed: path2 at most 25 in/s (pencil on its "follow" row).
+  // A path's top speed, as a % of the robot's: path2 at 40% (pencil on its "follow" row).
   const path2Row = `[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].find((li) => /follow\\s+path2/.test(li.innerText))`;
   check(await b.eval(`${path2Row}.querySelector('[data-testid=path-speed-text]').textContent === 'full speed'`), 'paths go at full speed unless you set one');
   await b.eval(`${path2Row}.querySelector('[data-testid=path-speed-edit]').click()`);
   await b.waitFor(`${frame}.querySelector('[data-testid=path-speed]')`);
-  await setIn('path-speed', 25);
+  await setIn('path-speed', 40);
   await b.eval(`${frame}.querySelector('[data-testid=path-speed-done]').click()`);
-  check(await b.eval(`${path2Row}.querySelector('[data-testid=path-speed-text]').textContent === 'max 25 in/s'`), 'the pencil on a path sets its top speed: path2 max 25 in/s');
+  check(await b.eval(`${path2Row}.querySelector('[data-testid=path-speed-text]').textContent === '40% speed'`), 'the pencil on a path sets its top speed: path2 at 40%');
   await b.screenshot(join(OUT, '4-paths.png'));
   await b.eval(`${frame}.querySelector('[data-testid=route-save]').click()`);
   await b.waitFor(`${frame}.querySelector('[data-testid=route-message]').innerText.includes('Saved autos/saturday.json')`);
@@ -538,7 +538,7 @@ try {
     && path2.events[1].action === 'deployStinger' && path2.events[1].at === 0.45,
     'the saved route has flywheels on at 20% and stinger down at 45% of path2, in order');
   check(route.steps[0].action === 'wait' && route.steps[0].params.seconds === 0.5, 'and the edited wait of 0.5 s');
-  check(path2.maxSpeed === 25 && route.paths[0].maxSpeed === undefined, 'and path2\'s top speed (25 in/s; path1 has none, full speed)');
+  check(path2.speedPercent === 40 && route.paths[0].speedPercent === undefined, 'and path2\'s speed (40%; path1 has none, full speed)');
   check(route.steps[route.steps.length - 1].action === 'stowStinger', 'and "stinger up" as the last step');
   check(route.paths[1].points.length === 3 && route.start.heading === 270, 'geometry and start pose survive the round trip');
   check(route.robot && route.robot.width > 0 && route.robot.length > 0 && route.robot.safetyMargin >= 0,
@@ -639,7 +639,8 @@ try {
   check(seen.steps.has('follow path1') && seen.steps.has('feed on') && seen.steps.has('stinger up'),
     `it ran the steps from the file: ${[...seen.steps].join(' → ')}`);
   check(seen.stinger.has(saved.FieldCentricJava.STINGER_DOWN), 'the stinger went down part way along path2');
-  check(seen.path2Peak > 5 && seen.path2Peak <= 25 * 1.15, `on path2 the robot keeps to its 25 in/s top speed (fastest ${seen.path2Peak.toFixed(1)} in/s)`);
+  const top40 = 68.47 * 0.4;   // ForesightConstants maxAchievableForwardVelocity
+  check(seen.path2Peak > 5 && seen.path2Peak <= top40 * 1.15, `on path2 the robot keeps to 40% of its top speed, ${top40.toFixed(1)} in/s (fastest ${seen.path2Peak.toFixed(1)} in/s)`);
   const { X, Y, Heading } = seen.last.n;
   check(Math.abs(X - 13.2) < 1.5 && Math.abs(Y - 96.07) < 1.5 && Math.abs(Heading - 90) < 5,
     `Pedro drove the simulated robot to the park pose: (${X.toFixed(2)}, ${Y.toFixed(2)}, ${Heading.toFixed(0)}°)`);
