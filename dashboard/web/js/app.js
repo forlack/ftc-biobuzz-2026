@@ -61,6 +61,10 @@ function showState(next) {
   showLock(next.locked);
   showLoad(next.load);
   if (gamepad) gamepad.state(next);
+  // The robot's settings differ from what the Tune tab shows (INIT putting live switches back, a
+  // gamepad button, another browser): redraw it, unless someone is typing in it.
+  if (tab === 'tune' && tune.fingerprint !== undefined && next.settingsFingerprint !== tune.fingerprint
+      && !(document.activeElement && document.activeElement.closest('#settings'))) tune.refresh();
   document.getElementById('op-start').disabled = next.state !== 'init';
   document.getElementById('op-stop').disabled = next.state === 'stopped';
   if (first && tab === 'robot') robot.refresh(next.hardwareMap);

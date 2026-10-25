@@ -447,6 +447,7 @@ public class DashboardServer {
         json.put("battery", battery());
         json.put("hardwareMap", host.activeHardwareMap());
         json.put("settingsStatus", host.settings().status());
+        json.put("settingsFingerprint", host.settings().fingerprint());
         json.put("locked", lock.locked());
         json.put("gamepads", gamepadOwners());
         json.put("load", load);
@@ -474,6 +475,7 @@ public class DashboardServer {
         JSONObject json = new JSONObject();
         json.put("status", settings.status());
         json.put("warnings", new JSONArray(settings.warnings()));
+        json.put("fingerprint", settings.fingerprint());   // the Tune tab redraws when the state's differs
         json.put("items", settings.describe());
         json.put("file", RobotSettings.location().isFile() ? fileInfo("settings/robot.json") : JSONObject.NULL);
         return json;

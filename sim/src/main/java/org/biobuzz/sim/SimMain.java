@@ -18,14 +18,15 @@ import java.nio.file.StandardCopyOption;
  *
  * By default it starts "Field Centric (Java)" running, so the dashboard has live telemetry
  * straight away. Options: --port N, --storage DIR, --web DIR, --fresh (empty the SD card
- * first), --init "OpMode name" [--start], --idle (start with no OpMode running).
+ * first), --init "OpMode name" [--start], --idle (start with no OpMode running), --no-seed (do
+ * not copy the repo's files: the tests fill the SD card themselves).
  */
 public final class SimMain {
     public static void main(String[] args) throws Exception {
         int port = DashboardServer.DEFAULT_PORT;
         File storage = new File("sdcard");
         File web = new File("../dashboard/web");
-        boolean fresh = false, start = false, idle = false;
+        boolean fresh = false, start = false, idle = false, noSeed = false;
         String init = null;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -36,12 +37,13 @@ public final class SimMain {
                 case "--init": init = args[++i]; break;
                 case "--start": start = true; break;
                 case "--idle": idle = true; break;
+                case "--no-seed": noSeed = true; break;
                 default: throw new IllegalArgumentException("Unknown option " + args[i]);
             }
         }
         File repo = new File("..").getCanonicalFile();
         if (fresh) deleteTree(storage.toPath());
-        seed(repo, storage);
+        if (noSeed) storage.mkdirs(); else seed(repo, storage);
         RobotFiles.setRoot(storage.getCanonicalFile());
 
         SimWorld world = new SimWorld();

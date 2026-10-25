@@ -38,9 +38,14 @@ const api = async (path, options = {}) => {
 // ---- Start a fresh simulator ------------------------------------------------------
 console.log('Building and starting the simulator…');
 execFileSync(join(REPO, 'gradlew'), ['-q', '-p', 'sim', 'installDist'], { cwd: REPO, stdio: 'inherit' });
+// Its SD card starts with only the hardware map and the saturday auton from the repo: no
+// robot.json (code defaults) and none of the other autons robot-sync may have pulled.
 const storage = mkdtempSync(join(tmpdir(), 'biobuzz-sd-'));
+cpSync(join(REPO, 'robot-config/24621-Biobuzz.xml'), join(storage, '24621-Biobuzz.xml'));
+mkdirSync(join(storage, 'autos'));
+cpSync(join(REPO, 'autos/saturday.json'), join(storage, 'autos/saturday.json'));
 const sim = spawn(join(REPO, 'sim/build/install/biobuzz-sim/bin/biobuzz-sim'),
-  ['--port', String(PORT), '--storage', storage, '--fresh'], { cwd: join(REPO, 'sim'), stdio: 'ignore' });
+  ['--port', String(PORT), '--storage', storage, '--no-seed'], { cwd: join(REPO, 'sim'), stdio: 'ignore' });
 let browser;
 const cleanup = () => {
   try { sim.kill('SIGKILL'); } catch { /* gone */ }
@@ -299,7 +304,7 @@ try {
   await b.eval(`document.querySelector('[data-tab="tune"]').click()`);
   await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]')`);
   check(await b.eval(`document.querySelectorAll('#settings .dot.unsaved').length === 0 && document.querySelectorAll('#settings .dot.synced').length > 20`),
-    'freshly loaded settings all show a green (in sync) dot');
+    `freshly loaded settings all show a green (in sync) dot ${await b.eval(`[...document.querySelectorAll('#settings .dot.unsaved')].map((d) => d.closest('.setting-row').querySelector('.setting-name').innerText.split('\\n')[0]).join(', ')`)}`);
   const routeOptions = await b.eval(`[...document.querySelectorAll('[data-key="PedroAutonomous.ROUTE"] option')].map((o) => o.value)`);
   check(routeOptions.includes('saturday'), `PedroAutonomous.ROUTE is a dropdown of the autons on the robot: ${routeOptions.join(', ')}`);
   const tunerShown = () => b.eval(`!!document.querySelector('#settings [data-group="FlywheelTuner"]')`);
@@ -349,6 +354,15 @@ try {
   await b.eval(`document.querySelector('[data-undo="Flywheels.POLLEN_FLYWHEEL_RPM"]').click()`);
   await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]').value === '3000' && document.querySelectorAll('#settings .dot.unsaved').length === 0`);
   check(true, 'the undo button next to a yellow value puts back the saved value (3000)');
+  // INIT puts a live switch back on: the Tune tab shows it without a refresh.
+  await b.eval(`(() => { const t = document.querySelector('[data-key="Intake.INTAKE_ENABLED"]'); t.checked = false; t.dispatchEvent(new Event('change', { bubbles: true })); t.blur(); })()`);
+  await b.waitFor(`!document.querySelector('[data-key="Intake.INTAKE_ENABLED"]').checked && (document.activeElement.blur(), true)`);
+  const intakeEnabled = async () => (await api('/api/settings')).data.items.find((i) => i.name === 'INTAKE_ENABLED').value;
+  for (let i = 0; i < 30 && await intakeEnabled(); i++) await sleep(100);   // the robot has it off
+  await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Field Centric (Java)' } });
+  await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
+  await b.waitFor(`document.querySelector('[data-key="Intake.INTAKE_ENABLED"]').checked`, 4000);
+  check(true, 'when INIT turns a live switch back on, the Tune tab shows it on by itself');
 
   // History: a second save, then the Tune tab's History button shows both and restores the first.
   await b.eval(`(() => { const i = document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]');
@@ -369,7 +383,8 @@ try {
   check(restoredRpm === 3000, 'Restore puts the older version back on the robot (and keeps it in history)');
 
   const scratch = mkdtempSync(join(tmpdir(), 'biobuzz-repo-'));
-  for (const folder of ['autos', 'robot-config']) cpSync(join(REPO, folder), join(scratch, folder), { recursive: true });
+  // A scratch repo with the same files the test robot started with.
+  for (const file of ['autos/saturday.json', 'robot-config/24621-Biobuzz.xml']) cpSync(join(REPO, file), join(scratch, file));
   const sync = (...args) => execFileSync(join(REPO, 'robot-sync'), [...args, '--url', URL],
     { env: { ...process.env, ROBOT_SYNC_ROOT: scratch }, encoding: 'utf8' });
   check(sync('status').includes('only on the robot'), 'robot-sync status sees the new robot.json');

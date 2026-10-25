@@ -24,12 +24,15 @@ export class TuneTab {
   }
 
   async refresh() {
+    // Only the newest request draws: an older answer arriving late would show old values.
+    const mine = this.request = (this.request || 0) + 1;
     try {
       // The autons on the robot, for PedroAutonomous.ROUTE's dropdown.
       const files = await api('/api/files').catch(() => []);
       this.routes = files.map((f) => f.path).filter((p) => /^autos\/.+\.json$/.test(p))
         .map((p) => p.slice('autos/'.length, -'.json'.length));
-      this.show(await api('/api/settings'));
+      const data = await api('/api/settings');
+      if (mine === this.request) this.show(data);
     } catch (error) {
       this.status(`Could not read settings: ${error.message}`, 'bad');
     }
@@ -37,6 +40,7 @@ export class TuneTab {
 
   show(data) {
     this.items = data.items;
+    this.fingerprint = data.fingerprint;   // what is on screen, compared with the robot's in app.js
     const unsaved = this.items.filter((i) => i.saved && !inSync(i)).length;
     const status = unsaved ? `${unsaved} change${unsaved === 1 ? '' : 's'} not saved · ${data.status}` : `all saved · ${data.status}`;
     this.status(status, data.status.startsWith('SAVE FAILED') ? 'bad' : unsaved ? 'warn' : 'ok');
@@ -140,8 +144,10 @@ export class TuneTab {
   }
 
   async set(item, value) {
+    const mine = this.request = (this.request || 0) + 1;
     try {
-      this.show(await api('/api/settings', { method: 'POST', body: { group: item.group, name: item.name, value } }));
+      const data = await api('/api/settings', { method: 'POST', body: { group: item.group, name: item.name, value } });
+      if (mine === this.request) this.show(data);
     } catch (error) {
       toast(error.message, true);
       this.refresh();

@@ -359,6 +359,21 @@ public class RobotSettings {
         return list;
     }
 
+    /**
+     * A number that changes whenever any setting or live switch changes, however it changed
+     * (INIT resetting the switches, a gamepad button, the Tune tab). The Tune tab redraws when
+     * it changes. Memory reads only.
+     */
+    public synchronized int fingerprint() {
+        int hash = 17;
+        for (Class<?> settingsClass : classes) {
+            for (Field field : allFields(settingsClass)) {
+                hash = hash * 31 + String.valueOf(safeGet(field)).hashCode();
+            }
+        }
+        return hash;
+    }
+
     /** Changes one setting or live switch now. Returns null, or why it was refused. */
     public synchronized String set(String group, String name, Object value) {
         for (Class<?> settingsClass : classes) {
