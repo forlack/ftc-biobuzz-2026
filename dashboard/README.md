@@ -47,7 +47,7 @@ drive.
 
 ## On the robot
 
-On this branch the dashboard is in every build, and Panels is gone (it replaces Panels):
+The dashboard is in every build (it replaced Panels, which is gone):
 
 ```bash
 ./deploy-linux --stay      # or ./deploy --stay on the Mac

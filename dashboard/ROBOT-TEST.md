@@ -1,15 +1,16 @@
 # Testing the dashboard on the real robot
 
-A repeatable checklist for putting the `dashboard` branch on the robot, checking it, and
-going back to `main` if anything is wrong. Run it the same way every time and fill in a row
-of the log at the bottom, so we can compare runs.
+A repeatable checklist for putting the dashboard build on the robot after big changes, checking
+it, and going back to a known good version if anything is wrong. Run it the same way every time
+and fill in a row of the log at the bottom, so we can compare runs. (The dashboard was built on
+branch `dashboard` and merged into `main` on 2026-10-25.)
 
 Works from the Mac (`./deploy`) or the Linux box (`./deploy-linux`); the flags are the same.
 
 ## 1. Before you leave real internet
 
 ```bash
-git fetch && git checkout dashboard && git pull
+git fetch && git checkout main && git pull
 ./gradlew :TeamCode:assembleDebug     # must say BUILD SUCCESSFUL
 ```
 
@@ -31,7 +32,7 @@ adb pull /sdcard/FIRST ~/ftc/backups/$(date +%Y%m%d-%H%M%S)-before-dashboard
 ## 3. Deploy
 
 ```bash
-./deploy --stay          # Mac;   Linux: ./deploy-linux --stay   (the dashboard is always in this branch's build)
+./deploy --stay          # Mac;   Linux: ./deploy-linux --stay   (the dashboard is in every build)
 ```
 
 `--stay` keeps the laptop on the robot's Wi-Fi so you can test. Deploy also uploads autons
@@ -45,7 +46,7 @@ Tick each one; write down anything that fails.
 | # | Check | Pass when |
 |---|---|---|
 | 1 | Driver Station | Connects, OpModes listed, Field Centric drives as before |
-| 2 | No Panels | <http://192.168.43.1:8001> does **not** load (Panels was removed on this branch); the Driver Station telemetry looks as before |
+| 2 | No Panels | <http://192.168.43.1:8001> does **not** load (Panels was removed); the Driver Station telemetry looks as before |
 | 3 | Dashboard | <http://192.168.43.1:8686> loads, says **Total Chaos 24621**, no SIMULATOR badge, top right **live** |
 | 4 | Tune tab | Groups Flywheels, Intake, MecanumDrive, PedroAutonomous, Stinger, DashboardConfig with green dots (no FieldCentricJava group: its settings moved to the mechanisms, and values saved under it before still load: check FLYWHEEL_F, STINGER_DOWN and the RPMs are your tuned ones, then **Save to robot** once); **FlywheelTuner under Hidden** at the bottom (Show / Hide work); **no Simulator group**; no "No settings found" warning on the Driver Station |
 | 5 | Robot tab | Map **24621-Biobuzz (in use)**, no red problems |
@@ -84,27 +85,29 @@ dashboard CPU under ~5% of one core is as expected, over 20% means something is 
 Copy both tables into the log. If **+ loop** is 1 ms or more: Tune tab →
 `DashboardConfig.MAX_SAMPLES_PER_SECOND` = 50, Save, measure again; then 25.
 
-## 5. If something is wrong: back to main
+## 5. If something is wrong: back to a known good version
 
 ```bash
-git checkout main
-./deploy --stay                      # main: the normal build, with Panels
+git log --oneline            # pick the last version that worked, e.g. 3d9495f (competition, with Panels)
+git checkout <commit>
+./deploy --stay              # Linux: ./deploy-linux --stay
+git checkout main            # afterwards, back to the current code
 ```
 
-The robot's files (settings, autons, hardware map) stay where they are; `main` reads its
-own auton from `paths/`, which its deploy uploads.
+The robot's files (settings, autons, hardware map) stay where they are. Versions before
+2026-10-25 use Panels and read their auton from `paths/` instead of `autos/`.
 
 ## 6. Afterwards
 
-Fill in the log, commit it, and leave the laptop on `main` until we decide to merge:
+Fill in the log and commit it:
 
 ```bash
 git add dashboard/ROBOT-TEST.md && git commit -m "Robot test log" && git push
-git checkout main
 ```
 
 ## Log
 
 | Date | Who | Branch commit | Checks failed | Load: loop, in Dash, + loop (ms), KB/s, 0/1/2 viewers | MAX_SAMPLES | Notes |
 |---|---|---|---|---|---|---|
-| | | | | | | |
+| 2026-10-24 | parent (Linux) | dashboard after comp merge | none blocking | loop 23.4 ms, in Dash 0.28 ms; dashboard 1.8% of a core, app 86% | 0 | First robot run: dashboard, Tune, Live, auton OK. Loop spikes ~60 ms every 0.5 s (not the dashboard; logcat showed no frequent GC; cause open). Automatic flywheel tuner replaced by the hand-tuning loop |
+| 2026-10-25 | parent (Linux, Mac) | dashboard 9ee5c52 → main a56f46e | none | not re-measured | 0 | Passed: 3, 4, 6, 7, 7c, 7d (INTAKE_ON follows operator X), 8, 10, 12, 14 (drawer; Linux Firefox with Logitech in X mode, Mac Chrome in D mode), 15 (Restart adb works), 16 (path speed), 17 (autons after refactor), 18 (live switches reset at INIT, DRIVE_SPEED live, INTAKE_I, undo, Delete). Not yet run: 2, 9 with ./dashboard-load, 11, 13 |

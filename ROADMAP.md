@@ -6,9 +6,9 @@ mechanism, a new autonomous action. Data files and a GUI handle the *tuning and 
 
 Agreed 2026-10-22. Step 4 changed to our own dashboard the same day.
 
-**Status 2026-10-23:** steps 2, 3 and 4 are built on branch `dashboard` and pass a 31-check
-end-to-end test against the desktop simulator (`./simulate`). Not yet tried on the robot.
-See [dashboard/README.md](dashboard/README.md).
+**Status 2026-10-25:** steps 2, 3 and 4 are built, tested on the robot, and merged into `main`
+(the dashboard replaced Panels). See [dashboard/README.md](dashboard/README.md) and the robot
+test log in [dashboard/ROBOT-TEST.md](dashboard/ROBOT-TEST.md).
 
 ## Principles
 
@@ -30,7 +30,7 @@ Also done: Pedro AutoTune's web server is out of competition builds (`--tuning` 
 
 ### 2. Autonomous as data: paths, steps and actions in one JSON
 Before this, the paths came from a pasted Pedro export (`paths/auto.java.txt`) and the order
-of steps was Java. Now (branch `dashboard`):
+of steps was Java. Now:
 
 - **One route file:** poses, paths, and the steps between and along them:
   ```json

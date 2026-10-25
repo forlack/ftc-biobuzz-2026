@@ -8,20 +8,29 @@ Last updated: 2026-10-25
 
 ## Total Chaos Dashboard + simulator — 2026-10-23 (built on branch `dashboard`; **merged into `main` 2026-10-25**, a56f46e)
 
-Built while the robot was with another team member; verified only against the simulator.
-Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-TEST.md`.
+Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into `main`
+2026-10-25 (work continues on `main`). Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-TEST.md`.
 
-**Handoff / state (2026-10-23):**
+**Current state (2026-10-25), read this first:**
+- Everything below is on `main`. Robot-verified: dashboard tabs, Tune (save, undo, live
+  switches reset at INIT, INTAKE_ON/FLYWHEELS_ON follow operator X/A), auton files incl. path
+  speed %, gamepad drawer (Linux Firefox with a Logitech in X mode; Mac Chrome in D mode),
+  Restart adb, Delete files, the mechanisms refactor (autons), hardware map 24621-Biobuzz.
+  Log: `dashboard/ROBOT-TEST.md`.
+- Open: ~60 ms loop spikes every ~0.5 s (not the dashboard, no frequent GC in logcat; next
+  suspect the SDK's own periodic hub traffic); browser does not reconnect by itself after a
+  Wi-Fi drop (a refresh is needed; fix proposed: reconnect when no message for ~3 s); "Use
+  this map" on the robot still gives Driver Station steps (switching from the app is unbuilt);
+  ROBOT-TEST checks 2, 9 (./dashboard-load), 11, 13 not yet run.
+- Next agreed later: strip unneeded visualizer features.
+
+**Handoff / state (2026-10-23, history):**
 - Name: **Total Chaos Dashboard** (team Total Chaos 24621; BIOBUZZ is the season's game).
   Visible strings renamed; internal names (`org.biobuzz.sim`, `biobuzz.*` storage keys,
   `assets/biobuzz/`, Visualizer branch `biobuzz`, the BIOBUZZ field image) deliberately kept.
-- The event on 2026-10-24 runs `main`. The first robot test of this branch is after that:
-  follow ROBOT-TEST.md exactly and fill in its log. Merge into `main` only when the user asks,
-  after a passing robot test. Leave the local checkout on `main` when not working on the branch.
-- Unverified on hardware: everything. Specific unknowns: dashboard load on the Control Hub
-  (`./dashboard-load`), Panels coexisting at :8001, `useHardwareMap` on Android (returns the
-  Driver Station steps; switching via `RobotConfigFileManager` + robot restart is untested), the
-  sim on the Mac (needs Java, e.g. Android Studio's JBR as JAVA_HOME).
+- (Superseded: the branch was robot-tested and merged; see Current state above.) The sim on
+  the Mac needs Java (Android Studio's JBR as JAVA_HOME); the dashboard itself works from the
+  Mac's browser.
 - **Teleop telemetry** (2026-10-23): all of it in `FieldCentricJava.updateTelemetry()`, each
   motor speed read once per loop (was 3 hub reads per motor); `telemetry.addData` for lines
   shown on both, `Dash.put` for chart-only values (targets, `Flywheels on/ready`, sticks,

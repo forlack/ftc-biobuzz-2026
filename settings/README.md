@@ -7,7 +7,8 @@ code. Changing the file needs **no build**.
 ## Tune and save
 
 1. Run **Field Centric (Java)** and open the dashboard at <http://192.168.43.1:8686>, Tune tab.
-2. Change numbers live.
+2. Change numbers live. A yellow dot means changed but not saved; ↶ next to it puts the saved
+   value back.
 3. When they are right, press **Save to robot**. Every dot turns green, and the save is kept in
    History.
 4. Copy the file into the repo and commit it:
@@ -23,6 +24,7 @@ Unsaved changes still disappear when the Robot Controller app restarts. Save fir
 - **No file:** the code's values are used. Nothing breaks.
 - **File changed since last time:** its values replace the code's.
 - **File unchanged:** nothing is reloaded, so unsaved Tune tab edits survive a re-INIT.
+- **Live switches** (`FLYWHEELS_ON`, `INTAKE_ON`) go back to on at every INIT.
 - **A bad value** (typo, a word where a number goes, a name the code no longer has): that
   value keeps the code default, and a `Settings warning` line says which one.
 - **The whole file is unreadable:** the backup from the save before, `robot.json.bak`, is
@@ -41,7 +43,8 @@ Press INIT to use it. The file groups values by class:
 ```json
 {
   "version": 1,
-  "FieldCentricJava": { "INTAKE_RPM": 700, "STINGER_DOWN": 0.45 },
+  "Intake": { "INTAKE_RPM": 700 },
+  "Stinger": { "STINGER_DOWN": 0.42 },
   "MecanumDrive": { "SLOW_SPEED": 0.25 }
 }
 ```
@@ -51,8 +54,10 @@ A value missing from the file keeps its code default, so a file may list only a 
 ## For programmers
 
 Every `public static` (not `final`) number, boolean or String in a class marked
-`@Configurable` is a setting (today `FieldCentricJava`, `MecanumDrive`, `PedroAutonomous`,
-`DashboardConfig`; the build lists them). A new one is saved automatically. Mark a live switch
-that should not be saved, like `FLYWHEELS_ON`, with `@RobotSettings.NotSaved`. More:
-`dashboard/DEVELOPER.md`. Renaming a variable makes old files warn about the old name;
-re-save to clear it.
+`@Configurable` is a setting (today the mechanisms `Intake`, `Flywheels`, `Stinger`, plus
+`MecanumDrive`, `PedroAutonomous`, `DashboardConfig`, `FlywheelTuner`; the build lists them).
+A new one is saved automatically. A live switch that should not be saved, like `FLYWHEELS_ON`
+or `INTAKE_ON`, is marked `@RobotSettings.NotSaved`: never saved, and back to its code value at
+every INIT. More: `dashboard/DEVELOPER.md`. Renaming a variable makes old files warn about the
+old name (re-save to clear it), unless it is marked `@RobotSettings.Renamed("OLD")`; a class
+whose settings moved from another uses `@RobotSettings.MovedFrom("OldClass")`.

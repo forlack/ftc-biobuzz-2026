@@ -12,7 +12,7 @@ Everything outside `TeamCode/` is FIRST's code, unmodified except for two build 
 | Android Studio | Narwhal 3 Feature Drop or later |
 | Pedro Pathing | revhub 3.0.1 / tuning 1.0.1 |
 | Gradle / AGP | 9.1.0 / 8.13.2 |
-| Dashboard | Total Chaos Dashboard (ours, port 8686; Panels removed on this branch) |
+| Dashboard | Total Chaos Dashboard (ours, port 8686; replaced Panels 2026-10-25) |
 | JDK | Android Studio Embedded JDK (17+; JBR 25 verified) |
 
 For FIRST's own documentation and SDK release notes, go to the source rather than a stale
@@ -25,7 +25,7 @@ copy here:
 Current tuning targets the competition robot. Historical test-platform measurements
 in AGENTS.md must not replace the current values in `pedro/Constants.java`.
 
-## Robot data files (this branch)
+## Robot data files
 
 Three kinds of file, all edited from the dashboard and kept in Git with `./robot-sync pull`:
 
@@ -36,8 +36,8 @@ Three kinds of file, all edited from the dashboard and kept in Git with `./robot
 | `24621-Biobuzz.xml` | `robot-config/24621-Biobuzz.xml` | Hardware map (plus `24621-Biobuzz-backup.xml`, an untouched copy) |
 
 Plus `history/` (every saved version) and `snapshots/` (known good copies), made on the robot.
-The old `paths/auto.java.txt` + `paths/auto.json` export is gone on this branch;
-`autos/saturday.json` is the same Saturday route.
+The old `paths/auto.java.txt` + `paths/auto.json` export is gone; `autos/saturday.json` is the
+same Saturday route.
 
 On the Linux desktop, save the robot Wi-Fi connection in NetworkManager once, then run
 `./deploy-linux -r 24621-RC --stay` from your terminal. Deploy uploads autons the robot does
@@ -244,7 +244,7 @@ adb pull /sdcard/FIRST/24621-Biobuzz.xml robot-config/
 git add robot-config && git commit -m "Update robot config" && git push
 ```
 
-## Total Chaos Dashboard and simulator (branch `dashboard`)
+## Total Chaos Dashboard and simulator
 
 Our own dashboard: live charts, settings, the path editor with robot actions, OpMode control
 and the hardware map. Try it with no robot at all:
@@ -253,7 +253,7 @@ and the hardware map. Try it with no robot at all:
 ./simulate          # then open http://localhost:8686
 ```
 
-On the robot: `./deploy-linux --stay` (Mac: `./deploy --stay`; the dashboard is in every build on this branch), then
+On the robot: `./deploy-linux --stay` (Mac: `./deploy --stay`; the dashboard is in every build), then
 <http://192.168.43.1:8686>. Test it with the repeatable checklist in
 [dashboard/ROBOT-TEST.md](dashboard/ROBOT-TEST.md).
 `./robot-sync pull|push|status` keeps the robot's files and Git in step.
