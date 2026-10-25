@@ -9,6 +9,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.OpModeManager;
 import com.qualcomm.robotcore.eventloop.opmode.OpModeManagerImpl;
 import com.qualcomm.robotcore.eventloop.opmode.OpModeManagerNotifier;
+import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 
@@ -144,6 +145,27 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
             activeMap = "";
         }
         return activeMap;
+    }
+
+    /** The active OpMode's gamepad1 / gamepad2 fields: memory only, no hub call. */
+    @Override public boolean driverStationGamepad(int number, float[] axes, int[] buttons) {
+        OpMode opMode = opModes.getActiveOpMode();
+        if (opMode == null || activeOpMode().isEmpty()) return false;
+        Gamepad pad = number == 1 ? opMode.gamepad1 : opMode.gamepad2;
+        if (pad == null) return false;
+        axes[0] = pad.left_stick_x;
+        axes[1] = pad.left_stick_y;
+        axes[2] = pad.right_stick_x;
+        axes[3] = pad.right_stick_y;
+        axes[4] = pad.left_trigger;
+        axes[5] = pad.right_trigger;
+        boolean[] down = {pad.a, pad.b, pad.x, pad.y, pad.left_bumper, pad.right_bumper,
+                pad.dpad_up, pad.dpad_down, pad.dpad_left, pad.dpad_right,
+                pad.back, pad.start, pad.guide, pad.left_stick_button, pad.right_stick_button};
+        int bits = 0;
+        for (int i = 0; i < down.length; i++) if (down[i]) bits |= 1 << i;
+        buttons[0] = bits;
+        return true;
     }
 
     @Override public RobotSettings settings() { return settings; }

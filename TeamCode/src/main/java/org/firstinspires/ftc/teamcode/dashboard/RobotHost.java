@@ -47,6 +47,16 @@ public interface RobotHost {
                 + file.replaceAll("\\.xml$", "") + ", then Activate.";
     }
 
+    /**
+     * The Driver Station's gamepad {@code number} (1 or 2) as the active OpMode sees it, for
+     * the dashboard's Gamepad drawer: axes in {@link VirtualGamepads#AXES} order, buttons as
+     * one bit set in {@code buttons[0]} ({@link VirtualGamepads#BUTTONS} order). Returns false
+     * when there is none (the simulator). Memory reads only: never a call to a hub.
+     */
+    default boolean driverStationGamepad(int number, float[] axes, int[] buttons) {
+        return false;
+    }
+
     RobotSettings settings();
 
     /** The autonomous actions the path editor may use. */

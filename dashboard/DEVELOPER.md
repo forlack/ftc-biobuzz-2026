@@ -44,6 +44,7 @@ Imports: `org.firstinspires.ftc.teamcode.dashboard.Configurable`,
 | Draw the robot on the field | `Dash.pose(x, y, headingRadians)` (Pedro inches) | Live tab field |
 | End the loop | `telemetry.update()` (with the wrapper it also ends the dashboard frame) | — |
 | Add an autonomous function | see [below](#an-autonomous-function) | Paths tab |
+| Let the Gamepad drawer drive (practice) | `drive = DashboardGamepads.combine(gamepad1, 1);` once per loop, then read only `drive` | the Driver Station gamepad plus the drawer's |
 
 **Numbers and booleans** can be charted (**+ Add chart** on the Live tab); text goes to the
 telemetry table. Use the **same name** for the same thing everywhere (`Pollen RPM` in teleop,
@@ -57,6 +58,7 @@ auton and simulator), so one chart works for all of them.
 | `telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry())` | `PanelsTelemetry.INSTANCE.getTelemetry()` … `update(telemetry)` | `telemetry = new DashboardTelemetry(telemetry)` |
 | `TelemetryPacket.put("x", v)` | `panels.addData("x", v)` | `Dash.put("x", v)` (dashboard only) |
 | `packet.fieldOverlay()` | `PanelsField` | `Dash.pose(x, y, heading)` |
+| (gamepad in the browser) | `PanelsGamepad…asCombinedFTCGamepad(gamepad1)` | `DashboardGamepads.combine(gamepad1, 1)` |
 | Values reset on restart | Values reset on restart | **Save** keeps them in `robot.json`, with history |
 
 What is different on purpose:

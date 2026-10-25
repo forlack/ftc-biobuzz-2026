@@ -12,6 +12,7 @@ import com.qualcomm.robotcore.hardware.VoltageSensor;
 import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.Button;
+import org.firstinspires.ftc.teamcode.lib.DashboardGamepads;
 import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
 import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
@@ -194,10 +195,14 @@ public class FieldCentricJava extends LinearOpMode {
         }
     }
 
-    /** Reads the gamepad once, so everything below sees the same thing. */
+    /**
+     * Reads the gamepad once, so everything below sees the same thing. The dashboard's
+     * Gamepad drawer adds to it when someone takes control there (practice only); otherwise
+     * these are the Driver Station gamepads unchanged.
+     */
     private void readGamepad() {
-        operate = gamepad2;
-        drive = gamepad1;
+        operate = DashboardGamepads.combine(gamepad2, 2);
+        drive = DashboardGamepads.combine(gamepad1, 1);
         buttons.update();
     }
 

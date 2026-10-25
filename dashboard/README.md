@@ -14,6 +14,17 @@ Controller app** or **in the desktop simulator**. Same page, same server code, s
 
 The bar at the top picks an OpMode and runs **Init / Start / Stop**, and shows the battery.
 
+**Gamepad drawer** (bottom of every tab; the **Gamepad** handle, or press **G**): a virtual
+gamepad 1 or 2 for practice. Drag the sticks and click the buttons (right-click holds a
+button down), or plug a controller into the laptop (the handle lights up when one is
+detected). Closed or not driving, it shows what the robot gets on that gamepad (the Driver
+Station's). **Take control** to drive; a green **Driving** pill in the top bar releases it.
+The robot adds it to the Driver Station gamepad (stronger stick, either button), so the
+Driver Station keeps working. Safety: one browser per gamepad; inputs older than 0.25 s
+count as all zero; control ends when the OpMode stops, the tab is hidden, the browser leaves
+or the dashboard is locked. **Not allowed in matches.** In code:
+`drive = DashboardGamepads.combine(gamepad1, 1);` (Field Centric does this).
+
 ## Try it without the robot: the simulator
 
 ```bash
@@ -30,7 +41,9 @@ battery sag, balls that slow the wheels when shot, and a mecanum chassis on the 
 Its SD card is `sim/sdcard/`, filled from the repo on first start.
 
 `Simulator` settings in the Tune tab switch its pretend driver on or off (`DEMO_DRIVING`,
-`DEMO_SHOOTING`, `FEED`).
+`DEMO_SHOOTING`, `FEED`). Drive it yourself with the **Gamepad drawer**: gamepad 1 and 2
+work like on the robot (same buttons as Field Centric), and the pretend driver stops while you
+drive.
 
 ## On the robot
 

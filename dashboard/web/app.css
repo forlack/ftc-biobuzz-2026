@@ -190,7 +190,7 @@ table.devices tr.bad input { border-color: var(--red); }
 #editor-text { width: 100%; min-height: 320px; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; resize: vertical; }
 
 .toast {
-  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%);
   background: #222b36; border: 1px solid var(--line); color: var(--text);
   padding: 9px 16px; border-radius: 10px; box-shadow: 0 8px 30px #0008; font-weight: 600; z-index: 10;
 }
@@ -245,3 +245,51 @@ body.locked [data-remove], body.locked [data-add] { opacity: .4; pointer-events:
 .chart.expanded .expand { border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; color: var(--text); font: inherit; font-size: 13px; }
 .chart.expanded .expand span { margin-left: 6px; vertical-align: middle; }
 body.chart-expanded #tab-live .live-grid::after { content: ""; position: fixed; inset: 0; background: #0009; z-index: 19; }
+
+/* ---- Gamepad drawer (bottom of every tab) ------------------------------------ */
+.pad-drawer { flex: none; border-top: 1px solid var(--line); background: var(--panel); position: relative; }
+.pad-handle {
+  display: flex; align-items: center; gap: 8px; margin: 0 auto; padding: 5px 18px;
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-top: 0;
+  border-radius: 0 0 10px 10px; font: inherit; font-weight: 700; cursor: pointer;
+}
+.pad-handle:hover { border-color: var(--honey); color: var(--honey); }
+.pad-handle svg { width: 20px; height: 20px; }
+.pad-handle .chev { font-size: 11px; color: var(--muted); }
+.pad-handle-note { font-size: 12px; font-weight: 600; color: var(--honey); }
+.pad-handle.detected { border-color: var(--honey); box-shadow: 0 0 10px #f5b30155; }
+.pad-handle.driving { border-color: var(--green); color: var(--green); box-shadow: 0 0 12px #3fb95066; }
+.pad-handle.driving .pad-handle-note { color: var(--green); }
+.pad-content { display: grid; grid-template-columns: minmax(260px, 350px) minmax(0, 520px) minmax(180px, 260px); gap: 18px; justify-content: center; padding: 8px 18px 12px; }
+.pad-side { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.pad-side .seg button { flex: 1; white-space: nowrap; padding: 6px 8px; }
+.pad-status { font-size: 13px; }
+.pad-status.driving { color: var(--green); font-weight: 600; }
+.pad-safety { font-size: 12px; color: var(--muted); border-left: 3px solid var(--honey); padding-left: 8px; }
+.pad-art { min-width: 0; }
+.pad-svg { width: 100%; max-height: 240px; display: block; touch-action: none; user-select: none; }
+.pad-svg .pad-body { fill: #1e2631; stroke: #3a4554; stroke-width: 2; }
+.pad-svg text { fill: var(--text); font: 700 14px system-ui, sans-serif; text-anchor: middle; pointer-events: none; }
+.pad-svg text.small { font-size: 12px; fill: var(--muted); }
+.pad-svg text.tiny { font-size: 9px; fill: var(--muted); }
+.pad-svg .pad-key { fill: #2b3542; stroke: #485466; stroke-width: 1.5; }
+.pad-svg .pad-center { fill: #2b3542; }
+.pad-svg .face.a { stroke: #3fb950; } .pad-svg .face.b { stroke: #f85149; }
+.pad-svg .face.x { stroke: #58a6ff; } .pad-svg .face.y { stroke: #f5b301; }
+.pad-svg .well { fill: #151b23; stroke: #485466; stroke-width: 1.5; }
+.pad-svg .knob { fill: #3a4554; stroke: #5d6b7e; stroke-width: 2; }
+.pad-svg .pad-key.on, .pad-svg .pad-stick.on .knob { fill: var(--honey); stroke: var(--honey); }
+.pad-svg .pad-key.held { stroke: var(--green); stroke-width: 3; }
+.pad-svg .pad-stick.pressed .well { stroke: var(--honey); stroke-width: 3; }
+.pad-svg.live .pad-key, .pad-svg.live .pad-stick { cursor: pointer; }
+.pad-svg:not(.live) { opacity: .85; }
+.pad-readout { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: center; white-space: pre; overflow: hidden; }
+.pad-legend { font-size: 12.5px; display: flex; flex-direction: column; gap: 3px; }
+.pad-legend b { display: inline-block; min-width: 92px; color: var(--honey); font-weight: 600; }
+.pad-pill { cursor: pointer; color: var(--green); border-color: #3fb95088; background: #3fb9501a; font: inherit; font-size: 12px; font-weight: 700; }
+.pad-pill:hover { background: #3fb95033; }
+body.locked #pad-take { opacity: .4; pointer-events: none; }
+@media (max-width: 1100px) {
+  .pad-content { grid-template-columns: 1fr; }
+  .pad-legend { display: none; }
+}

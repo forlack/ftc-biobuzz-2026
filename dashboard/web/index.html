@@ -33,6 +33,7 @@
       <button class="btn danger" id="op-stop">Stop</button>
       <span class="pill" id="op-state">stopped</span>
       <span class="pill" id="battery">— V</span>
+      <button class="pill pad-pill" id="pad-pill" title="The dashboard is driving a gamepad. Click to stop." hidden></button>
       <button class="btn lock" id="lock" title="Unlocked: anyone can make changes. Click to lock with a PIN."></button>
       <span class="conn" id="conn" title="Connection"><i></i><span>offline</span></span>
     </div>
@@ -142,6 +143,33 @@
       </div>
     </section>
   </main>
+
+  <!-- GAMEPAD: a drawer at the bottom of every tab (js/gamepad.js) -->
+  <div class="pad-drawer" id="pad-drawer">
+    <button class="pad-handle" id="pad-handle" aria-expanded="false" aria-controls="pad-body">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.8 4a2.5 2.5 0 0 1-4.3 1.2L14.5 16h-5l-2.3 2.2A2.5 2.5 0 0 1 2.9 17l-.8-4A5 5 0 0 1 7 7zm1 3v1.5H6.5v1.5H8v1.5h1.5V13H11v-1.5H9.5V10zm8.25.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-2 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2z" fill="currentColor"/></svg>
+      <span>Gamepad</span><span class="pad-handle-note" id="pad-handle-note"></span><span class="chev">▲</span>
+    </button>
+    <div class="pad-content" id="pad-body" hidden>
+      <div class="pad-side">
+        <div class="seg" id="pad-seg">
+          <button data-pad="1">Gamepad 1 · driver</button>
+          <button data-pad="2">Gamepad 2 · operator</button>
+        </div>
+        <button class="btn primary" id="pad-take">Take control</button>
+        <div class="pad-status" id="pad-status"></div>
+        <div class="muted" id="pad-device"></div>
+        <div class="pad-safety"><b>Practice only</b>: not allowed in a match. The robot gets all zero if the inputs stop for
+          0.25 s, and control ends when the OpMode stops, this tab is hidden, or the dashboard is locked.
+          <b>G</b> opens and closes this drawer.</div>
+      </div>
+      <div class="pad-art">
+        <div id="pad-art"></div>
+        <div class="pad-readout" id="pad-readout"></div>
+      </div>
+      <div class="pad-legend" id="pad-legend"></div>
+    </div>
+  </div>
 
   <dialog id="chart-dialog">
     <form method="dialog" class="chart-form">

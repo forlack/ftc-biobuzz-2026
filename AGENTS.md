@@ -2,7 +2,7 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-24
+Last updated: 2026-10-25
 
 ---
 
@@ -73,15 +73,27 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
 - **Loop spikes still there after the battery-read fix (user deployed 0962556):** so the
   dashboard was not the cause. Next evidence: `adb logcat -v time | grep -iE "GC|art"` during
   teleop (GC pauses ~2/s would explain it), else the SDK's own periodic hub traffic.
-- **Next after the first robot test (agreed 2026-10-24): virtual gamepad.** A drawer at the
-  bottom of every tab (labelled handle "🎮 Gamepad ▲", lights up when a laptop controller is
-  detected, G toggles, pushes content up). Controller image like Panels': draggable sticks,
-  buttons, bumpers, triggers; browser Gamepad API for a USB/Bluetooth controller; touch.
-  gamepad 1/2 selector. Safety: explicit "Take control", top-bar pill while driving, inputs
-  zeroed if no message for ~0.25 s, ends with the OpMode, view-only when Locked, practice only
-  (not legal in matches). Teleop merges it via a small helper (one-line change where gamepads
-  are read). Build order: (1) drawer + mirror of the Driver Station gamepads (display only),
-  (2) Take control + failsafe, (3) drive the simulated robot with it.
+- **Virtual gamepad built (2026-10-25), sim-verified only.** Drawer at the bottom of every tab
+  (`web/js/gamepad.js`; handle "Gamepad", G toggles, lights up when a laptop controller is
+  detected via the browser Gamepad API; SVG controller with draggable sticks, buttons, LT/RT;
+  right-click latches a button; per-pad legend of Field Centric's controls). Robot side:
+  `dashboard/VirtualGamepads` (shared core, static like Dash): one owner (websocket connection
+  id) per pad, inputs older than 0.25 s read as nothing, control ends when the active OpMode
+  changes/stops, when the browser's socket closes, and on Lock (also refused while locked).
+  Websocket messages: `{type:control,pad,take}` → reply `{type:control,pad,owner,error}`;
+  `{type:gamepad,pad,axes[6],buttons bits}` at 20/s; subscribe `gamepads:true` while the drawer
+  is open gets `{type:gamepads,pads:[…]}` (DS + virtual combined, on change, built by the one
+  broadcaster thread); `hello` carries the connection `id`; state has `gamepads:[owner1,owner2]`.
+  The DS mirror is `RobotHost.driverStationGamepad` (Android: the active OpMode's
+  gamepad1/2 fields, memory only, no hub call). Teleop: `lib/DashboardGamepads.combine(gamepad1, 1)`
+  (Android-only; returns the real Gamepad untouched when nobody drives, else a reused copy:
+  stronger stick, OR of buttons). The browser releases control when its tab is hidden.
+  Sim teleop now reads VirtualGamepads with Field Centric's button map (lib/Button is now in
+  the sim build) and field-centric math; the demo driver runs only while nobody drives. Needs
+  the robot test (ROBOT-TEST check 14).
+- **Text telemetry is re-sent once a second** (TelemetryStream): before, unchanged text was
+  sent only once, so after the table cleared on Stop, re-running an OpMode left unchanged text
+  rows (Intake ON, Driver…) missing until they changed.
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -91,7 +103,7 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
 Key facts for agents:
 
 - **Shared plain-Java core** (compiled into the app AND the desktop sim):
-  `dashboard/{DashboardServer,Dash,RobotHost,Base64Codec}`, `lib/{RobotFiles,RobotSettings,
+  `dashboard/{DashboardServer,Dash,RobotHost,Base64Codec,VirtualGamepads}`, `lib/{RobotFiles,RobotSettings,
   Actions,StandardActions,Mechanisms,AutoRoute,AutoSequence}`, `pedro/ForesightConstants`.
   No Android or FTC SDK imports in these, Java 8 syntax, Android 7 APIs only (no
   java.nio.file, no java.util.Base64, no String.join). `-Pdashboard` lint: no NewApi.
@@ -104,7 +116,7 @@ Key facts for agents:
 - **Panels removed on this branch (2026-10-23)**: no `com.bylazar` dependency or Maven repo
   (verified: 0 references in the APK; `-Ptuning` still resolves). The dashboard replaces it and
   is in **every** build (`-Pdashboard` / `--dashboard` still accepted, no effect). Lost with
-  Panels: the browser virtual gamepad (teleop now reads gamepad1/gamepad2 directly) and the
+  Panels: the browser virtual gamepad (replaced 2026-10-25 by the Gamepad drawer) and the
   `SAVE_TO_ROBOT` switch (use the Tune tab's Save).
 - **Developer API** (guide: `dashboard/DEVELOPER.md`, modelled on FTC Dashboard/Panels):
   `@Configurable` (`teamcode.dashboard.Configurable`) marks settings classes;
@@ -137,7 +149,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (91
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (115
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

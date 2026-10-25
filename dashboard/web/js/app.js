@@ -4,6 +4,7 @@ import { FrameDecoder } from './frames.js';
 import { LiveTab } from './live.js';
 import { TuneTab } from './tune.js';
 import { RobotTab } from './robot.js';
+import { GamepadDrawer } from './gamepad.js';
 
 const live = new LiveTab();
 const tune = new TuneTab();
@@ -59,6 +60,7 @@ function showState(next) {
   battery.classList.toggle('low', next.battery != null && next.battery < 12.2);
   showLock(next.locked);
   showLoad(next.load);
+  if (gamepad) gamepad.state(next);
   document.getElementById('op-start').disabled = next.state !== 'init';
   document.getElementById('op-stop').disabled = next.state === 'stopped';
   if (first && tab === 'robot') robot.refresh(next.hardwareMap);
@@ -158,6 +160,7 @@ window.addEventListener('biobuzz:history', (event) => {
 
 // ---- Live connection ----------------------------------------------------------------
 const decoder = new FrameDecoder();
+let gamepad = null;
 connection = connectLive({
   onStatus(up) {
     const conn = document.getElementById('conn');
@@ -167,6 +170,9 @@ connection = connectLive({
   },
   onMessage(message) {
     if (message.type === 'state') { showState(message); return; }
+    if (message.type === 'control') { gamepad.control(message); return; }
+    if (message.type === 'gamepads') { gamepad.gamepads(message); return; }
+    if (message.type === 'hello') gamepad.hello(message.id || 0);
     const telemetry = decoder.handle(message);
     if (!telemetry) return;
     if (telemetry.restarted) live.reset();
@@ -174,9 +180,14 @@ connection = connectLive({
   },
 });
 
-/** Loop data is only sent while the Live tab is showing; other tabs get status only. */
+// The Gamepad drawer at the bottom of every tab.
+gamepad = new GamepadDrawer({ send: (message) => connection.send(message), onOpenChange: () => subscribe() });
+
+/** Loop data is only sent while the Live tab is showing; other tabs get status only. The
+ *  gamepads as the robot sees them only while the drawer is open. */
 function subscribe() {
-  connection.send({ type: 'subscribe', frames: tab === 'live' && !document.hidden });
+  if (!connection) return;
+  connection.send({ type: 'subscribe', frames: tab === 'live' && !document.hidden, gamepads: gamepad.open && !document.hidden });
 }
 document.addEventListener('visibilitychange', subscribe);
 

@@ -19,7 +19,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * - One thread builds each batch (20 a second) once; every viewer is sent the same bytes, so
  *   a second viewer costs almost nothing extra.
  * - Compact: value names are sent once per connection ("names"), then each loop is just
- *   numbers in that order. Text values are sent only when they change.
+ *   numbers in that order. Text values are sent when they change, and all of them once a
+ *   second (so a table cleared when an OpMode stops fills again even if nothing changed).
  * - Viewers not on the Live tab ask for no loop data ("subscribe", frames: false) and get
  *   only the twice-a-second status.
  * - {@link DashboardConfig#MAX_SAMPLES_PER_SECOND} caps how many loops a second are sent.
@@ -32,7 +33,11 @@ import java.util.concurrent.atomic.AtomicLong;
  *                                                          values: null = not sent that loop;
  *                                                          text and pose are 0 when absent
  *   {"type":"state", ...}                                  robot status, twice a second
- * From the browser: {"type":"subscribe","frames":true|false}
+ *   {"type":"gamepads","pads":[{...}, {...}]}              gamepads 1 and 2 as the robot sees
+ *                                                          them, when they change (only to
+ *                                                          viewers with the Gamepad drawer open)
+ * From the browser: {"type":"subscribe","frames":true|false,"gamepads":true|false}, and the
+ * gamepad messages DashboardServer handles (control, gamepad).
  */
 final class TelemetryStream {
     static final int UPDATES_PER_SECOND = 20;
@@ -42,9 +47,11 @@ final class TelemetryStream {
     final AtomicLong bytesSent = new AtomicLong();
     final AtomicInteger viewers = new AtomicInteger();
     final AtomicInteger liveViewers = new AtomicInteger();
+    final AtomicInteger padViewers = new AtomicInteger();
 
     private final String boot = Long.toHexString(System.nanoTime() ^ System.currentTimeMillis());
     private final Callable<JSONObject> state;
+    private final Callable<String> gamepads;
 
     // Value names, in the order positions were given out. Positions never change while the app runs.
     private final Map<String, Integer> positions = new HashMap<>();
@@ -52,23 +59,25 @@ final class TelemetryStream {
 
     // The shared output, guarded by `signal`.
     private final Object signal = new Object();
-    private long batchNumber, batchLastSeq, stateNumber;
-    private byte[] batchBytes, stateBytes;
+    private long batchNumber, batchLastSeq, stateNumber, padsNumber;
+    private byte[] batchBytes, stateBytes, padsBytes;
+    private String lastPads = "";   // broadcaster thread only
 
     // Broadcaster state (broadcaster thread only).
     private long cursor = Dash.latestSeq();
     private double lastSample = -1e9;
     private Map<String, String> lastText = new HashMap<>();
 
-    TelemetryStream(Callable<JSONObject> state) {
+    TelemetryStream(Callable<JSONObject> state, Callable<String> gamepads) {
         this.state = state;
+        this.gamepads = gamepads;
     }
 
     // ---- Broadcaster -------------------------------------------------------------------
 
     /** Runs until {@code running} turns false: builds each batch and status once for everyone. */
     void broadcast(java.util.function.BooleanSupplier running) {
-        long lastState = 0;
+        long lastState = 0, lastAllText = 0;
         boolean hadLiveViewers = false;
         while (running.getAsBoolean()) {
             long started = System.nanoTime();
@@ -77,7 +86,11 @@ final class TelemetryStream {
                 if (!live) {
                     cursor = Dash.latestSeq();   // nobody watching loops: build nothing
                 } else {
-                    if (!hadLiveViewers) lastText = new HashMap<>();   // first viewer: send all text again
+                    long nowMs = System.currentTimeMillis();
+                    if (!hadLiveViewers || nowMs - lastAllText >= 1000) {   // all text again
+                        lastText = new HashMap<>();
+                        lastAllText = nowMs;
+                    }
                     List<Dash.Frame> frames = Dash.since(cursor, 2000);
                     if (!frames.isEmpty()) {
                         cursor = frames.get(frames.size() - 1).seq;
@@ -94,6 +107,18 @@ final class TelemetryStream {
                     }
                 }
                 hadLiveViewers = live;
+                if (padViewers.get() > 0) {
+                    String pads = gamepads.call();
+                    if (!pads.equals(lastPads)) {
+                        lastPads = pads;
+                        byte[] bytes = message(pads);
+                        synchronized (signal) {
+                            padsBytes = bytes;
+                            padsNumber++;
+                            signal.notifyAll();
+                        }
+                    }
+                }
                 long now = System.currentTimeMillis();
                 if (viewers.get() > 0 && now - lastState >= 500) {
                     lastState = now;
@@ -137,8 +162,17 @@ final class TelemetryStream {
 
     /** Per-connection flags, changed by the connection's reader thread. */
     static final class Viewer {
+        private static final AtomicLong IDS = new AtomicLong();
+        /** Names this connection for the virtual gamepads (never 0). */
+        final long id = IDS.incrementAndGet();
         volatile boolean open = true;
         volatile boolean wantsFrames = true;   // scripts that never subscribe get everything
+        volatile boolean wantsGamepads;
+    }
+
+    /** One message to one viewer only, from any thread (such as a reply to its request). */
+    void sendTo(OutputStream output, String json) throws IOException {
+        send(output, message(json));
     }
 
     /** Wakes the viewer's sending thread after its reader changed something. */
@@ -151,27 +185,35 @@ final class TelemetryStream {
     /** Sends to one browser until it leaves. */
     void serve(Viewer viewer, OutputStream output, java.util.function.BooleanSupplier running) throws Exception {
         viewers.incrementAndGet();
-        boolean live = false;
-        long seenBatch, seenState, lastSeq = 0;
+        boolean live = false, pads = false;
+        long seenBatch, seenState, seenPads, lastSeq = 0;
         int namesSent = 0;
         try {
             byte[] firstState;
             synchronized (signal) {
                 seenBatch = batchNumber;   // registered before history is read, so nothing is missed
                 seenState = stateNumber;
+                seenPads = padsNumber;
                 firstState = stateBytes;
             }
             long started = System.nanoTime();
-            send(output, message("{\"type\":\"hello\",\"boot\":\"" + boot + "\"}"));
+            send(output, message("{\"type\":\"hello\",\"boot\":\"" + boot + "\",\"id\":" + viewer.id + "}"));
             send(output, firstState != null ? firstState : stateMessage());
             busyNanos.addAndGet(System.nanoTime() - started);
             while (viewer.open && running.getAsBoolean()) {
-                byte[] batch = null, status = null;
+                byte[] batch = null, status = null, padsNow = null;
                 long batchEnd = 0;
+                boolean padsChanged = false;
                 synchronized (signal) {
-                    if (batchNumber == seenBatch && stateNumber == seenState && viewer.wantsFrames == live) {
+                    if (batchNumber == seenBatch && stateNumber == seenState && padsNumber == seenPads
+                            && viewer.wantsFrames == live && viewer.wantsGamepads == pads) {
                         signal.wait(600);
                     }
+                    if (padsNumber != seenPads) {
+                        seenPads = padsNumber;
+                        padsChanged = true;
+                    }
+                    padsNow = padsBytes;
                     if (batchNumber != seenBatch) {
                         seenBatch = batchNumber;
                         batch = batchBytes;
@@ -205,11 +247,22 @@ final class TelemetryStream {
                     lastSeq = batchEnd;
                 }
                 if (status != null) send(output, status);
+                boolean wantsPads = viewer.wantsGamepads;
+                if (wantsPads != pads) {
+                    pads = wantsPads;
+                    if (pads) padViewers.incrementAndGet(); else padViewers.decrementAndGet();
+                    // Just opened: what the broadcaster last built (it starts building now if
+                    // nobody had the drawer open, and sends the next change).
+                    if (pads && padsNow != null) send(output, padsNow);
+                } else if (pads && padsChanged && padsNow != null) {
+                    send(output, padsNow);
+                }
                 busyNanos.addAndGet(System.nanoTime() - started);
             }
         } finally {
             viewers.decrementAndGet();
             if (live) liveViewers.decrementAndGet();
+            if (pads) padViewers.decrementAndGet();
         }
     }
 

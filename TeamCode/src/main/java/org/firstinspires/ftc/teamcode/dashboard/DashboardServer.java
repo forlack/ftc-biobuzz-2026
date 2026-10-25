@@ -61,7 +61,11 @@ import javax.xml.parsers.DocumentBuilderFactory;
  *   POST /api/snapshots/restore         {id}
  *   POST /api/lock                      {action: lock|unlock, pin}. While locked, every change
  *                                       is refused with 423 until unlocked.
- *   GET  /ws                            websocket: telemetry frames and state
+ *   GET  /ws                            websocket: telemetry frames and state; also the
+ *                                       virtual gamepads (see VirtualGamepads):
+ *                                       {type: control, pad, take: true|false} answered with
+ *                                       {type: control, pad, owner, error}, then
+ *                                       {type: gamepad, pad, axes: [6], buttons: bits} 20 a second
  */
 public class DashboardServer {
     public static final int DEFAULT_PORT = 8686;
@@ -90,7 +94,7 @@ public class DashboardServer {
     private volatile String lastError = "";
     private final DashboardLock lock;
 
-    private final TelemetryStream stream = new TelemetryStream(this::state);
+    private final TelemetryStream stream = new TelemetryStream(this::state, this::gamepadsMessage);
     private volatile JSONObject load = new JSONObject();   // what the dashboard costs the robot
 
     public DashboardServer(RobotHost host, int port) {
@@ -436,6 +440,7 @@ public class DashboardServer {
         json.put("hardwareMap", host.activeHardwareMap());
         json.put("settingsStatus", host.settings().status());
         json.put("locked", lock.locked());
+        json.put("gamepads", gamepadOwners());
         json.put("load", load);
         json.put("time", Dash.now());
         return json;
@@ -657,6 +662,7 @@ public class DashboardServer {
         if (action.equals("lock")) {
             if (lock.locked()) return Response.error(400, "Already locked");
             lock.lock(pin);
+            VirtualGamepads.releaseIfNot("");   // locked is view only: nobody drives
         } else if (action.equals("unlock")) {
             if (!lock.unlock(pin)) return Response.error(403, "Wrong PIN");
         } else {
@@ -762,15 +768,22 @@ public class DashboardServer {
                     if (opcode == 8 || opcode < 0) break;
                     if (opcode == 1 && text[0] != null) {
                         JSONObject message = new JSONObject(text[0]);
-                        if ("subscribe".equals(message.optString("type"))) {
+                        String type = message.optString("type");
+                        if ("subscribe".equals(type)) {
                             viewer.wantsFrames = message.optBoolean("frames", true);
+                            viewer.wantsGamepads = message.optBoolean("gamepads", false);
                             stream.poke();
+                        } else if ("control".equals(type)) {
+                            control(viewer, message, output);
+                        } else if ("gamepad".equals(type)) {
+                            gamepadInput(viewer, message);
                         }
                     }
                 }
             } catch (Throwable ignored) {
             } finally {
                 viewer.open = false;
+                VirtualGamepads.release(viewer.id, 0);   // the browser left: its gamepad stops now
                 stream.poke();
             }
         });
@@ -780,6 +793,83 @@ public class DashboardServer {
             output.flush();
         } catch (IOException ignored) {
         }
+    }
+
+    // ---- Virtual gamepads ------------------------------------------------------------
+
+    /** Take control of a gamepad, or give it back; the answer goes to that browser only. */
+    private void control(TelemetryStream.Viewer viewer, JSONObject message, OutputStream output) throws Exception {
+        int pad = message.optInt("pad", 1) == 2 ? 2 : 1;
+        String error = null;
+        if (!message.optBoolean("take", false)) {
+            VirtualGamepads.release(viewer.id, pad);
+        } else if (lock.locked()) {
+            error = "The dashboard is locked. Unlock it with the PIN to drive.";
+        } else {
+            error = VirtualGamepads.take(viewer.id, pad, host.activeOpMode());
+        }
+        JSONObject reply = new JSONObject();
+        reply.put("type", "control");
+        reply.put("pad", pad);
+        reply.put("owner", VirtualGamepads.owner(pad));
+        if (error != null) reply.put("error", error);
+        stream.sendTo(output, reply.toString());
+    }
+
+    /** Inputs from the browser in control (anyone else's are ignored). */
+    private void gamepadInput(TelemetryStream.Viewer viewer, JSONObject message) {
+        // Control ends with the OpMode it was taken for.
+        VirtualGamepads.releaseIfNot(host.activeOpMode());
+        int pad = message.optInt("pad", 1) == 2 ? 2 : 1;
+        JSONArray list = message.optJSONArray("axes");
+        float[] axes = new float[VirtualGamepads.AXES.length];
+        for (int i = 0; list != null && i < axes.length && i < list.length(); i++) axes[i] = (float) list.optDouble(i, 0);
+        VirtualGamepads.update(viewer.id, pad, axes, message.optInt("buttons", 0));
+    }
+
+    /** [owner of gamepad 1, owner of gamepad 2] (connection ids, 0 = nobody), for the state message. */
+    private JSONArray gamepadOwners() {
+        VirtualGamepads.releaseIfNot(host.activeOpMode());
+        JSONArray owners = new JSONArray();
+        owners.put(VirtualGamepads.owner(1));
+        owners.put(VirtualGamepads.owner(2));
+        return owners;
+    }
+
+    private final float[] padAxes = new float[VirtualGamepads.AXES.length];
+    private final float[] stationAxes = new float[VirtualGamepads.AXES.length];
+    private final int[] padButtons = new int[1], stationButtons = new int[1];
+
+    /**
+     * Gamepads 1 and 2 as the OpMode sees them: the Driver Station's and the dashboard's
+     * combined (the stronger stick, either button), like lib/DashboardGamepads does. Built by
+     * the stream's one broadcaster thread, 20 times a second while a drawer is open.
+     */
+    private String gamepadsMessage() {
+        StringBuilder json = new StringBuilder("{\"type\":\"gamepads\",\"pads\":[");
+        for (int n = 1; n <= 2; n++) {
+            boolean virtual = VirtualGamepads.active(n);
+            VirtualGamepads.snapshot(n, padAxes, padButtons);
+            boolean station = false;
+            try {
+                station = host.driverStationGamepad(n, stationAxes, stationButtons);
+            } catch (Throwable ignored) {
+                // no Driver Station gamepad this time
+            }
+            if (n > 1) json.append(',');
+            json.append("{\"owner\":").append(VirtualGamepads.owner(n))
+                    .append(",\"virtual\":").append(virtual)
+                    .append(",\"station\":").append(station)
+                    .append(",\"axes\":[");
+            for (int i = 0; i < padAxes.length; i++) {
+                float value = padAxes[i];
+                if (station && Math.abs(stationAxes[i]) > Math.abs(value)) value = stationAxes[i];
+                if (i > 0) json.append(',');
+                TelemetryStream.number(json, Math.round(value * 100) / 100.0);
+            }
+            json.append("],\"buttons\":").append(padButtons[0] | (station ? stationButtons[0] : 0)).append('}');
+        }
+        return json.append("]}").toString();
     }
 
     /** Reads one client frame; a small text payload is unmasked into {@code text[0]}. Returns its opcode, or -1 at the end. */

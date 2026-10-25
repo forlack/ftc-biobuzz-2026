@@ -130,6 +130,101 @@ try {
   await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
   await b.waitFor(`document.getElementById('tab-live').innerText.includes('Flywheel compensated F')`, 5000);
 
+  // ---- Gamepad drawer: drive the simulated robot from the dashboard ---------------------
+  console.log('Gamepad drawer');
+  check(await b.eval(`!!document.querySelector('#pad-handle') && document.querySelector('#pad-body').hidden`),
+    'every tab has the Gamepad handle at the bottom, closed at first');
+  await b.eval(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }))`);
+  await b.waitFor(`!document.querySelector('#pad-body').hidden && document.querySelector('#pad-svg')`);
+  check(true, 'G opens the drawer with the controller picture');
+  await b.waitFor(`document.querySelector('#pad-status').textContent.includes('as the robot sees it')`);
+  check(await b.eval(`document.querySelector('#pad-legend').textContent.includes('reset forward')`),
+    'it labels what gamepad 1 does in the teleop');
+  await b.waitFor(`[...document.querySelectorAll('#telemetry tr')].some((r) => r.textContent === 'DriverDemo (nobody driving)')`, 3000);
+  check(true, 'nobody is driving yet: the simulator\'s demo driver is (text the OpMode did not change since the restart still shows)');
+  await b.eval(`document.querySelector('#pad-take').click()`);
+  await b.waitFor(`document.querySelector('#pad-take').textContent === 'Release' && !document.querySelector('#pad-pill').hidden`);
+  check(true, 'Take control: the button becomes Release and the top bar shows a Driving pill');
+  await b.waitFor(`[...document.querySelectorAll('#telemetry tr')].some((r) => r.textContent.includes('Dashboard gamepad 1'))`, 3000);
+  check(true, 'the simulated teleop now takes gamepad 1 from the dashboard (the demo driver stops)');
+  await sleep(1500);   // the demo's motion dies down
+  // Push the left stick straight up with the mouse and hold it.
+  const knob = await b.eval(`(() => { const r = document.querySelector('[data-stick="left"] .knob').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, h: r.height }; })()`);
+  const mouse = (type, x, y) => b.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
+  const poseBefore = await b.eval(`document.getElementById('pose-text').textContent`);
+  await mouse('mousePressed', knob.x, knob.y);
+  for (let i = 1; i <= 5; i++) await mouse('mouseMoved', knob.x, knob.y - knob.h * 0.3 * i);
+  await sleep(300);
+  const readout = await b.eval(`document.querySelector('#pad-readout').textContent`);
+  check(/left 0\.00, -1\.00/.test(readout), `dragging the left stick up gives y = -1, like an FTC gamepad (${readout.trim()})`);
+  await sleep(1200);
+  const poseMoving = await b.eval(`document.getElementById('pose-text').textContent`);
+  await mouse('mouseReleased', knob.x, knob.y - knob.h * 1.5);
+  const parsePose = (text) => (text.match(/-?\d+(\.\d+)?/g) || []).map(Number);
+  const [x0, y0] = parsePose(poseBefore), [x1, y1] = parsePose(poseMoving);
+  check(Math.hypot(x1 - x0, y1 - y0) > 10, `the robot drives forward on the field: (${poseBefore}) → (${poseMoving})`);
+  await sleep(200);
+  check(await b.eval(`/left 0\\.00, 0\\.00/.test(document.querySelector('#pad-readout').textContent)`), 'letting go springs the stick back to the middle');
+  await sleep(800);
+  const stopped1 = parsePose(await b.eval(`document.getElementById('pose-text').textContent`));
+  await sleep(700);
+  const stopped2 = parsePose(await b.eval(`document.getElementById('pose-text').textContent`));
+  check(Math.hypot(stopped2[0] - stopped1[0], stopped2[1] - stopped1[1]) < 0.5, 'and the robot stops');
+  // Operator buttons: gamepad 2, A turns the flywheels off.
+  await b.eval(`document.querySelector('#pad-seg [data-pad="2"]').click()`);
+  await b.waitFor(`document.querySelector('#pad-take').textContent === 'Take control' && document.querySelector('#pad-pill').hidden`);
+  check(true, 'switching to gamepad 2 releases gamepad 1');
+  await b.eval(`document.querySelector('#pad-take').click()`);
+  await b.waitFor(`document.querySelector('#pad-take').textContent === 'Release'`);
+  const aButton = await b.eval(`(() => { const r = document.querySelector('[data-btn="a"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+  await mouse('mousePressed', aButton.x, aButton.y);
+  await sleep(250);
+  await mouse('mouseReleased', aButton.x, aButton.y);
+  const flywheelsOn = async () => (await api('/api/settings')).data.items.find((i) => i.group === 'FieldCentricJava' && i.name === 'FLYWHEELS_ON').value;
+  for (let i = 0; i < 30 && await flywheelsOn(); i++) await sleep(100);
+  check(await flywheelsOn() === false,
+    'operator A from the drawer toggles the flywheels off, like on the Driver Station');
+  await mouse('mousePressed', aButton.x, aButton.y);
+  await sleep(250);
+  await mouse('mouseReleased', aButton.x, aButton.y);
+  await b.eval(`document.querySelector('#pad-take').click()`);   // Release
+  await b.waitFor(`document.querySelector('#pad-take').textContent === 'Take control'`);
+
+  // Safety: one driver per gamepad, and inputs that stop count as nothing.
+  const other = new WebSocket(`ws://localhost:${PORT}/ws`);
+  const replies = [];
+  other.onmessage = (event) => { const m = JSON.parse(event.data); if (m.type === 'control') replies.push(m); };
+  await new Promise((resolve) => { other.onopen = resolve; });
+  other.send(JSON.stringify({ type: 'control', pad: 2, take: true }));
+  for (let i = 0; i < 50 && !replies.length; i++) await sleep(50);
+  check(replies[0] && replies[0].owner > 0 && !replies[0].error, 'another browser can take gamepad 2 once it is free');
+  const push = setInterval(() => other.send(JSON.stringify({ type: 'gamepad', pad: 2, axes: [0, 0, 0, 0, 0, 0], buttons: 0 })), 50);
+  await b.waitFor(`document.querySelector('#pad-take').disabled && document.querySelector('#pad-status').textContent.includes('Another browser')`, 3000);
+  check(true, 'while it drives, this browser cannot take gamepad 2 and says who has it');
+  await b.waitFor(`[...document.querySelectorAll('#telemetry tr')].some((r) => r.textContent.includes('Dashboard gamepad 2'))`, 3000);
+  clearInterval(push);   // its inputs stop, the connection stays open
+  await b.waitFor(`[...document.querySelectorAll('#telemetry tr')].some((r) => r.textContent.includes('Demo (nobody driving)'))`, 3000);
+  check(true, 'when its inputs stop arriving the robot ignores that gamepad (all zero) within a moment');
+  other.close();
+  await b.waitFor(`!document.querySelector('#pad-take').disabled`, 3000);
+  check(true, 'when that browser leaves, its gamepad is free again');
+
+  // Control ends with the OpMode.
+  await b.eval(`document.querySelector('#pad-seg [data-pad="1"]').click()`);
+  await b.eval(`document.querySelector('#pad-take').click()`);
+  await b.waitFor(`document.querySelector('#pad-take').textContent === 'Release'`);
+  await api('/api/opmode', { method: 'POST', body: { action: 'stop' } });
+  await b.waitFor(`document.querySelector('#pad-pill').hidden && document.querySelector('#toast').textContent.includes('OpMode stopped')`, 4000);
+  check((await api('/api/state')).data.gamepads.every((owner) => owner === 0), 'stopping the OpMode ends gamepad control (and says so)');
+  check(await b.eval(`document.querySelector('#pad-take').disabled`), 'and Take control waits for an OpMode');
+  await b.screenshot(join(OUT, '1-gamepad.png'));
+  await b.eval(`document.querySelector('#pad-handle').click()`);
+  check(await b.eval(`document.querySelector('#pad-body').hidden`), 'the handle closes the drawer');
+  await api('/api/settings', { method: 'POST', body: { group: 'FieldCentricJava', name: 'FLYWHEELS_ON', value: true } });
+  await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Field Centric (Java)' } });
+  await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
+  await b.waitFor(`document.getElementById('tab-live').innerText.includes('Flywheel compensated F')`, 5000);
+
   // Full size: a chart fills the Live area under the toolbar, and Esc puts it back.
   await b.eval(`document.querySelector('.chart .expand').click()`);
   await sleep(400);

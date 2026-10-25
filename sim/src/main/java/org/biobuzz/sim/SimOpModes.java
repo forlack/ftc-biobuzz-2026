@@ -7,9 +7,11 @@ import org.biobuzz.sim.mirror.FieldCentricJava;
 import org.biobuzz.sim.mirror.MecanumDrive;
 import org.biobuzz.sim.mirror.PedroAutonomous;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
+import org.firstinspires.ftc.teamcode.dashboard.VirtualGamepads;
 import org.firstinspires.ftc.teamcode.lib.Actions;
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
+import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
 import org.firstinspires.ftc.teamcode.lib.Mechanisms;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
@@ -69,7 +71,7 @@ public final class SimOpModes {
     /** Mechanisms on simulated hardware, shared by teleop and autonomous. */
     static final class SimMechanisms implements Mechanisms {
         final SimWorld world;
-        boolean intakeOn, flywheelsOn, stingerDown;
+        boolean intakeOn, intakeReverse, flywheelsOn, stingerDown;
         double flywheelF;
 
         SimMechanisms(SimWorld world) { this.world = world; }
@@ -88,6 +90,13 @@ public final class SimOpModes {
                     && Math.abs(world.nectar.rpm(28) - FieldCentricJava.NECTAR_FLYWHEEL_RPM) < 100;
         }
 
+        /** Like the teleop: holding reverse wins over the toggle; nothing when disabled. */
+        double intakeTarget() {
+            if (!FieldCentricJava.INTAKE_ENABLED) return 0;
+            if (intakeReverse) return -FieldCentricJava.INTAKE_RPM;
+            return intakeOn ? FieldCentricJava.INTAKE_RPM : 0;
+        }
+
         /** Call every loop: applies targets and PIDF from the current settings. */
         void apply() {
             // Same voltage-compensated F as the robot.
@@ -98,7 +107,7 @@ public final class SimOpModes {
             world.intake.setPIDF(FieldCentricJava.INTAKE_P, 0, 0, FieldCentricJava.INTAKE_F);
             world.pollen.setTargetRPM(flywheelsOn ? FieldCentricJava.POLLEN_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
             world.nectar.setTargetRPM(flywheelsOn ? FieldCentricJava.NECTAR_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
-            world.intake.setTargetRPM(intakeRunning() ? FieldCentricJava.INTAKE_RPM : 0, SimWorld.INTAKE_TICKS_PER_REV);
+            world.intake.setTargetRPM(intakeTarget(), SimWorld.INTAKE_TICKS_PER_REV);
             world.setStinger(stingerDown ? FieldCentricJava.STINGER_DOWN : FieldCentricJava.STINGER_UP);
         }
 
@@ -109,7 +118,7 @@ public final class SimOpModes {
             Dash.put("Nectar RPM", world.nectar.rpm(SimWorld.FLYWHEEL_TICKS_PER_REV));
             Dash.put("Nectar target", flywheelsOn ? FieldCentricJava.NECTAR_FLYWHEEL_RPM : 0);
             Dash.put("Intake RPM", world.intake.rpm(SimWorld.INTAKE_TICKS_PER_REV));
-            Dash.put("Intake target", intakeRunning() ? FieldCentricJava.INTAKE_RPM : 0);
+            Dash.put("Intake target", intakeTarget());
             Dash.put("Pollen power", world.pollen.output());
             Dash.put("Nectar power", world.nectar.output());
             Dash.put("Feeding", world.feeding());
@@ -121,11 +130,33 @@ public final class SimOpModes {
         }
     }
 
-    /** "Field Centric (Java)": flywheels and intake as in the real teleop; demo driving and shooting. */
+    /**
+     * "Field Centric (Java)": the real teleop's controls, driven from the dashboard's Gamepad
+     * drawer (VirtualGamepads; the same buttons as FieldCentricJava). With nobody driving, a
+     * pretend driver loops around the field and shoots (Simulator.DEMO_DRIVING / DEMO_SHOOTING).
+     */
     public static final class TeleOp extends SimOpMode {
         private SimMechanisms robot;
         private Follower follower;
-        private double started;
+        private double started, headingZero;
+
+        // Gamepads 1 (drive) and 2 (operate), filled from the dashboard each loop.
+        private final float[] drive = new float[VirtualGamepads.AXES.length];
+        private final boolean[] driveButtons = new boolean[VirtualGamepads.BUTTONS.length];
+        private final float[] operate = new float[VirtualGamepads.AXES.length];
+        private final boolean[] operateButtons = new boolean[VirtualGamepads.BUTTONS.length];
+
+        // Same map as FieldCentricJava.
+        private final Button.Group buttons = new Button.Group();
+        private final Button slowMode = buttons.add(() -> driveButtons[VirtualGamepads.LEFT_BUMPER]);
+        private final Button turboMode = buttons.add(() -> driveButtons[VirtualGamepads.RIGHT_BUMPER]);
+        private final Button resetFront = buttons.add(() -> driveButtons[VirtualGamepads.B]);
+        private final Button forceShoot = buttons.add(() -> driveButtons[VirtualGamepads.A] && driveButtons[VirtualGamepads.RIGHT_BUMPER]);
+        private final Button toggleIntake = buttons.add(() -> operateButtons[VirtualGamepads.X]);
+        private final Button reverseIntake = buttons.add(() -> operateButtons[VirtualGamepads.DPAD_DOWN]);
+        private final Button toggleFlywheels = buttons.add(() -> operateButtons[VirtualGamepads.A]);
+        private final Button gate = buttons.add(() -> operateButtons[VirtualGamepads.RIGHT_BUMPER]);
+        private final Button sting = buttons.add(() -> operateButtons[VirtualGamepads.LEFT_BUMPER]);
 
         @Override public void init() {
             settings.load();
@@ -137,25 +168,70 @@ public final class SimOpModes {
         @Override public void start() {
             robot.intake(true);
             started = world.time();
+            headingZero = world.pose()[2];
         }
 
         @Override public void loop() {
-            robot.flywheels(FieldCentricJava.FLYWHEELS_ON);
-            // Pretend driver: a gentle loop around the field, and a volley every 6 seconds.
+            boolean driving = read(1, drive, driveButtons);
+            boolean operating = read(2, operate, operateButtons);
+            buttons.update();
             double t = world.time() - started;
-            if (Simulator.DEMO_DRIVING) {
+
+            if (driving) {
+                driveFieldCentric();
+            } else if (Simulator.DEMO_DRIVING && !operating) {
+                // Pretend driver: a gentle loop around the field.
                 follower.manual(0.35 * MecanumDrive.INITIAL_SPEED, 0.0, 0.25);
             } else {
                 follower.manual(0, 0, 0);
             }
             follower.update();
-            boolean volley = Simulator.DEMO_SHOOTING && FieldCentricJava.FLYWHEELS_ON && (t % 6.0) > 4.5;
-            robot.feed(volley || Simulator.FEED);
+
+            if (toggleIntake.pressed()) robot.intake(!robot.intakeOn);
+            robot.intakeReverse = reverseIntake.down();
+            if (toggleFlywheels.pressed()) FieldCentricJava.FLYWHEELS_ON = !FieldCentricJava.FLYWHEELS_ON;
+            robot.flywheels(FieldCentricJava.FLYWHEELS_ON);
+            robot.stinger(sting.down());
+            boolean volley = !driving && !operating && Simulator.DEMO_SHOOTING
+                    && FieldCentricJava.FLYWHEELS_ON && (t % 6.0) > 4.5;
+            robot.feed(volley || Simulator.FEED || gate.down() || forceShoot.down());
+
             robot.apply();
             robot.telemetry();
-            Dash.put("Intake", !FieldCentricJava.INTAKE_ENABLED ? "DISABLED (Tune tab)" : robot.intakeOn ? "ON" : "OFF");
+            Dash.put("Intake", !FieldCentricJava.INTAKE_ENABLED ? "DISABLED (Tune tab)"
+                    : robot.intakeReverse ? "REVERSE" : robot.intakeOn ? "ON" : "OFF");
+            Dash.put("Driver", driving || operating
+                    ? "Dashboard gamepad " + (driving && operating ? "1 + 2" : driving ? "1" : "2")
+                    : Simulator.DEMO_DRIVING ? "Demo (nobody driving)" : "Nobody");
             Dash.put("Settings", settings.status());
             common();
+        }
+
+        /** Gamepad {@code number} from the dashboard, or all zero when nobody drives it. */
+        private static boolean read(int number, float[] axes, boolean[] pressed) {
+            if (VirtualGamepads.read(number, axes, pressed)) return true;
+            java.util.Arrays.fill(axes, 0);
+            java.util.Arrays.fill(pressed, false);
+            return false;
+        }
+
+        /** MecanumDrive.drive's field-centric math, sent to Pedro's drivetrain. */
+        private void driveFieldCentric() {
+            double strafe = ignoreDrift(drive[VirtualGamepads.LEFT_STICK_X]);
+            double forward = ignoreDrift(-drive[VirtualGamepads.LEFT_STICK_Y]);
+            double turn = ignoreDrift(drive[VirtualGamepads.RIGHT_STICK_X]);
+            double speed = slowMode.down() ? MecanumDrive.SLOW_SPEED
+                    : turboMode.down() ? MecanumDrive.TURBO_SPEED : MecanumDrive.INITIAL_SPEED;
+            double yaw = world.pose()[2] - headingZero;
+            double right = strafe * Math.cos(yaw) + forward * Math.sin(yaw);
+            double ahead = -strafe * Math.sin(yaw) + forward * Math.cos(yaw);
+            // Pedro: strafe is to the left, turn counter-clockwise.
+            follower.manual(ahead * speed, -right * speed, -turn * speed);
+            if (resetFront.down()) headingZero = world.pose()[2];
+        }
+
+        private static double ignoreDrift(double value) {
+            return Math.abs(value) < MecanumDrive.STICK_DEADZONE ? 0.0 : value;
         }
 
         @Override public void stop() {
