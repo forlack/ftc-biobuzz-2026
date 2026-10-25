@@ -72,10 +72,10 @@ public class PedroAutonomous extends OpMode {
         intake = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD, 145.1);
         intake.setPIDF(FieldCentricJava.INTAKE_P, 0, 0, FieldCentricJava.INTAKE_F);
         shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
-        shooterPollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, 0,
+        shooterPollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, FieldCentricJava.POLLEN_FLYWHEEL_I,
                 FieldCentricJava.POLLEN_FLYWHEEL_D, FieldCentricJava.FLYWHEEL_F);
         shooterNectar = new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD);
-        shooterNectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, 0,
+        shooterNectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, FieldCentricJava.NECTAR_FLYWHEEL_I,
                 FieldCentricJava.NECTAR_FLYWHEEL_D, FieldCentricJava.FLYWHEEL_F);
 
         transportPollen = hardwareMap.get(CRServo.class, "transportPollen");
@@ -195,13 +195,15 @@ public class PedroAutonomous extends OpMode {
         flywheelVoltage = FieldCentricJava.flywheelBatteryVoltage(hardwareMap, flywheelVoltage);
         double f = FieldCentricJava.compensatedFlywheelF(flywheelVoltage);
         if (f != shooterPollen.getF() || FieldCentricJava.POLLEN_FLYWHEEL_P != shooterPollen.getP()
+                || FieldCentricJava.POLLEN_FLYWHEEL_I != shooterPollen.getI()
                 || FieldCentricJava.POLLEN_FLYWHEEL_D != shooterPollen.getD()) {
-            shooterPollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, 0,
+            shooterPollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, FieldCentricJava.POLLEN_FLYWHEEL_I,
                     FieldCentricJava.POLLEN_FLYWHEEL_D, f);
         }
         if (f != shooterNectar.getF() || FieldCentricJava.NECTAR_FLYWHEEL_P != shooterNectar.getP()
+                || FieldCentricJava.NECTAR_FLYWHEEL_I != shooterNectar.getI()
                 || FieldCentricJava.NECTAR_FLYWHEEL_D != shooterNectar.getD()) {
-            shooterNectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, 0,
+            shooterNectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, FieldCentricJava.NECTAR_FLYWHEEL_I,
                     FieldCentricJava.NECTAR_FLYWHEEL_D, f);
         }
     }

@@ -34,6 +34,31 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   ~200 KB/s at 100 Hz, even with no viewer); if robot loop times show GC spikes, reuse maps.
 - Flywheel Tuner on this branch also feeds the Live tab's Flywheels chart (RPM only, no target
   lines); results still applied with A and saved to robot.json.
+- **First robot test (2026-10-24, from Linux):** dashboard works on the hub. Load card with
+  Field Centric running and nobody on Live: loop 23.4 ms (43/s), Dashboard in loop 0.28 ms,
+  dashboard CPU 1.8% of a core, whole app 86% of a core (~21% of the hub). Deploy issue that day:
+  `installDebug` "Adb connection Error:EOF" with Android Studio open (it manages adb too); fixed
+  by quitting Studio. Old flywheel tuner gave identical wheels P 30 vs 100 (see below).
+- **Loop time (2026-10-24):** teleop uses `LynxModule` bulk caching (MANUAL, cleared at the top
+  of each loop) and sends section timers `Time drive ms` (incl. IMU), `Time intake+servos ms`,
+  `Time shooter ms`, `Time sensors+telemetry ms` (incl. bulk reads). Not yet run on the robot:
+  compare `Loop ms` to 23.4 ms and see which section dominates before optimising further
+  (suspects: Control Hub IMU read; repeated servo/target writes, which the SDK may already skip).
+- **Flywheel tuner rebuilt (2026-10-24):** procedure in plain-Java `lib/FlywheelTuning` (Rig
+  interface), OpMode `helpers/FlywheelTuner` is the hardware Rig; desktop check
+  `tests/java/FlywheelTuningCheck.java` runs the same procedure on a model (hub PIDF every 20 ms,
+  I summed per cycle, 20 ticks/s speed steps + noise). Why the old one disagreed: each wheel
+  tried multiples of its own P and a single noisy run picked the "fastest"; with a good F the
+  cost is nearly flat over P≈100-300, so it was luck. New: F from two powers, converted to F at
+  12.5 V with the robot's compensation slope (F_AT_10V keeps the ratio); the same P grid
+  {25..300} on both wheels x3 repeats; cost = mean |error| + steady error + wobble + overshoot
+  penalty over a 70%->100% step (0.1 s smoothing); P = smallest within 0.1% of a fitted
+  a + b/P + c*P curve's best; I {0.5, 1, 3} then D {2, 5} kept only if they cut cost by 0.5%.
+  Model: identical wheels get the same P (150, at most one grid step apart) in 8/8 runs.
+  New settings `POLLEN_FLYWHEEL_I` / `NECTAR_FLYWHEEL_I` (default 0) used by teleop, auton, sim.
+  Results: summary on DS + dashboard (addData), every trial's score dashboard-only (Dash.put).
+  The hub's real I scaling is inferred (SDK default P10/I3/F0 must reach speed), not measured.
+  The sim's motor model now also sums I per cycle.
 - **Next after the first robot test (agreed 2026-10-24): virtual gamepad.** A drawer at the
   bottom of every tab (labelled handle "🎮 Gamepad ▲", lights up when a laptop controller is
   detected, G toggles, pushes content up). Controller image like Panels': draggable sticks,
@@ -187,7 +212,8 @@ into dashboard themselves. Dashboard branch has not been deployed or merged here
   `TeamCode/src/tuning/java`; `TeamCode/build.gradle` adds that folder and the dependency
   only with `-Ptuning`. Deploy with `./deploy-linux --tuning` (or `./deploy --tuning`) to tune;
   a normal deploy removes it again. Verified: normal APK has no autotune classes.
-- **Flywheel Tuner** (`helpers/FlywheelTuner`, Diagnostics): both flywheels at their
+- **Flywheel Tuner** (`helpers/FlywheelTuner`, Diagnostics): *superseded on branch
+  `dashboard` 2026-10-24 (see the top section); this describes main's.* Both flywheels at their
   robot.json target RPMs. F from a two-point speed-vs-power line (0.4 and 0.8 power, no
   encoder) solved for the power at target: F = 32767 × power / target ticks/s. P from step
   tests (70% → 100%) at 0.25–3× the current P: fastest settle within 2% with overshoot ≤ 5%
@@ -860,7 +886,7 @@ after deployment to validate these values on hardware.
 | `FieldCentricJava` | Field Centric (Java) | Drive | Java port of the Blocks teleop |
 | `helpers.MotorsTest` | Motors Test | Diagnostics | Robot- and motor-level direction checks |
 | `helpers.LocalizationCheck` | Localization Check | Diagnostics | Pinpoint direction and distance check |
-| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Measures flywheel F and P; A saves to `robot.json` |
+| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Measures flywheel F, P, I, D (~2 min); A saves to `robot.json` |
 | `PedroAutonomous` | Pedro Pathing Autonomous | — | Out-and-back path, state machine |
 | `pedroPathing.Tuning` | Tuning | — | Official Pedro tuning suite (menu of routines) |
 

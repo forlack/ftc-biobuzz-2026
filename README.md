@@ -272,7 +272,7 @@ All team code lives in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`.
 | `FieldCentricJava` | Field Centric (Java) | Drive | Main teleop |
 | `helpers.MotorsTest` | Motors Test | Diagnostics | Per-motor and robot-level direction checks |
 | `helpers.LocalizationCheck` | Localization Check | Diagnostics | Pinpoint direction and distance check |
-| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Measures flywheel F and P; A saves to `robot.json` |
+| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Measures flywheel F, P, I, D (~2 min, results also on the dashboard); A saves to `robot.json` |
 | `PedroAutonomous` | Pedro Pathing Autonomous | Autonomous | SD-card Pedro export: shoot, then park |
 | `pedroPathing.Tuning` | Tuning | — | Official Pedro tuning suite |
 

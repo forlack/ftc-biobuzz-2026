@@ -93,8 +93,8 @@ public final class SimOpModes {
             // Same voltage-compensated F as the robot.
             flywheelF = FlywheelCompensation.f(world.battery(), FieldCentricJava.FLYWHEEL_VOLTAGE_COMPENSATION,
                     FieldCentricJava.FLYWHEEL_F, FieldCentricJava.FLYWHEEL_F_AT_10V);
-            world.pollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, 0, FieldCentricJava.POLLEN_FLYWHEEL_D, flywheelF);
-            world.nectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, 0, FieldCentricJava.NECTAR_FLYWHEEL_D, flywheelF);
+            world.pollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, FieldCentricJava.POLLEN_FLYWHEEL_I, FieldCentricJava.POLLEN_FLYWHEEL_D, flywheelF);
+            world.nectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, FieldCentricJava.NECTAR_FLYWHEEL_I, FieldCentricJava.NECTAR_FLYWHEEL_D, flywheelF);
             world.intake.setPIDF(FieldCentricJava.INTAKE_P, 0, 0, FieldCentricJava.INTAKE_F);
             world.pollen.setTargetRPM(flywheelsOn ? FieldCentricJava.POLLEN_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
             world.nectar.setTargetRPM(flywheelsOn ? FieldCentricJava.NECTAR_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);

@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
@@ -17,6 +18,8 @@ import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
 import org.firstinspires.ftc.teamcode.lib.MecanumDrive;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
+
+import java.util.List;
 
 /**
  * Field-centric teleop. Java version of the Blocks OpMode "Field Centric (Best)".
@@ -61,11 +64,13 @@ public class FieldCentricJava extends LinearOpMode {
     // Pollen flywheel.
     public static double POLLEN_FLYWHEEL_RPM = 3400;
     public static double POLLEN_FLYWHEEL_P = 100;
+    public static double POLLEN_FLYWHEEL_I = 0;
     public static double POLLEN_FLYWHEEL_D = 0;
 
     // Nectar flywheel.
     public static double NECTAR_FLYWHEEL_RPM = 3650;
     public static double NECTAR_FLYWHEEL_P = 125;
+    public static double NECTAR_FLYWHEEL_I = 0;
     public static double NECTAR_FLYWHEEL_D = 0;
 
     /** Stinger servo end points, 0 to 1. */
@@ -111,6 +116,7 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button sting           = buttons.add(() -> operate.left_bumper);
 
     private RobotSettings settings;
+    private List<LynxModule> hubs;
     private long lastLoop, nextBatteryRead;
     private double batteryVolts = 12.5;
     private double appliedFlywheelF = FLYWHEEL_F;
@@ -123,6 +129,13 @@ public class FieldCentricJava extends LinearOpMode {
         // Everything sent to telemetry also reaches the Total Chaos Dashboard.
         telemetry = new DashboardTelemetry(telemetry);
 
+        // Bulk reads: the first motor read in a loop fetches every encoder value of that hub in
+        // one call, instead of one call per motor. Cleared at the top of each loop.
+        hubs = hardwareMap.getAll(LynxModule.class);
+        for (LynxModule hub : hubs) {
+            hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL);
+        }
+
         // Drive.
         chassis = new MecanumDrive(hardwareMap);
 
@@ -133,7 +146,7 @@ public class FieldCentricJava extends LinearOpMode {
 
         // Pollen shooter and feed.
         shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
-        shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, 0, POLLEN_FLYWHEEL_D, FLYWHEEL_F);
+        shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, POLLEN_FLYWHEEL_I, POLLEN_FLYWHEEL_D, FLYWHEEL_F);
         triggerPollen = hardwareMap.get(CRServo.class, "triggerPollen");
         triggerPollen.setDirection(DcMotorSimple.Direction.REVERSE);
         transportPollen = hardwareMap.get(CRServo.class, "transportPollen");
@@ -141,7 +154,7 @@ public class FieldCentricJava extends LinearOpMode {
 
         // Nectar shooter and feed.
         shooterNectar = new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD);
-        shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, 0, NECTAR_FLYWHEEL_D, FLYWHEEL_F);
+        shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, NECTAR_FLYWHEEL_I, NECTAR_FLYWHEEL_D, FLYWHEEL_F);
         triggerNectar = hardwareMap.get(CRServo.class, "triggerNectar");
         transportNectar = hardwareMap.get(CRServo.class, "transportNectar");
         stinger = hardwareMap.get(Servo.class, "stinger");
@@ -158,12 +171,25 @@ public class FieldCentricJava extends LinearOpMode {
         toggleIntake.active = true;   // intake starts on; D-pad Up still toggles it
 
         while (opModeIsActive()) {
+            long start = System.nanoTime();
+            for (LynxModule hub : hubs) {
+                hub.clearBulkCache();
+            }
             readGamepad();
             updateDriving();
+            long driven = System.nanoTime();
             updateIntake();
             updateServos();
+            long mechanisms = System.nanoTime();
             updateShooter();
+            long shot = System.nanoTime();
             updateTelemetry();
+            // Where the loop time goes (Live tab charts). The rest of Loop ms is sending the
+            // telemetry to the Driver Station and the SDK between loops.
+            Dash.put("Time drive ms", (driven - start) / 1e6);
+            Dash.put("Time intake+servos ms", (mechanisms - driven) / 1e6);
+            Dash.put("Time shooter ms", (shot - mechanisms) / 1e6);
+            Dash.put("Time sensors+telemetry ms", (System.nanoTime() - shot) / 1e6);
             dashboard.update();
         }
     }
@@ -254,13 +280,13 @@ public class FieldCentricJava extends LinearOpMode {
             nextBatteryRead = now + 250_000_000L;
         }
         appliedFlywheelF = compensatedFlywheelF(batteryVolts);
-        if (POLLEN_FLYWHEEL_P != shooterPollen.getP()
+        if (POLLEN_FLYWHEEL_P != shooterPollen.getP() || POLLEN_FLYWHEEL_I != shooterPollen.getI()
                 || POLLEN_FLYWHEEL_D != shooterPollen.getD() || appliedFlywheelF != shooterPollen.getF()) {
-            shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, 0, POLLEN_FLYWHEEL_D, appliedFlywheelF);
+            shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, POLLEN_FLYWHEEL_I, POLLEN_FLYWHEEL_D, appliedFlywheelF);
         }
-        if (NECTAR_FLYWHEEL_P != shooterNectar.getP()
+        if (NECTAR_FLYWHEEL_P != shooterNectar.getP() || NECTAR_FLYWHEEL_I != shooterNectar.getI()
                 || NECTAR_FLYWHEEL_D != shooterNectar.getD() || appliedFlywheelF != shooterNectar.getF()) {
-            shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, 0, NECTAR_FLYWHEEL_D, appliedFlywheelF);
+            shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, NECTAR_FLYWHEEL_I, NECTAR_FLYWHEEL_D, appliedFlywheelF);
         }
         // Flips the same switch the Tune tab shows, so the button and the dashboard always agree.
         if (toggleFlywheels.pressed()) {
