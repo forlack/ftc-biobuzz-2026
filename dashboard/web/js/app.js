@@ -40,6 +40,9 @@ const select = document.getElementById('op-select');
 
 function showState(next) {
   const first = !state;
+  // The OpMode stopped or another one started: its telemetry no longer applies (the charts
+  // keep their history).
+  if (!first && next.active !== state.active) live.clearTelemetry(next.time);
   state = next;
   document.getElementById('robot-name').textContent = next.robot;
   document.getElementById('sim-badge').hidden = !next.simulated;

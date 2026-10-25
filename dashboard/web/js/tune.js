@@ -1,6 +1,17 @@
 // Tune tab: every setting, live editing, Save to robot.
 import { api, escapeHtml, toast } from './api.js';
 
+// Groups hidden or shown in this browser, overriding the code's @Configurable.Hidden.
+const HIDDEN_KEY = 'biobuzz.hiddenGroups';
+function hiddenOverrides() {
+  try { return JSON.parse(localStorage.getItem(HIDDEN_KEY)) || {}; } catch { return {}; }
+}
+function setHidden(group, hidden) {
+  const overrides = hiddenOverrides();
+  overrides[group] = hidden;
+  try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(overrides)); } catch { /* private window */ }
+}
+
 export class TuneTab {
   constructor() {
     this.items = [];
@@ -40,13 +51,33 @@ export class TuneTab {
     const holder = document.getElementById('settings');
     const focused = document.activeElement && document.activeElement.dataset.key;
     holder.innerHTML = '';
+    const overrides = hiddenOverrides();
+    const hidden = [];
     for (const [group, items] of groups) {
+      if (overrides[group] ?? items[0].hidden) {
+        hidden.push([group, items]);
+        continue;
+      }
       const card = document.createElement('div');
       card.className = 'card';
-      card.innerHTML = `<div class="card-head"><h3>${escapeHtml(group)}</h3><span class="muted">${items.length}</span></div>`;
+      card.dataset.group = group;
+      card.innerHTML = `<div class="card-head"><h3>${escapeHtml(group)}</h3>
+        <span class="muted">${items.length} <button class="btn small hide-group" title="Hide this group on the Tune tab (this browser). It still loads and saves.">Hide</button></span></div>`;
+      card.querySelector('.hide-group').addEventListener('click', () => { setHidden(group, true); this.show(data); });
       for (const item of items) card.appendChild(this.row(item));
       holder.appendChild(card);
     }
+    const shelf = document.getElementById('settings-hidden');
+    shelf.hidden = hidden.length === 0;
+    shelf.innerHTML = hidden.length ? `<span class="muted">Hidden:</span> ` + hidden.map(([group, items]) => {
+      const changed = items.filter((i) => i.saved && !inSync(i)).length;
+      return `<span class="hidden-group">${escapeHtml(group)} <span class="muted">(${items.length}${changed ? `, <b class="warn-text">${changed} not saved</b>` : ''})</span>
+        <button class="btn small" data-show="${escapeHtml(group)}">Show</button></span>`;
+    }).join(' ') : '';
+    shelf.querySelectorAll('[data-show]').forEach((button) => button.addEventListener('click', () => {
+      setHidden(button.dataset.show, false);
+      this.show(data);
+    }));
     if (focused) {
       const again = holder.querySelector(`[data-key="${CSS.escape(focused)}"]`);
       if (again) again.focus();

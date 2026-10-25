@@ -138,6 +138,10 @@ table.kv td:last-child { text-align: right; font-family: var(--mono); font-varia
 
 /* ---- Tune ------------------------------------------------------------------- */
 .settings { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 14px; align-items: start; }
+.settings-hidden { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 14px; }
+.settings-hidden .hidden-group { display: inline-flex; align-items: center; gap: 6px; }
+.hide-group { margin-left: 8px; }
+.warn-text { color: var(--honey); }
 .setting-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 70px; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #222a35; }
 .setting-row:last-child { border-bottom: 0; }
 .setting-name { font-family: var(--mono); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }

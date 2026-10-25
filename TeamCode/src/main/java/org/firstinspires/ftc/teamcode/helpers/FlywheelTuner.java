@@ -28,6 +28,7 @@ import java.util.Locale;
  * Both wheels spin up to full speed: keep hands and balls clear.
  */
 @Configurable
+@Configurable.Hidden   // only needed while tuning: Show it on the Tune tab
 @TeleOp(name = "Flywheel Tuner", group = "Diagnostics")
 public class FlywheelTuner extends LinearOpMode {
 

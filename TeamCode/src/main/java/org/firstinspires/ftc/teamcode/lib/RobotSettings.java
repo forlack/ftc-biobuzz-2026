@@ -252,6 +252,8 @@ public class RobotSettings {
                 boolean saved = isSetting(field);
                 JSONObject item = new JSONObject();
                 item.put("group", settingsClass.getSimpleName());
+                item.put("hidden", settingsClass.isAnnotationPresent(
+                        org.firstinspires.ftc.teamcode.dashboard.Configurable.Hidden.class));
                 item.put("name", field.getName());
                 item.put("type", typeName(field.getType()));
                 item.put("value", safeGet(field));

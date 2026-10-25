@@ -35,6 +35,7 @@ Imports: `org.firstinspires.ftc.teamcode.dashboard.Configurable`,
 |---|---|---|
 | Tune a number live and save it | `@Configurable` on the class, `public static double X = 1;` | Tune tab, `robot.json` |
 | A live switch that is never saved | `@RobotSettings.NotSaved` on the field | Tune tab |
+| Settings only needed sometimes (a tuner) | `@Configurable.Hidden` on the class as well | Tune tab, under **Hidden** until you click Show |
 | Load saved values at INIT | `new RobotSettings().load();` | — |
 | Show a value to drivers and chart it | `telemetry.addData("Name", value)` | Driver Station + Live tab |
 | Show it formatted, still chartable | `telemetry.addData("Battery", "%.2f V", volts)` | Driver Station shows `12.35 V`, chart gets the number |

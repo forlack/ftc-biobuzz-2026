@@ -62,6 +62,14 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   reports per cycle: time to ready (within RPM_TOLERANCE, teleop's "ready"; avg of last 5),
   overshoot, average error over the last 0.5 s (DS + dashboard; `… time to ready s` and
   `… overshoot RPM` chartable). Save with the Tune tab. Per-wheel `*_FLYWHEEL_I` settings stay.
+- **Tune tab hiding (2026-10-24):** `@Configurable.Hidden` (nested in `dashboard/Configurable`)
+  on a class lists it under "Hidden" at the bottom of the Tune tab (FlywheelTuner has it);
+  every group has Hide, hidden ones have Show; overrides per browser in localStorage
+  `biobuzz.hiddenGroups`. Display only: hidden settings still load and save. RobotSettings
+  describe() sends `hidden`; the sim's mirror generator copies the annotation.
+- **Live telemetry table clears** when the active OpMode stops or changes (app.js showState →
+  `live.clearTelemetry(state.time)`); frames older than that robot time still reach the charts
+  but not the table (they are in flight when Stop returns). Charts keep their history.
 - **Loop spikes still there after the battery-read fix (user deployed 0962556):** so the
   dashboard was not the cause. Next evidence: `adb logcat -v time | grep -iE "GC|art"` during
   teleop (GC pauses ~2/s would explain it), else the SDK's own periodic hub traffic.

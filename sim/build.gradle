@@ -83,12 +83,13 @@ tasks.register('generateMirrors') {
                     body << "    public static ${m.group(1)} ${m.group(2)} = ${m.group(3)};\n"
                 }
             }
+            def hidden = lines.any { it.trim().startsWith('@Configurable.Hidden') } ? '@org.firstinspires.ftc.teamcode.dashboard.Configurable.Hidden\n' : ''
             new File(folder, "${name}.java").text = """package org.biobuzz.sim.mirror;
 
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 
 /** GENERATED from TeamCode/src/main/java/${relative} by sim/build.gradle. Do not edit. */
-public final class ${name} {
+${hidden}public final class ${name} {
 ${body}}
 """
             classes << "${name}.class"

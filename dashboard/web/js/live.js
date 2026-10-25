@@ -254,9 +254,20 @@ export class LiveTab {
     this.dirty = true;
   }
 
-  /** New frames from the websocket. */
+  /**
+   * Empties the telemetry table (the OpMode stopped or changed); charts are kept. Frames from
+   * before {@code robotTime} (still on their way) go to the charts but not back into the table.
+   */
+  clearTelemetry(robotTime) {
+    this.latest = {};
+    this.latestText = {};
+    this.tableFrom = robotTime ?? null;
+    this.dirty = true;
+  }
+
   /** The robot app restarted: start the charts over. */
   reset() {
+    this.tableFrom = null;
     this.frames = [];
     this.trail = [];
     this.lastSeq = 0;
@@ -268,11 +279,13 @@ export class LiveTab {
       if (frame.seq <= (this.lastSeq || 0)) continue;   // already have it (catch-up after a tab switch)
       this.lastSeq = frame.seq;
       this.frames.push(frame);
-      Object.assign(this.latest, frame.n);
-      for (const key of Object.keys(frame.n)) delete this.latestText[key];
-      if (frame.s) {
-        Object.assign(this.latestText, frame.s);
-        for (const key of Object.keys(frame.s)) delete this.latest[key];
+      if (this.tableFrom == null || frame.t >= this.tableFrom) {   // not from before a stop
+        Object.assign(this.latest, frame.n);
+        for (const key of Object.keys(frame.n)) delete this.latestText[key];
+        if (frame.s) {
+          Object.assign(this.latestText, frame.s);
+          for (const key of Object.keys(frame.s)) delete this.latest[key];
+        }
       }
       if (frame.pose) {
         this.lastPose = frame.pose;

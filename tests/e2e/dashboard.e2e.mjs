@@ -122,6 +122,14 @@ try {
   check(/Flywheel compensated F\s+11\b/.test(liveText),
     'the flywheel F follows the battery: 11 with the simulator\'s full battery');
 
+  // Stopping the OpMode clears its telemetry from the table (charts keep their history).
+  await b.eval(`document.querySelector('#op-stop').click()`);
+  await b.waitFor(`!document.getElementById('tab-live').innerText.includes('Flywheel compensated F')`, 5000);
+  check(true, 'after Stop the telemetry table no longer shows the stopped OpMode\'s values');
+  await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Field Centric (Java)' } });
+  await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
+  await b.waitFor(`document.getElementById('tab-live').innerText.includes('Flywheel compensated F')`, 5000);
+
   // Full size: a chart fills the Live area under the toolbar, and Esc puts it back.
   await b.eval(`document.querySelector('.chart .expand').click()`);
   await sleep(400);
@@ -185,6 +193,13 @@ try {
     'freshly loaded settings all show a green (in sync) dot');
   const routeOptions = await b.eval(`[...document.querySelectorAll('[data-key="PedroAutonomous.ROUTE"] option')].map((o) => o.value)`);
   check(routeOptions.includes('saturday'), `PedroAutonomous.ROUTE is a dropdown of the autons on the robot: ${routeOptions.join(', ')}`);
+  const tunerShown = () => b.eval(`!!document.querySelector('#settings [data-group="FlywheelTuner"]')`);
+  check(!(await tunerShown()) && (await b.eval(`document.getElementById('settings-hidden').innerText`)).includes('FlywheelTuner'),
+    '@Configurable.Hidden: FlywheelTuner is listed under Hidden, not as a group');
+  await b.eval(`document.querySelector('#settings-hidden [data-show="FlywheelTuner"]').click()`);
+  check(await tunerShown(), 'Show puts it back on the Tune tab');
+  await b.eval(`document.querySelector('#settings [data-group="FlywheelTuner"] .hide-group').click()`);
+  check(!(await tunerShown()), 'and Hide hides it again (remembered in this browser)');
   await b.eval(`(() => {
     const input = document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]');
     input.value = '3000';

@@ -20,7 +20,17 @@ import java.lang.annotation.Target;
  *
  * Found automatically, on the robot and in the simulator. A live switch that should never be
  * saved gets {@code @RobotSettings.NotSaved}.
+ *
+ * A class whose settings are only for occasional use (a tuner, a test) can also get
+ * {@code @Configurable.Hidden}: the Tune tab then lists it under "Hidden" until someone clicks
+ * Show. It is still loaded and saved like any other.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
-public @interface Configurable {}
+public @interface Configurable {
+
+    /** Hidden on the Tune tab unless shown there (each browser remembers). */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    @interface Hidden {}
+}
