@@ -58,7 +58,8 @@ public class SimWorld {
                     integral = 0;
                 } else {
                     double error = target - measured;
-                    // Integrated per second (see tests/java/FlywheelTuningCheck for why).
+                    // Integrated per second: on the robot the cost kept falling as I rose to 3, which
+                    // a per-cycle sum (I = 3 overshooting badly) contradicted.
                     integral = clamp(integral + error * 0.02, -20000, 20000);
                     double derivative = (error - lastError) / 0.02;
                     lastError = error;

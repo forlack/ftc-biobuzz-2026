@@ -52,31 +52,19 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   `Time shooter ms`, `Time sensors+telemetry ms` (incl. bulk reads). Not yet run on the robot:
   compare `Loop ms` to 23.4 ms and see which section dominates before optimising further
   (suspects: Control Hub IMU read; repeated servo/target writes, which the SDK may already skip).
-- **Flywheel tuner, second version (2026-10-24, after a robot run):** the first rebuild chose
-  P 25 (its lowest) and I = D = 0 on the robot while I 3 and D 5 (its highest) still lowered
-  the cost. Now: both wheels' scores pooled into one shared answer (applied to both); P coarse
-  {5,10,20,35,50} then narrowing in (and past an end); I from 3 and D from 5, growing x1.6
-  while the cost keeps falling (cap 60, at least 3 tries); then P re-checked at x0.7 and x1.4
-  with the chosen I and D; a value must beat the noise (2 x combined standard error, at least
-  0.1%) to win, ties go to the gentler setting; reports the range of P that is "just as good".
-  ~19 trials, ~2.5 min. The model now integrates I per second (the robot's I kept helping up
-  to 3, which the per-cycle model contradicted); the sim's motor model too.
-  Details of the first rebuild, still true where not replaced:
-- **Flywheel tuner rebuilt (2026-10-24):** procedure in plain-Java `lib/FlywheelTuning` (Rig
-  interface), OpMode `helpers/FlywheelTuner` is the hardware Rig; desktop check
-  `tests/java/FlywheelTuningCheck.java` runs the same procedure on a model (hub PIDF every 20 ms,
-  I summed per cycle, 20 ticks/s speed steps + noise). Why the old one disagreed: each wheel
-  tried multiples of its own P and a single noisy run picked the "fastest"; with a good F the
-  cost is nearly flat over P≈100-300, so it was luck. New: F from two powers, converted to F at
-  12.5 V with the robot's compensation slope (F_AT_10V keeps the ratio); the same P grid
-  {25..300} on both wheels x3 repeats; cost = mean |error| + steady error + wobble + overshoot
-  penalty over a 70%->100% step (0.1 s smoothing); P = smallest within 0.1% of a fitted
-  a + b/P + c*P curve's best; I {0.5, 1, 3} then D {2, 5} kept only if they cut cost by 0.5%.
-  Model: identical wheels get the same P (150, at most one grid step apart) in 8/8 runs.
-  New settings `POLLEN_FLYWHEEL_I` / `NECTAR_FLYWHEEL_I` (default 0) used by teleop, auton, sim.
-  Results: summary on DS + dashboard (addData), every trial's score dashboard-only (Dash.put).
-  The hub's real I scaling is inferred (SDK default P10/I3/F0 must reach speed), not measured.
-  The sim's motor model now also sums I per cycle.
+- **Flywheel Tuner is now a hand-tuning loop (2026-10-24, user's call):** two automatic
+  versions (procedure + desktop model, in git history before this change: `lib/FlywheelTuning`,
+  `tests/java/FlywheelTuningCheck.java`, commit 0962556) disagreed with the robot: they chose
+  P 25 while P 50 visibly reached the setpoint faster. Their score weighted steady wobble; what
+  matters is recovering quickly after a shot. Now `helpers/FlywheelTuner` cycles both wheels
+  between LOW_PERCENT (70) of target for LOW_SECONDS (1) and the target for HIGH_SECONDS (2)
+  until STOP, applying the Tune tab's FLYWHEEL_F (compensated) and per-wheel P/I/D live, and
+  reports per cycle: time to ready (within RPM_TOLERANCE, teleop's "ready"; avg of last 5),
+  overshoot, average error over the last 0.5 s (DS + dashboard; `… time to ready s` and
+  `… overshoot RPM` chartable). Save with the Tune tab. Per-wheel `*_FLYWHEEL_I` settings stay.
+- **Loop spikes still there after the battery-read fix (user deployed 0962556):** so the
+  dashboard was not the cause. Next evidence: `adb logcat -v time | grep -iE "GC|art"` during
+  teleop (GC pauses ~2/s would explain it), else the SDK's own periodic hub traffic.
 - **Next after the first robot test (agreed 2026-10-24): virtual gamepad.** A drawer at the
   bottom of every tab (labelled handle "🎮 Gamepad ▲", lights up when a laptop controller is
   detected, G toggles, pushes content up). Controller image like Panels': draggable sticks,
@@ -904,7 +892,7 @@ after deployment to validate these values on hardware.
 | `FieldCentricJava` | Field Centric (Java) | Drive | Java port of the Blocks teleop |
 | `helpers.MotorsTest` | Motors Test | Diagnostics | Robot- and motor-level direction checks |
 | `helpers.LocalizationCheck` | Localization Check | Diagnostics | Pinpoint direction and distance check |
-| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Measures flywheel F, P, I, D (~2 min); A saves to `robot.json` |
+| `helpers.FlywheelTuner` | Flywheel Tuner | Diagnostics | Cycles the flywheels low/target until STOP; tune F, P, I, D live on the Tune tab |
 | `PedroAutonomous` | Pedro Pathing Autonomous | — | Out-and-back path, state machine |
 | `pedroPathing.Tuning` | Tuning | — | Official Pedro tuning suite (menu of routines) |
 

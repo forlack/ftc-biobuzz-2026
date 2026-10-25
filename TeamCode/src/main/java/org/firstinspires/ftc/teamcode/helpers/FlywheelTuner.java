@@ -1,188 +1,191 @@
 package org.firstinspires.ftc.teamcode.helpers;
 
+import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 import org.firstinspires.ftc.teamcode.FieldCentricJava;
+import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
-import org.firstinspires.ftc.teamcode.lib.FlywheelTuning;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
+import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 
 import java.util.Locale;
 
 /**
- * Finds F, P, I and D for the flywheels at the target RPMs from robot.json / FieldCentricJava.
- * The procedure is in lib/FlywheelTuning (checked on the desktop by tests/java/FlywheelTuningCheck):
- * F from two fixed powers (saved as F at 12.5 V); P coarse then narrowing in; I from 3 and D
- * from 5 upwards while they help; P checked again with them. Every trial runs 3 times on both
- * wheels and their scores are pooled: the wheels are identical, so both get the same answer.
+ * Hand tuning for the flywheels: cycles both between a low speed (like the drop after a shot)
+ * and their target RPM, over and over until STOP. Change FLYWHEEL_F and each wheel's P, I, D
+ * on the dashboard's Tune tab while it runs; they apply on the next loop, with the same
+ * voltage compensation as the teleop. Watch the Flywheels chart on the Live tab.
  *
- * Both wheels run at the same time and spin up to full speed: keep hands and balls clear.
- * Takes about 2.5 minutes. Press STOP at any time to stop the wheels.
- * At the end, press A to put the results in the settings and save robot.json.
- * Watch it on the dashboard's Live tab: the Flywheels chart, and every trial's score.
+ * Every cycle it measures, per wheel: time to ready (from the jump until within
+ * VelocityMotor.RPM_TOLERANCE of the target, the teleop's "ready"), overshoot, and the average
+ * error over the last half second. Lower is better for all three.
  *
- * It tunes with no ball going through. Check with real shots afterwards on the Tune tab.
+ * When you like the numbers, press Save to robot on the Tune tab.
+ * Both wheels spin up to full speed: keep hands and balls clear.
  */
+@Configurable
 @TeleOp(name = "Flywheel Tuner", group = "Diagnostics")
 public class FlywheelTuner extends LinearOpMode {
 
-    private static final double TICKS_PER_REV = 28;      // goBILDA 5202 1:1, same as VelocityMotor
+    /** The low part of each cycle, as % of the target (a shot drops the wheel to about this). */
+    public static double LOW_PERCENT = 70;
+    public static double LOW_SECONDS = 1.0;
+    public static double HIGH_SECONDS = 2.0;
+
+    private static final int AVERAGE_OF = 5;
+
+    /** One flywheel, the cycle in progress, and what the finished cycles measured. */
+    private static final class Wheel {
+        final String name;
+        final VelocityMotor motor;
+        double target;
+        // The cycle in progress.
+        boolean ready;
+        double readyAt, peak, errorSum;
+        int errorCount;
+        // The last finished cycle (NaN until there is one), and recent times to ready.
+        double readySeconds = Double.NaN, overshoot = Double.NaN, steadyError = Double.NaN;
+        final double[] recentReady = new double[AVERAGE_OF];
+        int cycles;
+
+        Wheel(String name, VelocityMotor motor) {
+            this.name = name;
+            this.motor = motor;
+        }
+    }
 
     @Override
     public void runOpMode() {
         // Everything sent to telemetry also reaches the Total Chaos Dashboard.
         telemetry = new DashboardTelemetry(telemetry);
         RobotSettings settings = new RobotSettings().load();
-        HubRig rig = new HubRig();
+        for (LynxModule hub : hardwareMap.getAll(LynxModule.class)) {
+            hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
+        }
+        // Same names and directions as FieldCentricJava.
+        Wheel pollen = new Wheel("Pollen", new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE));
+        Wheel nectar = new Wheel("Nectar", new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD));
+        Wheel[] wheels = {pollen, nectar};
 
-        telemetry.addData("Flywheel Tuner", "Both flywheels spin up to full speed. Keep hands and balls clear.");
-        telemetry.addData("Takes", "about 2.5 minutes. STOP stops the wheels.");
+        telemetry.addData("Flywheel Tuner", "Both flywheels cycle between "
+                + Math.round(LOW_PERCENT) + "% and their target until STOP. Keep hands and balls clear.");
+        telemetry.addData("How", "Change F, P, I, D on the Tune tab while it runs; Save to robot when happy.");
         telemetry.addData("Settings", settings.status());
-        telemetry.addData("Battery", "%.2f V", rig.volts());
-        for (int w = 0; w < rig.wheels(); w++) telemetry.addData(rig.name(w) + " target RPM", rig.targetRPM(w));
         telemetry.update();
         waitForStart();
 
-        FlywheelTuning.Result result = null;
+        double volts = FieldCentricJava.flywheelBatteryVoltage(hardwareMap, 12.5);
+        long nextVolts = 0;
+        boolean high = false;
+        long phaseStart = System.nanoTime();
         try {
-            result = FlywheelTuning.run(rig, FieldCentricJava.FLYWHEEL_F, FieldCentricJava.FLYWHEEL_F_AT_10V);
+            while (opModeIsActive()) {
+                long now = System.nanoTime();
+                if (now >= nextVolts) {
+                    volts = FieldCentricJava.flywheelBatteryVoltage(hardwareMap, volts);
+                    nextVolts = now + 250_000_000L;
+                }
+                double f = FieldCentricJava.compensatedFlywheelF(volts);
+                apply(pollen, FieldCentricJava.POLLEN_FLYWHEEL_P, FieldCentricJava.POLLEN_FLYWHEEL_I,
+                        FieldCentricJava.POLLEN_FLYWHEEL_D, f, FieldCentricJava.POLLEN_FLYWHEEL_RPM);
+                apply(nectar, FieldCentricJava.NECTAR_FLYWHEEL_P, FieldCentricJava.NECTAR_FLYWHEEL_I,
+                        FieldCentricJava.NECTAR_FLYWHEEL_D, f, FieldCentricJava.NECTAR_FLYWHEEL_RPM);
+
+                // Switch between the low and high parts of the cycle.
+                double inPhase = (now - phaseStart) / 1e9;
+                if (inPhase >= (high ? HIGH_SECONDS : LOW_SECONDS)) {
+                    if (high) for (Wheel wheel : wheels) finishCycle(wheel);
+                    high = !high;
+                    phaseStart = now;
+                    inPhase = 0;
+                    if (high) for (Wheel wheel : wheels) startCycle(wheel);
+                }
+                for (Wheel wheel : wheels) {
+                    wheel.motor.setTargetRPM(high ? wheel.target : wheel.target * LOW_PERCENT / 100);
+                }
+
+                for (Wheel wheel : wheels) {
+                    double rpm = wheel.motor.getRPM();
+                    if (high) measure(wheel, rpm, inPhase);
+                    Dash.put(wheel.name + " RPM", rpm);
+                    Dash.put(wheel.name + " target", wheel.motor.getTargetRPM());
+                    if (!Double.isNaN(wheel.readySeconds)) Dash.put(wheel.name + " time to ready s", wheel.readySeconds);
+                    if (!Double.isNaN(wheel.overshoot)) Dash.put(wheel.name + " overshoot RPM", wheel.overshoot);
+                    telemetry.addData(wheel.name, String.format(Locale.US,
+                            "ready in %s (avg of %d: %s)  over %s RPM  error %s RPM",
+                            seconds(wheel.readySeconds), Math.min(wheel.cycles, AVERAGE_OF),
+                            seconds(average(wheel)), whole(wheel.overshoot), whole(wheel.steadyError)));
+                    telemetry.addData(wheel.name + " PIDF", String.format(Locale.US, "P %s  I %s  D %s  F %.2f",
+                            fmt(wheel.motor.getP()), fmt(wheel.motor.getI()), fmt(wheel.motor.getD()), wheel.motor.getF()));
+                }
+                telemetry.addData("Battery V", "%.2f", volts);
+                telemetry.addData("Cycle", "%s, %.1f s", high ? "at target" : "low", inPhase);
+                settings.update(telemetry::addData);
+                telemetry.update();
+            }
         } finally {
-            FlywheelTuning.stop(rig);
-        }
-        if (result != null) showResults(result, settings);
-    }
-
-    private void showResults(FlywheelTuning.Result result, RobotSettings settings) {
-        boolean compensation = FieldCentricJava.FLYWHEEL_VOLTAGE_COMPENSATION;
-        double oldF = FieldCentricJava.FLYWHEEL_F, oldF10 = FieldCentricJava.FLYWHEEL_F_AT_10V;
-        // With compensation off the robot uses FLYWHEEL_F at every voltage: save today's F then.
-        double fNow = 0;
-        int counted = 0;
-        for (FlywheelTuning.Wheel wheel : result.wheels) {
-            if (wheel.fNow > 0) {
-                fNow += wheel.fNow;
-                counted++;
-            }
-        }
-        fNow = counted == 0 ? oldF : Math.round(fNow / counted * 100) / 100.0;
-        FlywheelTuning.Trial best = result.best;
-        boolean found = result.fAt12_5V > 0 && best != null;
-
-        // Every trial, dashboard only (the Driver Station screen is too small for the table).
-        for (int n = 0; n < result.trials.size(); n++) {
-            FlywheelTuning.Trial trial = result.trials.get(n);
-            Dash.put(String.format(Locale.US, "Trial %02d %s", n + 1, trial.label()), trial.describe());
-        }
-
-        boolean saved = false;
-        while (opModeIsActive()) {
-            if (found && !saved && gamepad1.a) {
-                // The flywheels are identical, so both get the same answer.
-                FieldCentricJava.FLYWHEEL_F = compensation ? result.fAt12_5V : fNow;
-                if (compensation) FieldCentricJava.FLYWHEEL_F_AT_10V = result.fAt10V;
-                FieldCentricJava.POLLEN_FLYWHEEL_P = FieldCentricJava.NECTAR_FLYWHEEL_P = best.p;
-                FieldCentricJava.POLLEN_FLYWHEEL_I = FieldCentricJava.NECTAR_FLYWHEEL_I = best.i;
-                FieldCentricJava.POLLEN_FLYWHEEL_D = FieldCentricJava.NECTAR_FLYWHEEL_D = best.d;
-                settings.save();
-                saved = true;
-            }
-            telemetry.addData("Next", !found ? "Nothing to apply: see the warnings."
-                    : saved ? "Applied to both flywheels. " + settings.status() + "  (./robot-sync pull to keep it in Git)"
-                    : "Press A to apply to both flywheels and save robot.json. STOP to discard.");
-            if (!result.warning.isEmpty()) telemetry.addData("WARNING", result.warning);
-            for (FlywheelTuning.Wheel wheel : result.wheels) {
-                if (!wheel.warning.isEmpty()) telemetry.addData(wheel.name + " WARNING", wheel.warning);
-            }
-            telemetry.addData("Battery during test", "%.2f V", result.volts);
-            if (compensation) {
-                telemetry.addData("FLYWHEEL_F (at 12.5 V)", "%.2f  (was %.2f)", result.fAt12_5V, oldF);
-                telemetry.addData("FLYWHEEL_F_AT_10V", "%.2f  (was %.2f)", result.fAt10V, oldF10);
-            } else {
-                telemetry.addData("FLYWHEEL_F (compensation off)", "%.2f  (was %.2f)", fNow, oldF);
-            }
-            if (best != null) {
-                telemetry.addData("Best", best.label() + "   " + best.describe());
-                telemetry.addData("Just as good", "P " + FlywheelTuning.format(result.similarPLow) + " to "
-                        + FlywheelTuning.format(result.similarPHigh) + " (within the noise; chose the gentlest)");
-            }
-            telemetry.addData("Trials", result.trials.size() + " in " + Math.round(result.seconds)
-                    + " s; every score in the dashboard's telemetry table");
-            telemetry.update();
-            sleep(50);
+            for (Wheel wheel : wheels) wheel.motor.stop();
         }
     }
 
-    /** The real flywheels for FlywheelTuning. Wheel 0 is Pollen, 1 is Nectar. */
-    private final class HubRig implements FlywheelTuning.Rig {
-        private final String[] names = {"Pollen", "Nectar"};
-        private final DcMotorEx[] motors = {
-                flywheel("shooterPollen", DcMotorSimple.Direction.REVERSE),   // same as FieldCentricJava
-                flywheel("shooterNectar", DcMotorSimple.Direction.FORWARD)};
-        private final double[] targets = {FieldCentricJava.POLLEN_FLYWHEEL_RPM, FieldCentricJava.NECTAR_FLYWHEEL_RPM};
-        private final double[] lastRpm = new double[2], shownTarget = new double[2];
-        private final long[] lastRead = new long[2];
-        private final long start = System.nanoTime();
-        private double lastVolts = 12.5;
-
-        public int wheels() { return 2; }
-        public String name(int w) { return names[w]; }
-        public double targetRPM(int w) { return targets[w]; }
-
-        public void power(int w, double power) {
-            if (motors[w].getMode() != DcMotor.RunMode.RUN_WITHOUT_ENCODER) {
-                motors[w].setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-            }
-            motors[w].setPower(power);
-            shownTarget[w] = 0;
+    /** Sends new coefficients only when one changed (the Tune tab, or the battery moving F). */
+    private static void apply(Wheel wheel, double p, double i, double d, double f, double target) {
+        VelocityMotor motor = wheel.motor;
+        if (p != motor.getP() || i != motor.getI() || d != motor.getD() || f != motor.getF()) {
+            motor.setPIDF(p, i, d, f);
         }
+        wheel.target = target;
+    }
 
-        public void pidf(int w, double p, double i, double d, double f) {
-            motors[w].setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            motors[w].setVelocityPIDFCoefficients(p, i, d, f);
+    private static void startCycle(Wheel wheel) {
+        wheel.ready = false;
+        wheel.peak = Double.NEGATIVE_INFINITY;
+        wheel.errorSum = 0;
+        wheel.errorCount = 0;
+    }
+
+    private static void measure(Wheel wheel, double rpm, double inPhase) {
+        if (!wheel.ready && Math.abs(rpm - wheel.target) < VelocityMotor.RPM_TOLERANCE) {
+            wheel.ready = true;
+            wheel.readyAt = inPhase;
         }
-
-        public void targetRPM(int w, double rpm) {
-            motors[w].setVelocity(rpm * TICKS_PER_REV / 60.0);
-            shownTarget[w] = rpm;
+        wheel.peak = Math.max(wheel.peak, rpm);
+        if (inPhase >= HIGH_SECONDS - 0.5) {
+            wheel.errorSum += rpm - wheel.target;
+            wheel.errorCount++;
         }
+    }
 
-        public double rpm(int w) {
-            lastRpm[w] = motors[w].getVelocity() * 60.0 / TICKS_PER_REV;
-            lastRead[w] = System.nanoTime();
-            return lastRpm[w];
-        }
+    private static void finishCycle(Wheel wheel) {
+        wheel.readySeconds = wheel.ready ? wheel.readyAt : Double.NaN;
+        wheel.overshoot = Math.max(0, wheel.peak - wheel.target);
+        wheel.steadyError = wheel.errorCount == 0 ? Double.NaN : wheel.errorSum / wheel.errorCount;
+        // Never ready counts as the whole high part, so the average shows it.
+        wheel.recentReady[wheel.cycles % AVERAGE_OF] = wheel.ready ? wheel.readyAt : HIGH_SECONDS;
+        wheel.cycles++;
+    }
 
-        public double volts() {
-            lastVolts = FieldCentricJava.flywheelBatteryVoltage(hardwareMap, lastVolts);
-            return lastVolts;
-        }
+    private static double average(Wheel wheel) {
+        int n = Math.min(wheel.cycles, AVERAGE_OF);
+        if (n == 0) return Double.NaN;
+        double sum = 0;
+        for (int k = 0; k < n; k++) sum += wheel.recentReady[k];
+        return sum / n;
+    }
 
-        public double seconds() { return (System.nanoTime() - start) / 1e9; }
-        public void pause(double seconds) { sleep(Math.max(1, Math.round(seconds * 1000))); }
-        public boolean active() { return opModeIsActive(); }
+    private static String seconds(double value) {
+        return Double.isNaN(value) ? "—" : String.format(Locale.US, "%.2fs", value);
+    }
 
-        public void status(String text) {
-            telemetry.addData("Status", text);
-            telemetry.addData("Battery V", "%.2f", lastVolts);
-            for (int w = 0; w < 2; w++) {
-                // Reuse the procedure's own reading when it is fresh: every read is a hub call.
-                double rpm = System.nanoTime() - lastRead[w] < 30_000_000L ? lastRpm[w] : rpm(w);
-                telemetry.addData(names[w] + " RPM", Math.round(rpm));
-                Dash.put(names[w] + " target", shownTarget[w]);   // the Flywheels chart's target lines
-            }
-            telemetry.update();
-        }
+    private static String whole(double value) {
+        return Double.isNaN(value) ? "—" : String.valueOf(Math.round(value));
+    }
 
-        private DcMotorEx flywheel(String name, DcMotorSimple.Direction direction) {
-            DcMotorEx motor = hardwareMap.get(DcMotorEx.class, name);
-            motor.setDirection(direction);
-            motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-            return motor;
-        }
+    private static String fmt(double value) {
+        return value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
     }
 }
