@@ -127,8 +127,9 @@ Dashboard and Panels. The short version:
 - **Telemetry:** wrap once, `telemetry = new DashboardTelemetry(telemetry);`, then
   `telemetry.addData(...)` reaches the Driver Station and the dashboard (numbers chart).
   `Dash.put(...)` for dashboard-only values. Read each sensor once per loop.
-- **An auton function:** a `default` method in `lib/Mechanisms`, the real thing in
-  `PedroAutonomous.RobotMechanisms`, and a name in `lib/StandardActions`.
+- **A mechanism or an auton function:** one class in `mechanisms/` (hardware, settings,
+  `@AutoFunction` methods, `update()`, `telemetry()`), plus a line in `mechanisms/Robot`.
+  Teleop and auton both use it; its functions appear in the Auton Sequence by themselves.
 
 What the teleop sends (the autonomous and the simulator use the same names): `Intake RPM`,
 `Intake target`, `Pollen RPM`, `Pollen target`, `Nectar RPM`, `Nectar target`,

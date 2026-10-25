@@ -1,38 +1,33 @@
 package org.firstinspires.ftc.teamcode.lib;
 
 /**
- * Our robot's autonomous actions. Add a new one here and it appears in the path editor.
+ * Every autonomous function the path editor offers: each mechanism's {@link AutoFunction}
+ * methods (found automatically), plus the steps below that take time and combine them.
  *
- * Every action only talks to {@link Mechanisms}, so it runs the same on the robot and in the
- * desktop simulator.
+ * Steps only use function names, so they run the same on the robot and in the simulator.
  */
 public final class StandardActions {
     private StandardActions() { }
 
-    public static Actions create(final Mechanisms robot) {
-        return new Actions()
+    public static Actions create(final AutoFunctions robot) {
+        final java.util.function.BooleanSupplier flywheelsReady = robot.condition("flywheelsReady");
+        final Runnable flywheelsOn = robot.action("flywheelsOn");
+        final Runnable feedOn = robot.action("feedOn");
+        final Runnable feedOff = robot.action("feedOff");
+
+        Actions actions = new Actions()
                 .step("wait", "wait", "Do nothing for a while.",
                         (sequence, p) -> sequence.waitSeconds(p.getDouble("seconds")),
-                        new Actions.Param("seconds", "Seconds", "s", 0.5, 0, 30))
-                .instant("intakeOn", "intake on", "Start the intake.",
-                        p -> () -> robot.intake(true))
-                .instant("intakeOff", "intake off", "Stop the intake.",
-                        p -> () -> robot.intake(false))
-                .instant("flywheelsOn", "flywheels on", "Spin both flywheels up to their target RPMs.",
-                        p -> () -> robot.flywheels(true))
-                .instant("flywheelsOff", "flywheels off", "Stop both flywheels.",
-                        p -> () -> robot.flywheels(false))
-                .instant("deployStinger", "stinger down", "Lower the stinger.",
-                        p -> () -> robot.stinger(true))
-                .instant("stowStinger", "stinger up", "Raise the stinger.",
-                        p -> () -> robot.stinger(false))
+                        new Actions.Param("seconds", "Seconds", "s", 0.5, 0, 30));
+        robot.addTo(actions);   // intake on, flywheels on, stinger down, ... from the mechanisms
+        return actions
                 .step("waitForFlywheels", "wait for flywheels",
                         "Wait until both flywheels are at speed, or the time limit runs out.",
                         (sequence, p) -> {
                             final double limit = p.getDouble("timeout");
                             final long[] started = {0};
                             sequence.run("start flywheel wait", () -> started[0] = System.nanoTime());
-                            sequence.waitUntil("wait for flywheels", () -> robot.flywheelsReady()
+                            sequence.waitUntil("wait for flywheels", () -> flywheelsReady.getAsBoolean()
                                     || (System.nanoTime() - started[0]) / 1e9 >= limit);
                         },
                         new Actions.Param("timeout", "Time limit", "s", 2, 0, 10))
@@ -41,14 +36,14 @@ public final class StandardActions {
                         (sequence, p) -> {
                             final long[] started = {0};
                             sequence.run("flywheels on", () -> {
-                                robot.flywheels(true);
+                                flywheelsOn.run();
                                 started[0] = System.nanoTime();
                             });
-                            sequence.waitUntil("wait for flywheels", () -> robot.flywheelsReady()
+                            sequence.waitUntil("wait for flywheels", () -> flywheelsReady.getAsBoolean()
                                     || (System.nanoTime() - started[0]) / 1e9 >= 2);
-                            sequence.run("feed on", () -> robot.feed(true));
+                            sequence.run("feed on", feedOn);
                             sequence.waitSeconds(p.getDouble("seconds"));
-                            sequence.run("feed off", () -> robot.feed(false));
+                            sequence.run("feed off", feedOff);
                         },
                         new Actions.Param("seconds", "Feed time", "s", 3.5, 0.1, 15))
                 .step("turnTo", "turn to",

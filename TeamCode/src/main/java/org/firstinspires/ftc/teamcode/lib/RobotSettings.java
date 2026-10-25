@@ -88,6 +88,28 @@ public class RobotSettings {
     @Target(ElementType.FIELD)
     public @interface NotSaved {}
 
+    /**
+     * The class's settings used to be in another class (same field names), such as
+     * {@code @RobotSettings.MovedFrom("FieldCentricJava")}. robot.json files saved before the
+     * move still work: a value missing from this class's section is taken from the old one.
+     * The next Save writes them under the new class.
+     */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    public @interface MovedFrom {
+        String value();
+    }
+
+    /** The value robot.json has for this setting: its own section, else where it moved from. */
+    private static Object inFile(JSONObject file, Class<?> settingsClass, String name) {
+        if (file == null) return null;
+        JSONObject section = file.optJSONObject(settingsClass.getSimpleName());
+        if (section != null && section.has(name)) return section.opt(name);
+        MovedFrom moved = settingsClass.getAnnotation(MovedFrom.class);
+        JSONObject old = moved == null ? null : file.optJSONObject(moved.value());
+        return old == null ? null : old.opt(name);
+    }
+
     /** When the file was last read or written, so an unchanged file is not read again. */
     private static long loadedStamp = -1;
     /** Each setting's value in the code, captured the first time its class is seen. */
@@ -157,17 +179,26 @@ public class RobotSettings {
         int applied = 0;
         for (Class<?> settingsClass : classes) {
             JSONObject section = json.optJSONObject(settingsClass.getSimpleName());
-            if (section == null) {
-                continue;
+            if (section != null) {
+                Iterator<String> names = section.keys();
+                while (names.hasNext()) {
+                    String name = names.next();
+                    String problem = apply(settingsClass, name, section.opt(name), false);
+                    if (problem == null) {
+                        applied++;
+                    } else {
+                        warnings.add(problem);
+                    }
+                }
             }
-            Iterator<String> names = section.keys();
-            while (names.hasNext()) {
-                String name = names.next();
-                String problem = apply(settingsClass, name, section.opt(name), false);
-                if (problem == null) {
-                    applied++;
-                } else {
-                    warnings.add(problem);
+            // Saved before the settings moved to this class: take the ones this class has.
+            MovedFrom moved = settingsClass.getAnnotation(MovedFrom.class);
+            JSONObject old = moved == null ? null : json.optJSONObject(moved.value());
+            if (old != null) {
+                for (Field field : settingsFields(settingsClass)) {
+                    if ((section != null && section.has(field.getName())) || !old.has(field.getName())) continue;
+                    String problem = apply(settingsClass, field.getName(), old.opt(field.getName()), false);
+                    if (problem == null) applied++; else warnings.add(problem);
                 }
             }
         }
@@ -247,7 +278,6 @@ public class RobotSettings {
         }
         JSONArray list = new JSONArray();
         for (Class<?> settingsClass : classes) {
-            JSONObject section = file == null ? null : file.optJSONObject(settingsClass.getSimpleName());
             for (Field field : allFields(settingsClass)) {
                 boolean saved = isSetting(field);
                 JSONObject item = new JSONObject();
@@ -260,7 +290,7 @@ public class RobotSettings {
                 Object fallback = DEFAULTS.get(key(settingsClass, field.getName()));
                 item.put("default", fallback == null ? JSONObject.NULL : fallback);
                 item.put("saved", saved);
-                Object inFile = section == null ? null : section.opt(field.getName());
+                Object inFile = inFile(file, settingsClass, field.getName());
                 item.put("inFile", inFile == null || !saved ? JSONObject.NULL : inFile);
                 list.put(item);
             }

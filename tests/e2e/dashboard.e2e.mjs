@@ -180,7 +180,7 @@ try {
   await mouse('mousePressed', aButton.x, aButton.y);
   await sleep(250);
   await mouse('mouseReleased', aButton.x, aButton.y);
-  const flywheelsOn = async () => (await api('/api/settings')).data.items.find((i) => i.group === 'FieldCentricJava' && i.name === 'FLYWHEELS_ON').value;
+  const flywheelsOn = async () => (await api('/api/settings')).data.items.find((i) => i.group === 'Flywheels' && i.name === 'FLYWHEELS_ON').value;
   for (let i = 0; i < 30 && await flywheelsOn(); i++) await sleep(100);
   check(await flywheelsOn() === false,
     'operator A from the drawer toggles the flywheels off, like on the Driver Station');
@@ -220,7 +220,7 @@ try {
   await b.screenshot(join(OUT, '1-gamepad.png'));
   await b.eval(`document.querySelector('#pad-handle').click()`);
   check(await b.eval(`document.querySelector('#pad-body').hidden`), 'the handle closes the drawer');
-  await api('/api/settings', { method: 'POST', body: { group: 'FieldCentricJava', name: 'FLYWHEELS_ON', value: true } });
+  await api('/api/settings', { method: 'POST', body: { group: 'Flywheels', name: 'FLYWHEELS_ON', value: true } });
   await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Field Centric (Java)' } });
   await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
   await b.waitFor(`document.getElementById('tab-live').innerText.includes('Flywheel compensated F')`, 5000);
@@ -282,8 +282,15 @@ try {
 
   // ---- 2. Tune a setting, save it, sync it into Git ---------------------------------------------
   console.log('Tune tab');
+  // A robot.json saved before the settings moved into mechanisms/ still loads.
+  await api('/api/file?path=settings/robot.json', { method: 'PUT', headers: { 'X-Base-Hash': '*' },
+    body: JSON.stringify({ version: 1, FieldCentricJava: { STINGER_DOWN: 0.4 } }, null, 2) });
+  await api('/api/settings/reload', { method: 'POST' });
+  const moved = (await api('/api/settings')).data.items.find((i) => i.group === 'Stinger' && i.name === 'STINGER_DOWN');
+  check(moved.value === 0.4 && moved.inFile === 0.4,
+    'an older robot.json (stinger under FieldCentricJava) still loads into the Stinger mechanism\'s settings');
   await b.eval(`document.querySelector('[data-tab="tune"]').click()`);
-  await b.waitFor(`document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]')`);
+  await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]')`);
   check(await b.eval(`document.querySelectorAll('#settings .dot.unsaved').length === 0 && document.querySelectorAll('#settings .dot.synced').length > 20`),
     'freshly loaded settings all show a green (in sync) dot');
   const routeOptions = await b.eval(`[...document.querySelectorAll('[data-key="PedroAutonomous.ROUTE"] option')].map((o) => o.value)`);
@@ -296,16 +303,16 @@ try {
   await b.eval(`document.querySelector('#settings [data-group="FlywheelTuner"] .hide-group').click()`);
   check(!(await tunerShown()), 'and Hide hides it again (remembered in this browser)');
   await b.eval(`(() => {
-    const input = document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]');
+    const input = document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]');
     input.value = '3000';
     input.dispatchEvent(new Event('change', { bubbles: true }));
   })()`);
-  await b.waitFor(`document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]').value === '3000'
+  await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]').value === '3000'
     && document.querySelectorAll('#settings .dot.unsaved').length > 0`);
   let settings = (await api('/api/settings')).data;
   const rpm = settings.items.find((i) => i.name === 'POLLEN_FLYWHEEL_RPM');
   check(rpm.value === 3000 && rpm.default === 3400, 'editing the box changes the setting on the robot right away');
-  check(await b.eval(`!!document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]').closest('.setting-row').querySelector('.dot.unsaved')`)
+  check(await b.eval(`!!document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]').closest('.setting-row').querySelector('.dot.unsaved')`)
     && await b.eval(`document.querySelectorAll('#settings .dot.unsaved').length === 1`),
     `only the changed setting turns yellow (changed, not saved): ${await b.eval(`[...document.querySelectorAll('#settings .dot.unsaved')].map((d) => d.closest('.setting-row').querySelector('.setting-name').innerText.split('\\n')[0]).join(', ')`)}`);
   await sleep(1500);
@@ -318,27 +325,28 @@ try {
   await b.eval(`document.querySelector('#settings-save').click()`);
   await b.waitFor(`document.querySelector('#settings-status').textContent.startsWith('all saved')`);
   const saved = (await api('/api/file?path=settings/robot.json')).data;
-  check(saved.FieldCentricJava.POLLEN_FLYWHEEL_RPM === 3000 && saved.version === 1, 'Save writes robot.json on the robot');
+  check(saved.Flywheels.POLLEN_FLYWHEEL_RPM === 3000 && saved.version === 1, 'Save writes robot.json on the robot');
   await b.waitFor(`document.querySelectorAll('#settings .dot.unsaved').length === 0`);
   check(true, 'after Save to robot every dot is green again');
-  check(!('FLYWHEELS_ON' in saved.FieldCentricJava) && !('INTAKE_ENABLED' in saved.FieldCentricJava) && !('Simulator' in saved), 'live switches are not saved');
+  check(!('FLYWHEELS_ON' in saved.Flywheels) && !('INTAKE_ENABLED' in saved.Intake) && !('Simulator' in saved), 'live switches are not saved');
+  check(!('FieldCentricJava' in saved) && saved.Stinger.STINGER_DOWN === 0.4, 'Save writes the moved settings under their mechanisms (Stinger.STINGER_DOWN 0.4), not FieldCentricJava');
   await b.screenshot(join(OUT, '2-tune.png'));
 
   // History: a second save, then the Tune tab's History button shows both and restores the first.
-  await b.eval(`(() => { const i = document.querySelector('[data-key="FieldCentricJava.POLLEN_FLYWHEEL_RPM"]');
+  await b.eval(`(() => { const i = document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]');
     i.value = '9000'; i.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await b.waitFor(`document.querySelectorAll('#settings .dot.unsaved').length === 1`);
   await b.eval(`document.querySelector('#settings-save').click()`);
   await b.waitFor(`document.querySelector('#settings-status').textContent.startsWith('all saved')`);
   await b.eval(`document.querySelector('#settings-history').click()`);
-  await b.waitFor(`document.querySelector('#tab-robot').classList.contains('active') && document.querySelectorAll('#history tr[data-id]').length === 2`);
-  check(true, 'Tune → History opens the history of robot.json with both saves');
+  await b.waitFor(`document.querySelector('#tab-robot').classList.contains('active') && document.querySelectorAll('#history tr[data-id]').length === 3`);
+  check(true, 'Tune → History opens the history of robot.json with both saves (and the older file before them)');
   await b.eval(`document.querySelector('#history tr[data-id] [data-changes]').click()`);
   await b.waitFor(`document.querySelector('#history tr.changes:not([hidden])')`);
   const changes = await b.eval(`document.querySelector('#history tr.changes:not([hidden])').innerText`);
   check(/POLLEN_FLYWHEEL_RPM\s+3000\s+→\s+9000/.test(changes), `it shows what the newest save changed: ${changes.trim()}`);
   await b.eval(`(() => { window.confirm = () => true; [...document.querySelectorAll('#history tr[data-id]')][1].querySelector('[data-restore]').click(); })()`);
-  await b.waitFor(`document.querySelectorAll('#history tr[data-id]').length === 3`);
+  await b.waitFor(`document.querySelectorAll('#history tr[data-id]').length === 4`);
   const restoredRpm = (await api('/api/settings')).data.items.find((i) => i.name === 'POLLEN_FLYWHEEL_RPM').value;
   check(restoredRpm === 3000, 'Restore puts the older version back on the robot (and keeps it in history)');
 
@@ -349,7 +357,7 @@ try {
   check(sync('status').includes('only on the robot'), 'robot-sync status sees the new robot.json');
   sync('pull');
   const pulled = JSON.parse(readFileSync(join(scratch, 'settings/robot.json'), 'utf8'));
-  check(pulled.FieldCentricJava.POLLEN_FLYWHEEL_RPM === 3000, 'robot-sync pull copies it into the repo');
+  check(pulled.Flywheels.POLLEN_FLYWHEEL_RPM === 3000, 'robot-sync pull copies it into the repo');
   check(!sync('status').includes('->'), 'after the pull everything is in sync');
   const historyFiles = execFileSync('find', [join(scratch, 'history'), '-type', 'f'], { encoding: 'utf8' }).trim().split('\n');
   check(historyFiles.length >= 3, `robot-sync pull also copies the robot's history into the repo (${historyFiles.length} versions)`);
@@ -414,6 +422,11 @@ try {
 
   // ---- 4. Path editor: robot actions on the route --------------------------------------------------
   console.log('Paths tab');
+  // The functions come from the mechanisms' @AutoFunction methods: the same list as before.
+  const functionNames = (await api('/api/actions')).data.map((a) => a.name).sort();
+  check(JSON.stringify(functionNames) === JSON.stringify(['deployStinger', 'flywheelsOff', 'flywheelsOn', 'intakeOff', 'intakeOn',
+    'shoot', 'stowStinger', 'turnTo', 'wait', 'waitForFlywheels']),
+    `the Auton Sequence offers the mechanisms' functions plus the steps, nothing hidden (${functionNames.join(', ')})`);
   await b.eval(`document.querySelector('[data-tab="paths"]').click()`);
   const frame = `document.getElementById('visualizer').contentWindow.document`;
   await b.waitFor(`${frame}.querySelector('[data-testid=robot-panel]') && ${frame}.querySelector('[data-testid=robot-panel]').innerText.includes('connected')`, 20000);
@@ -558,7 +571,7 @@ try {
   check(true, 'Save snapshot makes a known good copy');
   const goodRoute = (await api('/api/file?path=autos/saturday.json')).data;
   await api('/api/file?path=autos/saturday.json', { method: 'PUT', body: JSON.stringify({ ...goodRoute, steps: goodRoute.steps.slice(0, 1) }) });
-  await api('/api/settings', { method: 'POST', body: { group: 'FieldCentricJava', name: 'INTAKE_RPM', value: 1 } });
+  await api('/api/settings', { method: 'POST', body: { group: 'Intake', name: 'INTAKE_RPM', value: 1 } });
   await api('/api/settings/save', { method: 'POST' });
   await b.eval(`(() => { window.confirm = () => true; document.querySelector('#snapshots [data-snapshot]').click(); })()`);
   await b.waitFor(`document.querySelector('#toast').textContent.startsWith('Restored')`);
@@ -621,7 +634,7 @@ try {
   check(seen.last && seen.last.n['Route done'] === 1, 'the autonomous finishes the whole route');
   check(seen.steps.has('follow path1') && seen.steps.has('feed on') && seen.steps.has('stinger up'),
     `it ran the steps from the file: ${[...seen.steps].join(' → ')}`);
-  check(seen.stinger.has(saved.FieldCentricJava.STINGER_DOWN), 'the stinger went down part way along path2');
+  check(seen.stinger.has(saved.Stinger.STINGER_DOWN), 'the stinger went down part way along path2');
   const top40 = 68.47 * 0.4;   // ForesightConstants maxAchievableForwardVelocity
   check(seen.path2Peak > 5 && seen.path2Peak <= top40 * 1.15, `on path2 the robot keeps to 40% of its top speed, ${top40.toFixed(1)} in/s (fastest ${seen.path2Peak.toFixed(1)} in/s)`);
   const { X, Y, Heading } = seen.last.n;

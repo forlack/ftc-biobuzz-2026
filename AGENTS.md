@@ -116,6 +116,29 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   `timeoutConstraint` only limits end-of-path correcting; AutoSequence's follow step waits
   for `!follower.isBusy()` with no time limit, so a robot blocked mid-path waits until the
   30 s end.
+- **Mechanisms refactor (2026-10-25), sim-verified only:** `mechanisms/` holds `Intake`,
+  `Flywheels` (both wheels + transports, voltage-compensated F, `compensatedF`), `Feeder`
+  (triggers), `Stinger`, and `Robot` (public final fields of each, battery read at 4 Hz,
+  `update()`, `telemetry()`, bulk-read helpers, static `batteryVoltage`). FieldCentricJava keeps
+  only buttons, drive and the section timers (same names); PedroAutonomous builds `Robot` and
+  calls `robot.update()` each loop (INIT still only sets stinger up and triggers off).
+  Teleop's `Flywheels.FLYWHEELS_ON` switch stays teleop-only (auton sets the instance state;
+  auton stop must not switch the next teleop's flywheels off). Settings moved out of
+  FieldCentricJava (same field names) into Intake / Flywheels / Stinger with
+  `@RobotSettings.MovedFrom("FieldCentricJava")`: load and the Tune tab's "in file" fall back
+  to the old section; the next Save writes the new layout. `lib/Mechanisms` and
+  `PedroAutonomous.RobotMechanisms` are gone. **Auton functions** = `@AutoFunction` methods
+  (`lib/AutoFunction`, registry `lib/AutoFunctions`: reflection over Robot's public final
+  fields; void = action, boolean = condition, `listed=false` hidden (feedOn/feedOff), double
+  params with `@AutoFunction.Param`; listed ones sorted by label). `StandardActions.create(AutoFunctions)`
+  adds wait + the listed functions + steps (waitForFlywheels, shoot, turnTo) that use function
+  names. AndroidDashboard lists via `AutoFunctions.describe(Robot.class)` (no hardware). Sim:
+  the mirror generator also copies each `@AutoFunction` signature with an empty body
+  (conditions return true) and `@RobotSettings.MovedFrom`, and generates `RobotStub` from
+  Robot.java's `public final X y;` lines; `SimOpModes.functions()` =
+  `AutoFunctions.of(new RobotStub()).override(simMechanisms)` (override throws on a name the
+  robot lacks). Reflection needs `setAccessible(true)` (SimMechanisms is not public). e2e 125
+  incl. old-robot.json migration and the unchanged function list. Robot test: ROBOT-TEST 4, 17.
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -126,7 +149,7 @@ Key facts for agents:
 
 - **Shared plain-Java core** (compiled into the app AND the desktop sim):
   `dashboard/{DashboardServer,Dash,RobotHost,Base64Codec,VirtualGamepads}`, `lib/{RobotFiles,RobotSettings,
-  Actions,StandardActions,Mechanisms,AutoRoute,AutoSequence}`, `pedro/ForesightConstants`.
+  Actions,StandardActions,AutoFunction,AutoFunctions,AutoRoute,AutoSequence}`, `pedro/ForesightConstants`.
   No Android or FTC SDK imports in these, Java 8 syntax, Android 7 APIs only (no
   java.nio.file, no java.util.Base64, no String.join). `-Pdashboard` lint: no NewApi.
 - `RobotFiles.root()` is /sdcard/FIRST, or the sim's SD card (`biobuzz.storage` property).
@@ -171,7 +194,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (122
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (125
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

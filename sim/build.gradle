@@ -30,7 +30,8 @@ sourceSets {
             include 'org/firstinspires/ftc/teamcode/lib/RobotSettings.java'
             include 'org/firstinspires/ftc/teamcode/lib/Actions.java'
             include 'org/firstinspires/ftc/teamcode/lib/StandardActions.java'
-            include 'org/firstinspires/ftc/teamcode/lib/Mechanisms.java'
+            include 'org/firstinspires/ftc/teamcode/lib/AutoFunction.java'
+            include 'org/firstinspires/ftc/teamcode/lib/AutoFunctions.java'
             include 'org/firstinspires/ftc/teamcode/lib/AutoSequence.java'
             include 'org/firstinspires/ftc/teamcode/lib/AutoRoute.java'
             include 'org/firstinspires/ftc/teamcode/lib/FlywheelCompensation.java'
@@ -54,6 +55,11 @@ tasks.named('run') {
 // class's simple name and every public static setting (generated from the real source, so
 // they can never drift); classes the simulator compiles itself (dashboard/) are used as they
 // are. ConfigurableClasses.ALL lists them all. One robot.json works on the robot and here.
+//
+// Auton functions: a mechanism's @AutoFunction methods are copied into its mirror with empty
+// bodies (conditions answer true), and RobotStub has the same public final fields as
+// mechanisms/Robot. So AutoFunctions.of(new RobotStub()) lists exactly the robot's functions;
+// the simulator then overrides the ones it simulates (SimOpModes.SimMechanisms).
 def teamCode = file('../TeamCode/src/main/java')
 def mirrorDir = layout.buildDirectory.dir('generated/mirror')
 
@@ -66,13 +72,16 @@ tasks.register('generateMirrors') {
         folder.mkdirs()
         def field = ~/^\s*public static (double|float|int|long|boolean|String) ([A-Z0-9_]+)\s*=\s*([^;]+);/
         def classes = []
+        def mirrored = [] as Set
         fileTree(teamCode).matching { include '**/*.java' }.sort { it.path }.each { source ->
             def lines = source.readLines()
-            if (!lines.any { it.trim() == '@Configurable' }) return
+            def configurable = lines.any { it.trim() == '@Configurable' }
+            def functions = lines.any { it.trim().startsWith('@AutoFunction(') }
+            if (!configurable && !functions) return
             def name = source.name - '.java'
             def relative = teamCode.toPath().relativize(source.toPath()).toString().replace('\\', '/')
             if (relative.startsWith('org/firstinspires/ftc/teamcode/dashboard/')) {
-                classes << (relative - '.java').replace('/', '.') + '.class'
+                if (configurable) classes << (relative - '.java').replace('/', '.') + '.class'
                 return
             }
             def body = new StringBuilder()
@@ -84,17 +93,47 @@ tasks.register('generateMirrors') {
                     body << "    public static ${m.group(1)} ${m.group(2)} = ${m.group(3)};\n"
                 }
             }
-            def hidden = lines.any { it.trim().startsWith('@Configurable.Hidden') } ? '@org.firstinspires.ftc.teamcode.dashboard.Configurable.Hidden\n' : ''
+            // Each @AutoFunction method, from its annotation to the "{" of its body.
+            def text = lines.join('\n')
+            def at = 0
+            while ((at = text.indexOf('@AutoFunction(', at)) >= 0) {
+                def lineStart = text.lastIndexOf('\n', at) + 1
+                if (text.substring(lineStart, at).trim()) { at++; continue }   // in a comment or code
+                def brace = text.indexOf('{', at)
+                def signature = text.substring(at, brace).trim().replaceAll(/\s+/, ' ')
+                def stub = signature.contains(' boolean ') ? '{ return true; }' : '{ }'
+                body << "    ${signature} ${stub}\n"
+                at = brace
+            }
+            def annotations = lines.findAll { it.trim().startsWith('@RobotSettings.MovedFrom(') }.collect { it.trim() + '\n' }.join('')
+            if (lines.any { it.trim().startsWith('@Configurable.Hidden') }) annotations += '@org.firstinspires.ftc.teamcode.dashboard.Configurable.Hidden\n'
             new File(folder, "${name}.java").text = """package org.biobuzz.sim.mirror;
 
+import org.firstinspires.ftc.teamcode.lib.AutoFunction;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 
 /** GENERATED from TeamCode/src/main/java/${relative} by sim/build.gradle. Do not edit. */
-${hidden}public final class ${name} {
+${annotations}public final class ${name} {
 ${body}}
 """
-            classes << "${name}.class"
+            mirrored << name
+            if (configurable) classes << "${name}.class"
         }
+        // The robot's mechanisms (mechanisms/Robot's public final fields), as mirrors.
+        def robotSource = new File(teamCode, 'org/firstinspires/ftc/teamcode/mechanisms/Robot.java')
+        def parts = new StringBuilder()
+        if (robotSource.isFile()) {
+            robotSource.readLines().each { line ->
+                def m = line =~ /^\s*public final (\w+) (\w+);/
+                if (m.find() && mirrored.contains(m.group(1))) parts << "    public final ${m.group(1)} ${m.group(2)} = new ${m.group(1)}();\n"
+            }
+        }
+        new File(folder, 'RobotStub.java').text = """package org.biobuzz.sim.mirror;
+
+/** GENERATED by sim/build.gradle: mechanisms/Robot's mechanisms, for their auton functions. Do not edit. */
+public final class RobotStub {
+${parts}}
+"""
         new File(folder, 'ConfigurableClasses.java').text = """package org.biobuzz.sim.mirror;
 
 /** GENERATED by sim/build.gradle: every @Configurable class in TeamCode. Do not edit. */

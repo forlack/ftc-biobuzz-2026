@@ -22,9 +22,10 @@ import org.firstinspires.ftc.robotcore.internal.opmode.RegisteredOpModes;
 import org.firstinspires.ftc.teamcode.dashboard.DashboardServer;
 import org.firstinspires.ftc.teamcode.dashboard.RobotHost;
 import org.firstinspires.ftc.teamcode.lib.Actions;
-import org.firstinspires.ftc.teamcode.lib.Mechanisms;
+import org.firstinspires.ftc.teamcode.lib.AutoFunctions;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.StandardActions;
+import org.firstinspires.ftc.teamcode.mechanisms.Robot;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -48,14 +49,9 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
     private final Context context;
     private final OpModeManagerImpl opModes;
     private final RobotSettings settings = new RobotSettings();
-    private final Actions actions = StandardActions.create(new Mechanisms() {
-        // Only the list of actions is used here; routes run inside PedroAutonomous.
-        @Override public void intake(boolean on) { }
-        @Override public void flywheels(boolean on) { }
-        @Override public boolean flywheelsReady() { return true; }
-        @Override public void feed(boolean on) { }
-        @Override public void stinger(boolean down) { }
-    });
+    // Only the list (names, labels, settings) of mechanisms/Robot's auton functions; routes run
+    // inside PedroAutonomous. Nothing here touches hardware.
+    private final Actions actions = StandardActions.create(AutoFunctions.describe(Robot.class));
     private volatile String state = "stopped";
     private DashboardServer server;
 

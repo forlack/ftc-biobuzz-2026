@@ -3,17 +3,21 @@ package org.biobuzz.sim;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 
-import org.biobuzz.sim.mirror.FieldCentricJava;
+import org.biobuzz.sim.mirror.Flywheels;
+import org.biobuzz.sim.mirror.Intake;
 import org.biobuzz.sim.mirror.MecanumDrive;
 import org.biobuzz.sim.mirror.PedroAutonomous;
+import org.biobuzz.sim.mirror.RobotStub;
+import org.biobuzz.sim.mirror.Stinger;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.dashboard.VirtualGamepads;
 import org.firstinspires.ftc.teamcode.lib.Actions;
+import org.firstinspires.ftc.teamcode.lib.AutoFunction;
+import org.firstinspires.ftc.teamcode.lib.AutoFunctions;
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
-import org.firstinspires.ftc.teamcode.lib.Mechanisms;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.StandardActions;
@@ -68,55 +72,72 @@ public final class SimOpModes {
         }
     }
 
+    /**
+     * The robot's auton functions in the simulator: every one the real mechanisms have (from
+     * the generated RobotStub, so the editor lists the same), with the ones simulated here
+     * (SimMechanisms' @AutoFunction methods, same names) doing the real thing.
+     */
+    static AutoFunctions functions(SimMechanisms robot) {
+        return AutoFunctions.of(new RobotStub()).override(robot);
+    }
+
     /** Mechanisms on simulated hardware, shared by teleop and autonomous. */
-    static final class SimMechanisms implements Mechanisms {
+    static final class SimMechanisms {
         final SimWorld world;
         boolean intakeOn, intakeReverse, flywheelsOn, stingerDown;
         double flywheelF;
 
         SimMechanisms(SimWorld world) { this.world = world; }
 
-        @Override public void intake(boolean on) { intakeOn = on; }
+        void intake(boolean on) { intakeOn = on; }
+        void flywheels(boolean on) { flywheelsOn = on; }
+        void feed(boolean on) { world.setFeeding(on); }
+        void stinger(boolean down) { stingerDown = down; }
 
-        /** On, and not switched off on the Tune tab (FieldCentricJava.INTAKE_ENABLED). */
-        boolean intakeRunning() { return intakeOn && FieldCentricJava.INTAKE_ENABLED; }
-        @Override public void flywheels(boolean on) { flywheelsOn = on; }
-        @Override public void feed(boolean on) { world.setFeeding(on); }
-        @Override public void stinger(boolean down) { stingerDown = down; }
+        // The real mechanisms' auton functions, simulated (names as in mechanisms/).
+        @AutoFunction(name = "intakeOn") public void intakeOn() { intake(true); }
+        @AutoFunction(name = "intakeOff") public void intakeOff() { intake(false); }
+        @AutoFunction(name = "flywheelsOn") public void flywheelsOn() { flywheels(true); }
+        @AutoFunction(name = "flywheelsOff") public void flywheelsOff() { flywheels(false); }
+        @AutoFunction(name = "feedOn") public void feedOn() { feed(true); }
+        @AutoFunction(name = "feedOff") public void feedOff() { feed(false); }
+        @AutoFunction(name = "deployStinger") public void deployStinger() { stinger(true); }
+        @AutoFunction(name = "stowStinger") public void stowStinger() { stinger(false); }
 
-        @Override public boolean flywheelsReady() {
+        @AutoFunction(name = "flywheelsReady")
+        public boolean flywheelsReady() {
             return flywheelsOn
-                    && Math.abs(world.pollen.rpm(28) - FieldCentricJava.POLLEN_FLYWHEEL_RPM) < 100
-                    && Math.abs(world.nectar.rpm(28) - FieldCentricJava.NECTAR_FLYWHEEL_RPM) < 100;
+                    && Math.abs(world.pollen.rpm(28) - Flywheels.POLLEN_FLYWHEEL_RPM) < 100
+                    && Math.abs(world.nectar.rpm(28) - Flywheels.NECTAR_FLYWHEEL_RPM) < 100;
         }
 
         /** Like the teleop: holding reverse wins over the toggle; nothing when disabled. */
         double intakeTarget() {
-            if (!FieldCentricJava.INTAKE_ENABLED) return 0;
-            if (intakeReverse) return -FieldCentricJava.INTAKE_RPM;
-            return intakeOn ? FieldCentricJava.INTAKE_RPM : 0;
+            if (!Intake.INTAKE_ENABLED) return 0;
+            if (intakeReverse) return -Intake.INTAKE_RPM;
+            return intakeOn ? Intake.INTAKE_RPM : 0;
         }
 
         /** Call every loop: applies targets and PIDF from the current settings. */
         void apply() {
             // Same voltage-compensated F as the robot.
-            flywheelF = FlywheelCompensation.f(world.battery(), FieldCentricJava.FLYWHEEL_VOLTAGE_COMPENSATION,
-                    FieldCentricJava.FLYWHEEL_F, FieldCentricJava.FLYWHEEL_F_AT_10V);
-            world.pollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, FieldCentricJava.POLLEN_FLYWHEEL_I, FieldCentricJava.POLLEN_FLYWHEEL_D, flywheelF);
-            world.nectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, FieldCentricJava.NECTAR_FLYWHEEL_I, FieldCentricJava.NECTAR_FLYWHEEL_D, flywheelF);
-            world.intake.setPIDF(FieldCentricJava.INTAKE_P, 0, 0, FieldCentricJava.INTAKE_F);
-            world.pollen.setTargetRPM(flywheelsOn ? FieldCentricJava.POLLEN_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
-            world.nectar.setTargetRPM(flywheelsOn ? FieldCentricJava.NECTAR_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
+            flywheelF = FlywheelCompensation.f(world.battery(), Flywheels.FLYWHEEL_VOLTAGE_COMPENSATION,
+                    Flywheels.FLYWHEEL_F, Flywheels.FLYWHEEL_F_AT_10V);
+            world.pollen.setPIDF(Flywheels.POLLEN_FLYWHEEL_P, Flywheels.POLLEN_FLYWHEEL_I, Flywheels.POLLEN_FLYWHEEL_D, flywheelF);
+            world.nectar.setPIDF(Flywheels.NECTAR_FLYWHEEL_P, Flywheels.NECTAR_FLYWHEEL_I, Flywheels.NECTAR_FLYWHEEL_D, flywheelF);
+            world.intake.setPIDF(Intake.INTAKE_P, 0, 0, Intake.INTAKE_F);
+            world.pollen.setTargetRPM(flywheelsOn ? Flywheels.POLLEN_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
+            world.nectar.setTargetRPM(flywheelsOn ? Flywheels.NECTAR_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
             world.intake.setTargetRPM(intakeTarget(), SimWorld.INTAKE_TICKS_PER_REV);
-            world.setStinger(stingerDown ? FieldCentricJava.STINGER_DOWN : FieldCentricJava.STINGER_UP);
+            world.setStinger(stingerDown ? Stinger.STINGER_DOWN : Stinger.STINGER_UP);
         }
 
-        /** The same telemetry names FieldCentricJava and PedroAutonomous send. */
+        /** The same telemetry names the real mechanisms send (mechanisms/). */
         void telemetry() {
             Dash.put("Pollen RPM", world.pollen.rpm(SimWorld.FLYWHEEL_TICKS_PER_REV));
-            Dash.put("Pollen target", flywheelsOn ? FieldCentricJava.POLLEN_FLYWHEEL_RPM : 0);
+            Dash.put("Pollen target", flywheelsOn ? Flywheels.POLLEN_FLYWHEEL_RPM : 0);
             Dash.put("Nectar RPM", world.nectar.rpm(SimWorld.FLYWHEEL_TICKS_PER_REV));
-            Dash.put("Nectar target", flywheelsOn ? FieldCentricJava.NECTAR_FLYWHEEL_RPM : 0);
+            Dash.put("Nectar target", flywheelsOn ? Flywheels.NECTAR_FLYWHEEL_RPM : 0);
             Dash.put("Intake RPM", world.intake.rpm(SimWorld.INTAKE_TICKS_PER_REV));
             Dash.put("Intake target", intakeTarget());
             Dash.put("Pollen power", world.pollen.output());
@@ -146,7 +167,7 @@ public final class SimOpModes {
         private final float[] operate = new float[VirtualGamepads.AXES.length];
         private final boolean[] operateButtons = new boolean[VirtualGamepads.BUTTONS.length];
 
-        // Same map as FieldCentricJava.
+        // Same map as Flywheels.
         private final Button.Group buttons = new Button.Group();
         private final Button slowMode = buttons.add(() -> driveButtons[VirtualGamepads.LEFT_BUMPER]);
         private final Button turboMode = buttons.add(() -> driveButtons[VirtualGamepads.RIGHT_BUMPER]);
@@ -189,16 +210,16 @@ public final class SimOpModes {
 
             if (toggleIntake.pressed()) robot.intake(!robot.intakeOn);
             robot.intakeReverse = reverseIntake.down();
-            if (toggleFlywheels.pressed()) FieldCentricJava.FLYWHEELS_ON = !FieldCentricJava.FLYWHEELS_ON;
-            robot.flywheels(FieldCentricJava.FLYWHEELS_ON);
+            if (toggleFlywheels.pressed()) Flywheels.FLYWHEELS_ON = !Flywheels.FLYWHEELS_ON;
+            robot.flywheels(Flywheels.FLYWHEELS_ON);
             robot.stinger(sting.down());
             boolean volley = !driving && !operating && Simulator.DEMO_SHOOTING
-                    && FieldCentricJava.FLYWHEELS_ON && (t % 6.0) > 4.5;
+                    && Flywheels.FLYWHEELS_ON && (t % 6.0) > 4.5;
             robot.feed(volley || Simulator.FEED || gate.down() || forceShoot.down());
 
             robot.apply();
             robot.telemetry();
-            Dash.put("Intake", !FieldCentricJava.INTAKE_ENABLED ? "DISABLED (Tune tab)"
+            Dash.put("Intake", !Intake.INTAKE_ENABLED ? "DISABLED (Tune tab)"
                     : robot.intakeReverse ? "REVERSE" : robot.intakeOn ? "ON" : "OFF");
             Dash.put("Driver", driving || operating
                     ? "Dashboard gamepad " + (driving && operating ? "1 + 2" : driving ? "1" : "2")
@@ -259,7 +280,7 @@ public final class SimOpModes {
             follower = SimPedro.follower(world);
             follower.setPose(route.start);
             world.loadBalls(3);
-            Actions actions = StandardActions.create(robot);
+            Actions actions = StandardActions.create(functions(robot));
             auto = route.build(follower, actions);
             Dash.put("Status", "Route \"" + route.name + "\" from " + file.getName() + ": "
                     + auto.stepCount() + " steps. " + settings.status());

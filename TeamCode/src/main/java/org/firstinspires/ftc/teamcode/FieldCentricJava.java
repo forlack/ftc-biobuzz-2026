@@ -1,31 +1,26 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.CRServo;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
-import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.hardware.VoltageSensor;
 
-import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.DashboardGamepads;
 import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
-import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
 import org.firstinspires.ftc.teamcode.lib.MecanumDrive;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
-import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
-
-import java.util.List;
+import org.firstinspires.ftc.teamcode.mechanisms.Flywheels;
+import org.firstinspires.ftc.teamcode.mechanisms.Robot;
 
 /**
  * Field-centric teleop. Java version of the Blocks OpMode "Field Centric (Best)".
  *
  * The loop never waits for anything -- read AGENTS.md before adding to it.
+ *
+ * The mechanisms (intake, flywheels, feeder, stinger) live in mechanisms/: this OpMode only
+ * maps buttons to them. Their settings are on the Tune tab under each mechanism's name.
  *
  * Driver (gamepad 1):
  *   left stick        drive (field-centric, raw power with brake)
@@ -42,63 +37,15 @@ import java.util.List;
  *   right bumper      hold both gates open
  *   left bumper       lower stinger while held
  */
-@Configurable
 @TeleOp(name = "Field Centric (Java)", group = "Drive")
 public class FieldCentricJava extends LinearOpMode {
-
-    // Intake -- editable live on the dashboard's Tune tab.
-    public static double INTAKE_RPM = 700;
-    public static double INTAKE_P = 15;
-    public static double INTAKE_F = 15;
-    /** Off: the intake never runs (teleop and auton), whatever the buttons say. A switch, not saved. */
-    @RobotSettings.NotSaved
-    public static boolean INTAKE_ENABLED = true;
-
-    /** Turn both flywheels on or off from the Tune tab. They start on. A switch, not a setting. */
-    @RobotSettings.NotSaved
-    public static boolean FLYWHEELS_ON = true;
-    /** F follows the battery voltage (see FlywheelCompensation). Off: FLYWHEEL_F at any voltage. */
-    public static boolean FLYWHEEL_VOLTAGE_COMPENSATION = true;
-    public static double FLYWHEEL_F = 11; // F at 12.5 V (and always, with compensation off)
-    public static double FLYWHEEL_F_AT_10V = 12;
-
-    // Pollen flywheel.
-    public static double POLLEN_FLYWHEEL_RPM = 3400;
-    public static double POLLEN_FLYWHEEL_P = 100;
-    public static double POLLEN_FLYWHEEL_I = 0;
-    public static double POLLEN_FLYWHEEL_D = 0;
-
-    // Nectar flywheel.
-    public static double NECTAR_FLYWHEEL_RPM = 3650;
-    public static double NECTAR_FLYWHEEL_P = 125;
-    public static double NECTAR_FLYWHEEL_I = 0;
-    public static double NECTAR_FLYWHEEL_D = 0;
-
-    /** Stinger servo end points, 0 to 1. */
-    public static double STINGER_UP = 0;
-    public static double STINGER_DOWN = 0.42;
 
     // Drive and dashboard.
     private MecanumDrive chassis;
     private DriveDashboard dashboard;
+    private Robot robot;
     private Gamepad drive;
     private Gamepad operate;
-
-
-    // Intake.
-    private VelocityMotor intake;
-
-    // Pollen shooter and feed.
-    private VelocityMotor shooterPollen;
-    private CRServo triggerPollen;
-    private CRServo transportPollen;
-
-    // Nectar shooter and feed.
-    private VelocityMotor shooterNectar;
-    private CRServo triggerNectar;
-    private CRServo transportNectar;
-
-    private Servo stinger;
 
     // Must be ABOVE the buttons -- they register themselves during construction.
     private final Button.Group buttons = new Button.Group();
@@ -107,7 +54,7 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button slowMode        = buttons.add(() -> drive.left_bumper);
     private final Button turboMode       = buttons.add(() -> drive.right_bumper);
     private final Button resetFront      = buttons.add(() -> drive.b);
-    private final Button forceShoot       = buttons.add(() -> drive.a && drive.right_bumper);
+    private final Button forceShoot      = buttons.add(() -> drive.a && drive.right_bumper);
 
     // Mechanism controls.
     private final Button toggleIntake    = buttons.add(() -> operate.x);
@@ -117,48 +64,20 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button sting           = buttons.add(() -> operate.left_bumper);
 
     private RobotSettings settings;
-    private List<LynxModule> hubs;
-    private long lastLoop, nextBatteryRead;
-    private double batteryVolts = 12.5;
-    private double appliedFlywheelF = FLYWHEEL_F;
-    private boolean feeding;
+    private long lastLoop;
 
     @Override
     public void runOpMode() {
-        // First, before anything reads a setting: robot.json replaces the defaults above.
+        // First, before anything reads a setting: robot.json replaces the defaults.
         settings = new RobotSettings().load();   // every @Configurable class
         // Everything sent to telemetry also reaches the Total Chaos Dashboard.
         telemetry = new DashboardTelemetry(telemetry);
 
-        // Bulk reads: the first motor read in a loop fetches every encoder value of that hub in
-        // one call, instead of one call per motor. Cleared at the top of each loop.
-        hubs = hardwareMap.getAll(LynxModule.class);
-        for (LynxModule hub : hubs) {
-            hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL);
-        }
-
-        // Drive.
+        // Hardware names must match the active robot config exactly (each mechanism has its own).
         chassis = new MecanumDrive(hardwareMap);
-
-        // Hardware names must match the active robot config exactly.
-        // Intake.
-        intake = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD, 145.1);
-        intake.setPIDF(INTAKE_P, intake.getI(), intake.getD(), INTAKE_F);
-
-        // Pollen shooter and feed.
-        shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
-        shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, POLLEN_FLYWHEEL_I, POLLEN_FLYWHEEL_D, FLYWHEEL_F);
-        triggerPollen = hardwareMap.get(CRServo.class, "triggerPollen");
-        triggerPollen.setDirection(DcMotorSimple.Direction.REVERSE);
-        transportPollen = hardwareMap.get(CRServo.class, "transportPollen");
-        transportPollen.setDirection(DcMotorSimple.Direction.REVERSE);
-
-        // Nectar shooter and feed.
-        shooterNectar = new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD);
-        shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, NECTAR_FLYWHEEL_I, NECTAR_FLYWHEEL_D, FLYWHEEL_F);
-        triggerNectar = hardwareMap.get(CRServo.class, "triggerNectar");
-        transportNectar = hardwareMap.get(CRServo.class, "transportNectar");
-        stinger = hardwareMap.get(Servo.class, "stinger");
+        robot = new Robot(hardwareMap);
+        // Bulk reads: one call per hub for every encoder value. Cleared at the top of each loop.
+        robot.useManualBulkReads();
 
         // Dashboard.
         dashboard = new DriveDashboard(chassis, telemetry);
@@ -169,18 +88,15 @@ public class FieldCentricJava extends LinearOpMode {
             return;
         }
         chassis.resetHeading();
-        toggleIntake.active = true;   // intake starts on; D-pad Up still toggles it
+        robot.intake.on();   // the intake starts on; operator X toggles it
 
         while (opModeIsActive()) {
             long start = System.nanoTime();
-            for (LynxModule hub : hubs) {
-                hub.clearBulkCache();
-            }
+            robot.clearBulkCache();
             readGamepad();
             updateDriving();
             long driven = System.nanoTime();
-            updateIntake();
-            updateServos();
+            updateIntakeAndServos();
             long mechanisms = System.nanoTime();
             updateShooter();
             long shot = System.nanoTime();
@@ -229,129 +145,39 @@ public class FieldCentricJava extends LinearOpMode {
         }
     }
 
-    private void updateIntake() {
-        if (INTAKE_P != intake.getP() || INTAKE_F != intake.getF()) {
-            intake.setPIDF(INTAKE_P, intake.getI(), intake.getD(), INTAKE_F);
-        }
+    private void updateIntakeAndServos() {
         if (toggleIntake.pressed()) {
-            toggleIntake.toggle();
+            robot.intake.toggle();
         }
-        // Holding reverse wins over the toggle, and only lasts while held. The toggle is left
-        // alone, so letting go returns the intake to whatever it was doing before.
-        double rpm = 0;
-        if (!INTAKE_ENABLED) {
-            rpm = 0;
-        } else if (reverseIntake.down()) {
-            rpm = -INTAKE_RPM;
-        } else if (toggleIntake.active) {
-            rpm = INTAKE_RPM;
-        }
-        intake.setTargetRPM(rpm);
-    }
-
-    private void updateServos() {
-        // Transports run only while the flywheels are on (operator A, or FLYWHEELS_ON on the Tune tab).
-        transportPollen.setPower(FLYWHEELS_ON ? 1 : 0);
-        feeding = gate.down() || forceShoot.down();
-        triggerNectar.setPower(feeding ? 1 : 0);
-        triggerPollen.setPower(feeding ? 1 : 0);
-        transportNectar.setPower(FLYWHEELS_ON ? 1 : 0);
-        stinger.setPosition(sting.down() ? STINGER_DOWN : STINGER_UP);
-    }
-
-    /** Flywheel F for this battery voltage, from the settings above. */
-    public static double compensatedFlywheelF(double voltage) {
-        return FlywheelCompensation.f(voltage, FLYWHEEL_VOLTAGE_COMPENSATION,
-                FLYWHEEL_F, FLYWHEEL_F_AT_10V);
-    }
-
-    /** Lowest valid hub voltage; use the previous reading if no sensor is valid. */
-    public static double flywheelBatteryVoltage(com.qualcomm.robotcore.hardware.HardwareMap map,
-                                                double previous) {
-        double volts = Double.POSITIVE_INFINITY;
-        for (VoltageSensor sensor : map.voltageSensor) {
-            double reading = sensor.getVoltage();
-            if (Double.isFinite(reading) && reading > 0) volts = Math.min(volts, reading);
-        }
-        return Double.isFinite(volts) ? volts : previous;
+        // Holding reverse wins over the toggle, and only lasts while held.
+        robot.intake.reverse(reverseIntake.down());
+        robot.intake.update();
+        robot.feeder.set(gate.down() || forceShoot.down());
+        robot.feeder.update();
+        robot.stinger.set(sting.down());
+        robot.stinger.update();
     }
 
     private void updateShooter() {
-        long now = System.nanoTime();
-        // Reading the battery is a call to the hub that takes a few ms, so only 4 times a second.
-        // The same reading drives the flywheel F and the Battery V telemetry.
-        if (now >= nextBatteryRead) {
-            batteryVolts = flywheelBatteryVoltage(hardwareMap, batteryVolts);
-            nextBatteryRead = now + 250_000_000L;
-        }
-        appliedFlywheelF = compensatedFlywheelF(batteryVolts);
-        if (POLLEN_FLYWHEEL_P != shooterPollen.getP() || POLLEN_FLYWHEEL_I != shooterPollen.getI()
-                || POLLEN_FLYWHEEL_D != shooterPollen.getD() || appliedFlywheelF != shooterPollen.getF()) {
-            shooterPollen.setPIDF(POLLEN_FLYWHEEL_P, POLLEN_FLYWHEEL_I, POLLEN_FLYWHEEL_D, appliedFlywheelF);
-        }
-        if (NECTAR_FLYWHEEL_P != shooterNectar.getP() || NECTAR_FLYWHEEL_I != shooterNectar.getI()
-                || NECTAR_FLYWHEEL_D != shooterNectar.getD() || appliedFlywheelF != shooterNectar.getF()) {
-            shooterNectar.setPIDF(NECTAR_FLYWHEEL_P, NECTAR_FLYWHEEL_I, NECTAR_FLYWHEEL_D, appliedFlywheelF);
-        }
         // Flips the same switch the Tune tab shows, so the button and the dashboard always agree.
         if (toggleFlywheels.pressed()) {
-            FLYWHEELS_ON = !FLYWHEELS_ON;
+            Flywheels.FLYWHEELS_ON = !Flywheels.FLYWHEELS_ON;
         }
-        shooterPollen.setTargetRPM(FLYWHEELS_ON ? POLLEN_FLYWHEEL_RPM : 0);
-        shooterNectar.setTargetRPM(FLYWHEELS_ON ? NECTAR_FLYWHEEL_RPM : 0);
+        robot.flywheels.set(Flywheels.FLYWHEELS_ON);
+        robot.readBattery();
+        robot.flywheels.update(robot.batteryVolts());
     }
 
     /**
-     * Everything the drivers and the dashboard see, in one place. Each motor speed is read
-     * from the hub once per loop (every read is a call to the hub that costs loop time).
-     *
-     * telemetry.addData goes to the Driver Station and the dashboard; Dash.put to the dashboard
-     * only (values for charts that drivers do not need). The names match the autonomous and the
-     * simulator, so the same charts work everywhere.
+     * Everything the drivers and the dashboard see, in one place: each mechanism's lines
+     * (Driver Station and dashboard) and chart values (dashboard only). The names match the
+     * autonomous and the simulator, so the same charts work everywhere.
      */
     private void updateTelemetry() {
-        double intakeRpm = intake.getRPM();
-        double pollenRpm = shooterPollen.getRPM();
-        double nectarRpm = shooterNectar.getRPM();
-        boolean ready = FLYWHEELS_ON
-                && Math.abs(pollenRpm - shooterPollen.getTargetRPM()) < VelocityMotor.RPM_TOLERANCE
-                && Math.abs(nectarRpm - shooterNectar.getTargetRPM()) < VelocityMotor.RPM_TOLERANCE;
-
         long now = System.nanoTime();
-
-        telemetry.addLine("--- INTAKE ---");
-        telemetry.addData("Intake", !INTAKE_ENABLED ? "DISABLED (Tune tab)"
-                : reverseIntake.down() ? "REVERSE" : (toggleIntake.active ? "ON" : "OFF"));
-        telemetry.addData("Intake speed", rpmLine(intakeRpm, intake.getTargetRPM()));
-        telemetry.addLine("");
-        telemetry.addLine("--- SHOOTERS ---");
-        telemetry.addData("Flywheels", !FLYWHEELS_ON ? "OFF" : ready ? "READY" : "spinning up");
-        telemetry.addData("Pollen", rpmLine(pollenRpm, shooterPollen.getTargetRPM()));
-        telemetry.addData("Nectar", rpmLine(nectarRpm, shooterNectar.getTargetRPM()));
-        telemetry.addData("Feeding", feeding);
-        telemetry.addData("Stinger", stinger.getPosition());
-        telemetry.addData("Battery V", "%.2f", batteryVolts);
-        telemetry.addData("Flywheel compensated F", "%.2f", appliedFlywheelF);
-        telemetry.addLine("Pollen hub PIDF " + shooterPollen.getAppliedPIDF());
-        telemetry.addLine("Nectar hub PIDF " + shooterNectar.getAppliedPIDF());
+        robot.telemetry(telemetry);
         settings.update(telemetry::addData);
-
-        // Dashboard only: numbers to chart.
-        Dash.put("Intake RPM", intakeRpm);
-        Dash.put("Intake target", intake.getTargetRPM());
-        Dash.put("Pollen RPM", pollenRpm);
-        Dash.put("Pollen target", shooterPollen.getTargetRPM());
-        Dash.put("Nectar RPM", nectarRpm);
-        Dash.put("Nectar target", shooterNectar.getTargetRPM());
-        Dash.put("Flywheels on", FLYWHEELS_ON);
-        Dash.put("Flywheels ready", ready);
         if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
         lastLoop = now;
-    }
-
-    /** "3385 / 3400 RPM (-0.4%)" for the Driver Station. */
-    private static String rpmLine(double rpm, double target) {
-        String line = Math.round(rpm) + " / " + Math.round(target) + " RPM";
-        return target == 0 ? line : String.format(java.util.Locale.US, "%s (%+.1f%%)", line, (rpm - target) / Math.abs(target) * 100);
     }
 }

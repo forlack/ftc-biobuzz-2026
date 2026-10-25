@@ -43,7 +43,7 @@ Imports: `org.firstinspires.ftc.teamcode.dashboard.Configurable`,
 | A heading or instruction line | `telemetry.addLine("--- SHOOTERS ---")` | Driver Station only |
 | Draw the robot on the field | `Dash.pose(x, y, headingRadians)` (Pedro inches) | Live tab field |
 | End the loop | `telemetry.update()` (with the wrapper it also ends the dashboard frame) | — |
-| Add an autonomous function | see [below](#an-autonomous-function) | Paths tab |
+| Add a mechanism or an auton function | see [below](#a-mechanism-teleop-auton-and-dashboard-at-once) | Tune tab, Paths tab |
 | Let the Gamepad drawer drive (practice) | `drive = DashboardGamepads.combine(gamepad1, 1);` once per loop, then read only `drive` | the Driver Station gamepad plus the drawer's |
 
 **Numbers and booleans** can be charted (**+ Add chart** on the Live tab); text goes to the
@@ -74,29 +74,77 @@ What is different on purpose:
 - **Read each sensor or motor once per loop** and reuse the number. Every hardware read is a
   call to the hub that costs loop time; `telemetry.addData("RPM", motor.getRPM())` in three
   places is three reads. Put telemetry in one method at the end of the loop
-  (`FieldCentricJava.updateTelemetry()` is the example).
+  (each mechanism's `telemetry()`, called from `Robot.telemetry()`, is the example).
 - **Call `telemetry.update()` once per loop.** Each call is one dashboard frame.
 - **Slow reads** (battery voltage) only a few times a second. The teleop shows how.
 - **Nobody watching costs almost nothing**: values only go into a small buffer.
 - **See the cost**: the Live toolbar and the `Dashboard ms` chart series show how much of each
   loop is spent in the dashboard (`Dash.put`, `Dash.frame`); it is measured, not guessed.
 
-## An autonomous function
+## A mechanism (teleop, auton and dashboard at once)
 
-Three steps, so one function runs on the robot and in the simulator:
+Each mechanism is one class in `mechanisms/`: its hardware, its settings, its auton functions,
+what it does every loop, and its telemetry. `mechanisms/Robot` makes them all; the teleop and
+the autonomous both use that same `Robot`. An arm:
 
-1. In `lib/Mechanisms.java`, as a `default` method that does nothing (the simulator then needs
-   no change): `default void arm(boolean up) { }`
-2. In `PedroAutonomous.RobotMechanisms`, do the real thing:
-   `@Override public void arm(boolean up) { armServo.setPosition(up ? Arm.UP : Arm.DOWN); }`
-3. In `lib/StandardActions.java`, name it for the path editor:
-   `.instant("armUp", "arm up", "Raise the arm.", () -> robot.arm(true))`
-   (`.instant` = one shot, can go on a path at a %; `.step` = takes time, has settings like
-   seconds, only between paths).
+```java
+package org.firstinspires.ftc.teamcode.mechanisms;
 
-After a deploy (or restarting `./simulate`) it is in **Add to the sequence**. Names are
-permanent once an auton uses them: the robot refuses an auton naming a function it does not
-have.
+@Configurable                                   // UP / DOWN on the Tune tab, saved in robot.json
+public class Arm {
+    public static double UP = 0.8, DOWN = 0.2;
+
+    private final Servo servo;
+    private boolean up;
+
+    public Arm(HardwareMap hardwareMap) {
+        servo = hardwareMap.get(Servo.class, "arm");   // the name in the robot configuration
+    }
+
+    @AutoFunction(name = "armUp", label = "arm up", help = "Raise the arm.")
+    public void up() { up = true; }
+
+    @AutoFunction(name = "armDown", label = "arm down", help = "Lower the arm.")
+    public void down() { up = false; }
+
+    public void update() { servo.setPosition(up ? UP : DOWN); }       // once per loop
+
+    public void telemetry(Telemetry telemetry) { telemetry.addData("Arm", up ? "UP" : "DOWN"); }
+}
+```
+
+Then:
+
+1. `mechanisms/Robot.java`: `public final Arm arm;`, `arm = new Arm(hardwareMap);` in the
+   constructor, and `arm.update()` / `arm.telemetry(telemetry)` in `update()` / `telemetry()`.
+2. Teleop (`FieldCentricJava`): a button, `if (armButton.pressed()) robot.arm.up();`, and
+   `robot.arm.update()` in the loop.
+3. `REQUIRED` in `dashboard/web/js/hardware.js`: add `arm`, so the Robot tab warns when the
+   configuration lacks it.
+
+After a deploy (or restarting `./simulate`): `Arm` is on the Tune tab, and **arm up** / **arm
+down** are in the Auton Sequence's **Add to the sequence** (also as functions on a path). No
+other file changes; the simulator lists them too (they do nothing there until someone
+simulates an arm in `sim/SimOpModes.SimMechanisms` with the same names).
+
+Rules for `@AutoFunction` (details in `lib/AutoFunction.java`):
+
+- Public method on a mechanism that is a `public final` field of `Robot`.
+- An action returns `void` and only sets what happens next; `update()` does the work. That way
+  it can also fire part way along a path.
+- Settings are `double` parameters marked `@AutoFunction.Param(name, label, unit, value, min, max)`;
+  the editor shows a box for each.
+- A `boolean` method is a condition (like `flywheelsReady`): not offered in the editor, but
+  steps can wait for it. `listed = false` hides an action the same way (`feedOn`).
+- The name is permanent once an auton uses it: the robot refuses an auton naming a function it
+  does not have.
+
+Functions that take time and combine others (`shoot`: spin up, wait until ready, feed for N
+seconds) are written in `lib/StandardActions.java` with the function names.
+
+Settings saved before a class existed: when settings move from one class to another with the
+same names, `@RobotSettings.MovedFrom("OldClass")` keeps older robot.json files working (that is
+how the intake, flywheel and stinger settings left `FieldCentricJava`).
 
 ## How it works (for the curious)
 

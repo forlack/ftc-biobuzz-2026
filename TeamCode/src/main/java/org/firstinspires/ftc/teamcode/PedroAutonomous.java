@@ -4,20 +4,17 @@ import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
-import com.qualcomm.robotcore.hardware.CRServo;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
+import org.firstinspires.ftc.teamcode.lib.AutoFunctions;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
-import org.firstinspires.ftc.teamcode.lib.Mechanisms;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.StandardActions;
-import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
+import org.firstinspires.ftc.teamcode.mechanisms.Robot;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
 
 import java.io.File;
@@ -28,6 +25,9 @@ import java.util.List;
 /**
  * Runs an auton made in the dashboard's path editor: autos/ROUTE.json on the robot, one file
  * with the start pose, the paths, functions along the paths and the sequence in between.
+ *
+ * The route's functions (intake on, shoot, stinger down...) are the mechanisms' @AutoFunction
+ * methods, run on the same mechanisms/Robot as the teleop.
  *
  * During INIT, D-pad up/down picks another route file. Place the robot at the start pose shown.
  *
@@ -50,13 +50,7 @@ public class PedroAutonomous extends OpMode {
     private boolean lastUp, lastDown;
     private long lastLoop;
 
-    private VelocityMotor intake;
-    private VelocityMotor shooterPollen;
-    private VelocityMotor shooterNectar;
-    private CRServo transportPollen, transportNectar;
-    private CRServo triggerPollen, triggerNectar;
-    private Servo stinger;
-    private RobotMechanisms robot;
+    private Robot robot;
 
     @Override
     public void init() {
@@ -69,25 +63,12 @@ public class PedroAutonomous extends OpMode {
 
         follower = Constants.create(hardwareMap);
 
-        intake = new VelocityMotor(hardwareMap, "intake", DcMotorSimple.Direction.FORWARD, 145.1);
-        intake.setPIDF(FieldCentricJava.INTAKE_P, 0, 0, FieldCentricJava.INTAKE_F);
-        shooterPollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
-        shooterPollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, FieldCentricJava.POLLEN_FLYWHEEL_I,
-                FieldCentricJava.POLLEN_FLYWHEEL_D, FieldCentricJava.FLYWHEEL_F);
-        shooterNectar = new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD);
-        shooterNectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, FieldCentricJava.NECTAR_FLYWHEEL_I,
-                FieldCentricJava.NECTAR_FLYWHEEL_D, FieldCentricJava.FLYWHEEL_F);
-
-        transportPollen = hardwareMap.get(CRServo.class, "transportPollen");
-        transportPollen.setDirection(DcMotorSimple.Direction.REVERSE);
-        transportNectar = hardwareMap.get(CRServo.class, "transportNectar");
-        triggerPollen = hardwareMap.get(CRServo.class, "triggerPollen");
-        triggerPollen.setDirection(DcMotorSimple.Direction.REVERSE);
-        triggerNectar = hardwareMap.get(CRServo.class, "triggerNectar");
-        stinger = hardwareMap.get(Servo.class, "stinger");
-        stinger.setPosition(FieldCentricJava.STINGER_UP);
-        robot = new RobotMechanisms();
-        robot.feed(false);
+        robot = new Robot(hardwareMap);
+        // As before: stinger up and triggers stopped at INIT; nothing else moves until start.
+        robot.stinger.up();
+        robot.stinger.update();
+        robot.feeder.off();
+        robot.feeder.update();
 
         prepare();
     }
@@ -104,7 +85,7 @@ public class PedroAutonomous extends OpMode {
             }
             AutoRoute route = AutoRoute.read(file);
             start = route.start;
-            auto = route.build(follower, StandardActions.create(robot));
+            auto = route.build(follower, StandardActions.create(AutoFunctions.of(robot)));
             source = file.getPath() + " (\"" + route.name + "\")";
             follower.setPose(start);
         } catch (Exception error) {
@@ -168,58 +149,33 @@ public class PedroAutonomous extends OpMode {
             requestOpModeStop();
             return;
         }
-        updateFlywheelCompensation();
         // Intake and flywheels run the whole match.
-        robot.intake(true);
-        robot.flywheels(true);
+        robot.intake.on();
+        robot.flywheels.on();
+        robot.update();
     }
 
     @Override
     public void stop() {
         if (follower != null) follower.stop();
         if (robot != null) {
-            robot.feed(false);
-            robot.intake(false);
-            robot.flywheels(false);
-        }
-    }
-
-    private long nextFlywheelCompensation;
-    private double flywheelVoltage = 12.5;
-
-    /** Same voltage-compensated flywheel F as teleop, battery read 4 times a second. */
-    private void updateFlywheelCompensation() {
-        long now = System.nanoTime();
-        if (now < nextFlywheelCompensation) return;
-        nextFlywheelCompensation = now + 250_000_000L;
-        flywheelVoltage = FieldCentricJava.flywheelBatteryVoltage(hardwareMap, flywheelVoltage);
-        double f = FieldCentricJava.compensatedFlywheelF(flywheelVoltage);
-        if (f != shooterPollen.getF() || FieldCentricJava.POLLEN_FLYWHEEL_P != shooterPollen.getP()
-                || FieldCentricJava.POLLEN_FLYWHEEL_I != shooterPollen.getI()
-                || FieldCentricJava.POLLEN_FLYWHEEL_D != shooterPollen.getD()) {
-            shooterPollen.setPIDF(FieldCentricJava.POLLEN_FLYWHEEL_P, FieldCentricJava.POLLEN_FLYWHEEL_I,
-                    FieldCentricJava.POLLEN_FLYWHEEL_D, f);
-        }
-        if (f != shooterNectar.getF() || FieldCentricJava.NECTAR_FLYWHEEL_P != shooterNectar.getP()
-                || FieldCentricJava.NECTAR_FLYWHEEL_I != shooterNectar.getI()
-                || FieldCentricJava.NECTAR_FLYWHEEL_D != shooterNectar.getD()) {
-            shooterNectar.setPIDF(FieldCentricJava.NECTAR_FLYWHEEL_P, FieldCentricJava.NECTAR_FLYWHEEL_I,
-                    FieldCentricJava.NECTAR_FLYWHEEL_D, f);
+            robot.feeder.off();
+            robot.intake.off();
+            robot.flywheels.off();
+            robot.update();
         }
     }
 
     @Override
     public void loop() {
         if (auto == null) return;
-        updateFlywheelCompensation();
         follower.update();
         auto.update();
+        robot.update();
 
         Pose pose = follower.pose();
         telemetry.addData("Step", auto.stepNumber() + "/" + auto.stepCount() + "  " + auto.stepName());
         telemetry.addData("Following", follower.isBusy());
-        telemetry.addData("Battery V", "%.2f", flywheelVoltage);
-        telemetry.addData("Flywheel compensated F", "%.2f", shooterNectar.getF());
         telemetry.addData("Completion", follower.completion());
         telemetry.addData("X", pose.x());
         telemetry.addData("Y", pose.y());
@@ -227,54 +183,11 @@ public class PedroAutonomous extends OpMode {
 
         // Dashboard only: the same names the teleop and the simulator chart.
         Dash.put("Route done", auto.finished());
-        robot.telemetry();
+        robot.telemetry(telemetry);
         long now = System.nanoTime();
         if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
         lastLoop = now;
         Dash.pose(pose.x(), pose.y(), pose.heading());
         telemetry.update();   // also ends this loop's dashboard frame
-    }
-
-    /** The robot's mechanisms, for the route's actions. */
-    private final class RobotMechanisms implements Mechanisms {
-        private boolean flywheelsOn, intakeOn;
-
-        @Override public void intake(boolean on) {
-            intakeOn = on;
-            intake.setTargetRPM(on && FieldCentricJava.INTAKE_ENABLED ? FieldCentricJava.INTAKE_RPM : 0);
-        }
-
-        @Override public void flywheels(boolean on) {
-            flywheelsOn = on;
-            shooterPollen.setTargetRPM(on ? FieldCentricJava.POLLEN_FLYWHEEL_RPM : 0);
-            shooterNectar.setTargetRPM(on ? FieldCentricJava.NECTAR_FLYWHEEL_RPM : 0);
-            // Same rule as teleop: the transports run while the flywheels do.
-            transportPollen.setPower(on ? 1 : 0);
-            transportNectar.setPower(on ? 1 : 0);
-        }
-
-        @Override public boolean flywheelsReady() {
-            return flywheelsOn && shooterPollen.atSpeed() && shooterNectar.atSpeed();
-        }
-
-        @Override public void feed(boolean on) {
-            triggerPollen.setPower(on ? 1 : 0);
-            triggerNectar.setPower(on ? 1 : 0);
-        }
-
-        @Override public void stinger(boolean down) {
-            stinger.setPosition(down ? FieldCentricJava.STINGER_DOWN : FieldCentricJava.STINGER_UP);
-        }
-
-        void telemetry() {
-            Dash.put("Pollen RPM", shooterPollen.getRPM());
-            Dash.put("Pollen target", shooterPollen.getTargetRPM());
-            Dash.put("Nectar RPM", shooterNectar.getRPM());
-            Dash.put("Nectar target", shooterNectar.getTargetRPM());
-            Dash.put("Intake RPM", intake.getRPM());
-            Dash.put("Intake target", intake.getTargetRPM());
-            Dash.put("Flywheels ready", flywheelsReady());
-            Dash.put("Stinger", stinger.getPosition());
-        }
     }
 }

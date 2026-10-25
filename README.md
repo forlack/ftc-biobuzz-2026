@@ -298,8 +298,9 @@ while (opModeIsActive()) {
 }
 ```
 
-To add something to the robot, write an `updateXxx()` method and add one call to the loop.
-Its telemetry goes in `updateTelemetry()`: `telemetry.addData(...)` shows on the Driver Station
+To add a mechanism, write one class in `mechanisms/` (hardware, settings, `@AutoFunction`
+methods for the auton, `update()`, `telemetry()`) and add it to `mechanisms/Robot`; the teleop
+and the autonomous both use `Robot`. Telemetry: `telemetry.addData(...)` shows on the Driver Station
 and the Total Chaos Dashboard (numbers can be charted); `Dash.put(...)` is for a number only
 the dashboard needs. New settings: `public static` fields in a `@Configurable` class. The
 developer guide: [dashboard/DEVELOPER.md](dashboard/DEVELOPER.md).
@@ -308,7 +309,7 @@ developer guide: [dashboard/DEVELOPER.md](dashboard/DEVELOPER.md).
 Controller will stop the robot if the loop stops turning over, and gamepads only refresh
 between iterations. Use a state machine instead — `PedroAutonomous` is the worked example.
 
-`FieldCentricJava.java` is the worked example to add to.
+`FieldCentricJava.java` (buttons) and `mechanisms/` (what they control) are the worked examples.
 
 ## More detail
 

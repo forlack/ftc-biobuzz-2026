@@ -47,7 +47,7 @@ Tick each one; write down anything that fails.
 | 1 | Driver Station | Connects, OpModes listed, Field Centric drives as before |
 | 2 | No Panels | <http://192.168.43.1:8001> does **not** load (Panels was removed on this branch); the Driver Station telemetry looks as before |
 | 3 | Dashboard | <http://192.168.43.1:8686> loads, says **Total Chaos 24621**, no SIMULATOR badge, top right **live** |
-| 4 | Tune tab | Groups FieldCentricJava, MecanumDrive, PedroAutonomous, DashboardConfig with green dots; **FlywheelTuner under Hidden** at the bottom (Show / Hide work); **no Simulator group**; no "No settings found" warning on the Driver Station |
+| 4 | Tune tab | Groups Flywheels, Intake, MecanumDrive, PedroAutonomous, Stinger, DashboardConfig with green dots (no FieldCentricJava group: its settings moved to the mechanisms, and values saved under it before still load: check FLYWHEEL_F, STINGER_DOWN and the RPMs are your tuned ones, then **Save to robot** once); **FlywheelTuner under Hidden** at the bottom (Show / Hide work); **no Simulator group**; no "No settings found" warning on the Driver Station |
 | 5 | Robot tab | Map **2222-Config (in use)**, no red problems |
 | 6 | OpMode bar | Init then Start **Field Centric (Java)** from the dashboard; Stop stops it |
 | 7 | Live tab | Flywheel, intake, battery and loop charts move; telemetry table fills. **+ Add chart** offers `Flywheels ready`, `Feeding`, `Drive forward`…; toggling flywheels / holding feed shows on them. Driver Station lines read cleanly (one line per RPM with % off). (The field stays empty in teleop: teleop does not send its position yet.) |
@@ -63,6 +63,7 @@ Tick each one; write down anything that fails.
 | 14 | Gamepad drawer | Robot on blocks first. Field Centric running. Open the **Gamepad** drawer (G): pressing buttons on the **Driver Station** gamepad lights them in the picture. **Take control** of gamepad 1, drag the left stick gently: the wheels turn; let go: they stop. Gamepad 2: **A** toggles the flywheels. Close the laptop lid (or turn off its Wi-Fi) while holding a stick: the wheels stop within a moment. Stop the OpMode: the drawer says control ended. Loop time (check 9) about the same while driving |
 | 15 | Restart adb | Once, while adb works (right after a reboot): `adb shell pm grant com.qualcomm.ftcrobotcontroller android.permission.WRITE_SECURE_SETTINGS`. Robot tab, **adb** card: says **Listening**, Restart adb is enabled. Next time adb sticks: note what the card says (Listening / Not listening), press **Restart adb**, then `adb disconnect; adb connect 192.168.43.1:5555` and `adb devices`. Write down whether it worked; if not, power-cycle as before |
 | 16 | Path speed | Paths tab: pencil on a **follow** step, set a speed (say 40%), Save, run the auton: that path is visibly slower |
+| 17 | Mechanisms refactor | Teleop: every button as before (intake X / D-pad down, flywheels A, gates RB, stinger LB, force shoot A+RB), Driver Station lines as before, loop time about the same. Auton: `saturday` runs exactly as before (intake and flywheels on, shoot, stinger down on path2, park). Paths tab, Add to the sequence: same functions as before |
 
 Load measurement for check 9 (Field Centric running, robot on blocks or driven gently):
 

@@ -5,12 +5,13 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
-import org.firstinspires.ftc.teamcode.FieldCentricJava;
 import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
+import org.firstinspires.ftc.teamcode.mechanisms.Flywheels;
+import org.firstinspires.ftc.teamcode.mechanisms.Robot;
 
 import java.util.Locale;
 
@@ -67,7 +68,7 @@ public class FlywheelTuner extends LinearOpMode {
         for (LynxModule hub : hardwareMap.getAll(LynxModule.class)) {
             hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
         }
-        // Same names and directions as FieldCentricJava.
+        // Same names and directions as mechanisms/Flywheels.
         Wheel pollen = new Wheel("Pollen", new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE));
         Wheel nectar = new Wheel("Nectar", new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD));
         Wheel[] wheels = {pollen, nectar};
@@ -79,7 +80,7 @@ public class FlywheelTuner extends LinearOpMode {
         telemetry.update();
         waitForStart();
 
-        double volts = FieldCentricJava.flywheelBatteryVoltage(hardwareMap, 12.5);
+        double volts = Robot.batteryVoltage(hardwareMap, 12.5);
         long nextVolts = 0;
         boolean high = false;
         long phaseStart = System.nanoTime();
@@ -87,14 +88,14 @@ public class FlywheelTuner extends LinearOpMode {
             while (opModeIsActive()) {
                 long now = System.nanoTime();
                 if (now >= nextVolts) {
-                    volts = FieldCentricJava.flywheelBatteryVoltage(hardwareMap, volts);
+                    volts = Robot.batteryVoltage(hardwareMap, volts);
                     nextVolts = now + 250_000_000L;
                 }
-                double f = FieldCentricJava.compensatedFlywheelF(volts);
-                apply(pollen, FieldCentricJava.POLLEN_FLYWHEEL_P, FieldCentricJava.POLLEN_FLYWHEEL_I,
-                        FieldCentricJava.POLLEN_FLYWHEEL_D, f, FieldCentricJava.POLLEN_FLYWHEEL_RPM);
-                apply(nectar, FieldCentricJava.NECTAR_FLYWHEEL_P, FieldCentricJava.NECTAR_FLYWHEEL_I,
-                        FieldCentricJava.NECTAR_FLYWHEEL_D, f, FieldCentricJava.NECTAR_FLYWHEEL_RPM);
+                double f = Flywheels.compensatedF(volts);
+                apply(pollen, Flywheels.POLLEN_FLYWHEEL_P, Flywheels.POLLEN_FLYWHEEL_I,
+                        Flywheels.POLLEN_FLYWHEEL_D, f, Flywheels.POLLEN_FLYWHEEL_RPM);
+                apply(nectar, Flywheels.NECTAR_FLYWHEEL_P, Flywheels.NECTAR_FLYWHEEL_I,
+                        Flywheels.NECTAR_FLYWHEEL_D, f, Flywheels.NECTAR_FLYWHEEL_RPM);
 
                 // Switch between the low and high parts of the cycle.
                 double inPhase = (now - phaseStart) / 1e9;

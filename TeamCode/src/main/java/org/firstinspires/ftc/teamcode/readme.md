@@ -13,7 +13,8 @@ Driving already works, so you can go straight to whatever you are adding.
 | File | What it is |
 |---|---|
 | `FieldCentricJava.java` | Our real teleop. A worked example of everything below. |
-| `PedroAutonomous.java` | Autonomous that follows a path. Shows a state machine. |
+| `PedroAutonomous.java` | Runs an auton made in the dashboard's Paths tab. |
+| `mechanisms/` | One class per mechanism (intake, flywheels, feeder, stinger) and `Robot`, which makes them all. Teleop and auton both use them. |
 | `helpers/` | Checks to run when something seems wrong: `MotorsTest` (each motor turns the right way) and `LocalizationCheck` (the Pinpoint reads the right way). |
 | `lib/` | The framework. Read it if you are curious; you rarely need to change it. |
 | `pedro/` | Pedro Pathing config and its AutoTune procedures. |
@@ -26,7 +27,7 @@ One loop that runs 50–200 times a second. Each method does a little work and r
 while (opModeIsActive()) {
     readGamepad();
     updateDriving();
-    updateArm();          // ← yours
+    robot.arm.update();   // ← yours (a mechanism)
     dashboard.update();
 }
 ```
@@ -38,21 +39,25 @@ machine that does one step per loop. `PedroAutonomous.java` shows how.
 
 ## Adding your own part of the robot
 
-1. Get the hardware in `runOpMode()`:
+A new mechanism (an arm, say) is **one class in `mechanisms/`**, and then the teleop, the
+autonomous and the dashboard can all use it:
+
+1. `mechanisms/Arm.java`: get the hardware in the constructor (the name must match the robot
+   config), settings as `public static` fields (they show on the Tune tab), methods like
+   `up()` / `down()`, an `update()` that moves the hardware once per loop, and `telemetry()`.
+   Put `@AutoFunction(name = "armUp", label = "arm up")` on a method and the auton sequence
+   can use it.
+2. `mechanisms/Robot.java`: one field `public final Arm arm;`, made in the constructor, and its
+   `update()` / `telemetry()` calls.
+3. The teleop: bind a button with the others, and use it in the loop:
    ```java
-   arm = hardwareMap.get(DcMotorEx.class, "Arm");   // name must match the robot config
+   private final Button armUp = buttons.add(() -> operate.dpad_up);
+   ...
+   if (armUp.pressed()) robot.arm.up();
+   robot.arm.update();
    ```
-2. Bind a button up with the others:
-   ```java
-   private final Button armUp = buttons.add(() -> pad.dpad_up);
-   ```
-3. Write the method and add one call to the loop:
-   ```java
-   private void updateArm() {
-       arm.setPower(armUp.down() ? 0.5 : 0.0);
-       dashboard.addData("arm position", arm.getCurrentPosition());
-   }
-   ```
+
+The whole worked example, with the rules: `dashboard/DEVELOPER.md` ("A mechanism").
 
 ## Buttons
 

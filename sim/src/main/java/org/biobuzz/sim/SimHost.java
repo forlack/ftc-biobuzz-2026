@@ -41,7 +41,7 @@ public class SimHost implements RobotHost {
     public SimHost(SimWorld world, File webRoot) {
         this.world = world;
         this.webRoot = webRoot;
-        this.catalog = StandardActions.create(new SimOpModes.SimMechanisms(world));
+        this.catalog = StandardActions.create(SimOpModes.functions(new SimOpModes.SimMechanisms(world)));
         add("Field Centric (Java)", "teleop", SimOpModes.TeleOp::new);
         add("Pedro Pathing Autonomous", "autonomous", SimOpModes.Autonomous::new);
         settings.load();
