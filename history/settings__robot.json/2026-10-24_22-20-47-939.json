@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "FieldCentricJava": {
+    "FLYWHEEL_F": 11,
+    "FLYWHEEL_F_AT_10V": 12,
+    "FLYWHEEL_VOLTAGE_COMPENSATION": false,
+    "INTAKE_F": 15,
+    "INTAKE_P": 15,
+    "INTAKE_RPM": 700,
+    "NECTAR_FLYWHEEL_D": 0,
+    "NECTAR_FLYWHEEL_I": 0.5,
+    "NECTAR_FLYWHEEL_P": 75,
+    "NECTAR_FLYWHEEL_RPM": 3650,
+    "POLLEN_FLYWHEEL_D": 0,
+    "POLLEN_FLYWHEEL_I": 0.5,
+    "POLLEN_FLYWHEEL_P": 75,
+    "POLLEN_FLYWHEEL_RPM": 3400,
+    "STINGER_DOWN": 0.42,
+    "STINGER_UP": 0
+  },
+  "FlywheelTuner": {
+    "HIGH_SECONDS": 3,
+    "LOW_PERCENT": 80,
+    "LOW_SECONDS": 3
+  },
+  "MecanumDrive": {
+    "INITIAL_SPEED": 0.75,
+    "MAX_ALLOWED_SPEED": 1,
+    "MIN_ALLOWED_SPEED": 0.1,
+    "SLOW_SPEED": 0.25,
+    "SPEED_STEP": 0.05,
+    "START_IN_BRAKE_MODE": true,
+    "STICK_DEADZONE": 0.1,
+    "TURBO_SPEED": 1
+  },
+  "PedroAutonomous": {
+    "ROUTE": "saturday"
+  },
+  "DashboardConfig": {
+    "MAX_SAMPLES_PER_SECOND": 0
+  }
+}
