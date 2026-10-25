@@ -12,6 +12,7 @@ import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
 import org.firstinspires.ftc.teamcode.lib.MecanumDrive;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.mechanisms.Flywheels;
+import org.firstinspires.ftc.teamcode.mechanisms.Intake;
 import org.firstinspires.ftc.teamcode.mechanisms.Robot;
 
 /**
@@ -88,7 +89,6 @@ public class FieldCentricJava extends LinearOpMode {
             return;
         }
         chassis.resetHeading();
-        robot.intake.on();   // the intake starts on; operator X toggles it
 
         while (opModeIsActive()) {
             long start = System.nanoTime();
@@ -146,9 +146,11 @@ public class FieldCentricJava extends LinearOpMode {
     }
 
     private void updateIntakeAndServos() {
+        // Flips the same switch the Tune tab shows (it starts on), like the flywheels' A.
         if (toggleIntake.pressed()) {
-            robot.intake.toggle();
+            Intake.INTAKE_ON = !Intake.INTAKE_ON;
         }
+        robot.intake.set(Intake.INTAKE_ON);
         // Holding reverse wins over the toggle, and only lasts while held.
         robot.intake.reverse(reverseIntake.down());
         robot.intake.update();

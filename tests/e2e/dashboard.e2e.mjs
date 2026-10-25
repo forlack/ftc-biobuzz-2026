@@ -192,6 +192,17 @@ try {
   await mouse('mousePressed', aButton.x, aButton.y);
   await sleep(250);
   await mouse('mouseReleased', aButton.x, aButton.y);
+  // X flips the intake's switch the same way.
+  const xButton = await b.eval(`(() => { const r = document.querySelector('[data-btn="x"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+  const intakeSwitch = async () => (await api('/api/settings')).data.items.find((i) => i.group === 'Intake' && i.name === 'INTAKE_ON').value;
+  await mouse('mousePressed', xButton.x, xButton.y);
+  await sleep(250);
+  await mouse('mouseReleased', xButton.x, xButton.y);
+  for (let i = 0; i < 30 && await intakeSwitch(); i++) await sleep(100);
+  check(await intakeSwitch() === false, 'operator X flips INTAKE_ON, the switch the Tune tab shows');
+  await mouse('mousePressed', xButton.x, xButton.y);
+  await sleep(250);
+  await mouse('mouseReleased', xButton.x, xButton.y);
   await b.eval(`document.querySelector('#pad-take').click()`);   // Release
   await b.waitFor(`document.querySelector('#pad-take').textContent === 'Take control'`);
 
@@ -227,10 +238,10 @@ try {
   check(await b.eval(`document.querySelector('#pad-body').hidden`), 'the handle closes the drawer');
   // Live switches turned off for a test go back on at the next INIT (never saved, never stuck).
   await api('/api/settings', { method: 'POST', body: { group: 'Flywheels', name: 'FLYWHEELS_ON', value: false } });
-  await api('/api/settings', { method: 'POST', body: { group: 'Intake', name: 'INTAKE_ENABLED', value: false } });
+  await api('/api/settings', { method: 'POST', body: { group: 'Intake', name: 'INTAKE_ON', value: false } });
   await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Field Centric (Java)' } });
-  const switches = (await api('/api/settings')).data.items.filter((i) => ['FLYWHEELS_ON', 'INTAKE_ENABLED'].includes(i.name));
-  check(switches.length === 2 && switches.every((i) => i.value === true), 'live switches (FLYWHEELS_ON, INTAKE_ENABLED) turned off go back on at the next INIT');
+  const switches = (await api('/api/settings')).data.items.filter((i) => ['FLYWHEELS_ON', 'INTAKE_ON'].includes(i.name));
+  check(switches.length === 2 && switches.every((i) => i.value === true), 'live switches (FLYWHEELS_ON, INTAKE_ON) turned off go back on at the next INIT');
   await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
   await b.waitFor(`document.getElementById('tab-live').innerText.includes('Flywheel compensated F')`, 5000);
 
@@ -340,7 +351,7 @@ try {
   check(saved.Flywheels.POLLEN_FLYWHEEL_RPM === 3000 && saved.version === 1, 'Save writes robot.json on the robot');
   await b.waitFor(`document.querySelectorAll('#settings .dot.unsaved').length === 0`);
   check(true, 'after Save to robot every dot is green again');
-  check(!('FLYWHEELS_ON' in saved.Flywheels) && !('INTAKE_ENABLED' in saved.Intake) && !('Simulator' in saved), 'live switches are not saved');
+  check(!('FLYWHEELS_ON' in saved.Flywheels) && !('INTAKE_ON' in saved.Intake) && !('Simulator' in saved), 'live switches are not saved');
   check(saved.MecanumDrive.DRIVE_SPEED === 0.6 && !('INITIAL_SPEED' in saved.MecanumDrive), 'Save writes DRIVE_SPEED, not the old INITIAL_SPEED');
   check(!('FieldCentricJava' in saved) && saved.Stinger.STINGER_DOWN === 0.4, 'Save writes the moved settings under their mechanisms (Stinger.STINGER_DOWN 0.4), not FieldCentricJava');
   await b.screenshot(join(OUT, '2-tune.png'));
@@ -355,13 +366,13 @@ try {
   await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]').value === '3000' && document.querySelectorAll('#settings .dot.unsaved').length === 0`);
   check(true, 'the undo button next to a yellow value puts back the saved value (3000)');
   // INIT puts a live switch back on: the Tune tab shows it without a refresh.
-  await b.eval(`(() => { const t = document.querySelector('[data-key="Intake.INTAKE_ENABLED"]'); t.checked = false; t.dispatchEvent(new Event('change', { bubbles: true })); t.blur(); })()`);
-  await b.waitFor(`!document.querySelector('[data-key="Intake.INTAKE_ENABLED"]').checked && (document.activeElement.blur(), true)`);
-  const intakeEnabled = async () => (await api('/api/settings')).data.items.find((i) => i.name === 'INTAKE_ENABLED').value;
-  for (let i = 0; i < 30 && await intakeEnabled(); i++) await sleep(100);   // the robot has it off
+  await b.eval(`(() => { const t = document.querySelector('[data-key="Intake.INTAKE_ON"]'); t.checked = false; t.dispatchEvent(new Event('change', { bubbles: true })); t.blur(); })()`);
+  await b.waitFor(`!document.querySelector('[data-key="Intake.INTAKE_ON"]').checked && (document.activeElement.blur(), true)`);
+  const intakeOnNow = async () => (await api('/api/settings')).data.items.find((i) => i.name === 'INTAKE_ON').value;
+  for (let i = 0; i < 30 && await intakeOnNow(); i++) await sleep(100);   // the robot has it off
   await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Field Centric (Java)' } });
   await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
-  await b.waitFor(`document.querySelector('[data-key="Intake.INTAKE_ENABLED"]').checked`, 4000);
+  await b.waitFor(`document.querySelector('[data-key="Intake.INTAKE_ON"]').checked`, 4000);
   check(true, 'when INIT turns a live switch back on, the Tune tab shows it on by itself');
 
   // History: a second save, then the Tune tab's History button shows both and restores the first.

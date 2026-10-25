@@ -113,7 +113,6 @@ public final class SimOpModes {
 
         /** Like the teleop: holding reverse wins over the toggle; nothing when disabled. */
         double intakeTarget() {
-            if (!Intake.INTAKE_ENABLED) return 0;
             if (intakeReverse) return -Intake.INTAKE_RPM;
             return intakeOn ? Intake.INTAKE_RPM : 0;
         }
@@ -187,7 +186,6 @@ public final class SimOpModes {
         }
 
         @Override public void start() {
-            robot.intake(true);
             started = world.time();
             headingZero = world.pose()[2];
         }
@@ -208,7 +206,8 @@ public final class SimOpModes {
             }
             follower.update();
 
-            if (toggleIntake.pressed()) robot.intake(!robot.intakeOn);
+            if (toggleIntake.pressed()) Intake.INTAKE_ON = !Intake.INTAKE_ON;
+            robot.intake(Intake.INTAKE_ON);
             robot.intakeReverse = reverseIntake.down();
             if (toggleFlywheels.pressed()) Flywheels.FLYWHEELS_ON = !Flywheels.FLYWHEELS_ON;
             robot.flywheels(Flywheels.FLYWHEELS_ON);
@@ -219,8 +218,7 @@ public final class SimOpModes {
 
             robot.apply();
             robot.telemetry();
-            Dash.put("Intake", !Intake.INTAKE_ENABLED ? "DISABLED (Tune tab)"
-                    : robot.intakeReverse ? "REVERSE" : robot.intakeOn ? "ON" : "OFF");
+            Dash.put("Intake", robot.intakeReverse ? "REVERSE" : robot.intakeOn ? "ON" : "OFF");
             Dash.put("Driver", driving || operating
                     ? "Dashboard gamepad " + (driving && operating ? "1 + 2" : driving ? "1" : "2")
                     : Simulator.DEMO_DRIVING ? "Demo (nobody driving)" : "Nobody");

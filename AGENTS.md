@@ -152,6 +152,13 @@ Full guide: `dashboard/README.md`. Robot test procedure + log: `dashboard/ROBOT-
   follow. On the robot the user must make the copies (Robot tab Save as copy), Activate
   24621-Biobuzz on the DS, then Delete the old maps. "practice1"/"auton practice" autons on
   the robot were not made by our code or tests (someone used Save as new).
+- **INTAKE_ON replaces INTAKE_ENABLED (2026-10-25, user's choice):** the intake now works like
+  the flywheels: `Intake.INTAKE_ON` is teleop's on/off live switch (NotSaved, true at every
+  INIT), flipped by operator X and the Tune tab alike; teleop calls `robot.intake.set(INTAKE_ON)`
+  each loop. No master "disabled" lock any more (auton uses the instance state via
+  intakeOn/intakeOff, unaffected by the switch). Tune tab redraws when the robot's settings
+  fingerprint (state `settingsFingerprint`) differs from what it shows. e2e 137; the test sim
+  starts with `--no-seed` and only 24621-Biobuzz.xml + autos/saturday.json.
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -207,7 +214,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (135
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (137
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

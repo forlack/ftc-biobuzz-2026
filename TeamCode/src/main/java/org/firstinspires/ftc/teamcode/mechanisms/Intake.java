@@ -18,9 +18,9 @@ public class Intake {
     public static double INTAKE_P = 15;
     public static double INTAKE_I = 0;
     public static double INTAKE_F = 15;
-    /** Off: the intake never runs (teleop and auton), whatever the buttons say. A switch, not saved. */
+    /** Teleop's on/off switch (operator X flips it too). It starts on. A switch, not saved. */
     @RobotSettings.NotSaved
-    public static boolean INTAKE_ENABLED = true;
+    public static boolean INTAKE_ON = true;
 
     private final VelocityMotor motor;
     private boolean on, reverse;
@@ -36,7 +36,7 @@ public class Intake {
     @AutoFunction(name = "intakeOff", label = "intake off", help = "Stop the intake.")
     public void off() { on = false; }
 
-    public void toggle() { on = !on; }
+    public void set(boolean on) { this.on = on; }
 
     public boolean isOn() { return on; }
 
@@ -49,9 +49,7 @@ public class Intake {
             motor.setPIDF(INTAKE_P, INTAKE_I, motor.getD(), INTAKE_F);
         }
         double rpm = 0;
-        if (!INTAKE_ENABLED) {
-            rpm = 0;
-        } else if (reverse) {
+        if (reverse) {
             rpm = -INTAKE_RPM;
         } else if (on) {
             rpm = INTAKE_RPM;
@@ -63,7 +61,7 @@ public class Intake {
     public void telemetry(Telemetry telemetry) {
         double rpm = motor.getRPM();
         telemetry.addLine("--- INTAKE ---");
-        telemetry.addData("Intake", !INTAKE_ENABLED ? "DISABLED (Tune tab)" : reverse ? "REVERSE" : (on ? "ON" : "OFF"));
+        telemetry.addData("Intake", reverse ? "REVERSE" : (on ? "ON" : "OFF"));
         telemetry.addData("Intake speed", Robot.rpmLine(rpm, motor.getTargetRPM()));
         Dash.put("Intake RPM", rpm);
         Dash.put("Intake target", motor.getTargetRPM());
