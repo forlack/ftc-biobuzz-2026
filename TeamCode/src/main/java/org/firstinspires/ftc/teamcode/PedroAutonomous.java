@@ -239,7 +239,7 @@ public class PedroAutonomous extends OpMode {
 
         @Override public void intake(boolean on) {
             intakeOn = on;
-            intake.setTargetRPM(on ? FieldCentricJava.INTAKE_RPM : 0);
+            intake.setTargetRPM(on && FieldCentricJava.INTAKE_ENABLED ? FieldCentricJava.INTAKE_RPM : 0);
         }
 
         @Override public void flywheels(boolean on) {

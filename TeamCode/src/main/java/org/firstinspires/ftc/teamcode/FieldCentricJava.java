@@ -46,6 +46,9 @@ public class FieldCentricJava extends LinearOpMode {
     public static double INTAKE_RPM = 700;
     public static double INTAKE_P = 15;
     public static double INTAKE_F = 15;
+    /** Off: the intake never runs (teleop and auton), whatever the buttons say. A switch, not saved. */
+    @RobotSettings.NotSaved
+    public static boolean INTAKE_ENABLED = true;
 
     /** Turn both flywheels on or off from the Tune tab. They start on. A switch, not a setting. */
     @RobotSettings.NotSaved
@@ -205,7 +208,9 @@ public class FieldCentricJava extends LinearOpMode {
         // Holding reverse wins over the toggle, and only lasts while held. The toggle is left
         // alone, so letting go returns the intake to whatever it was doing before.
         double rpm = 0;
-        if (reverseIntake.down()) {
+        if (!INTAKE_ENABLED) {
+            rpm = 0;
+        } else if (reverseIntake.down()) {
             rpm = -INTAKE_RPM;
         } else if (toggleIntake.active) {
             rpm = INTAKE_RPM;
@@ -284,7 +289,8 @@ public class FieldCentricJava extends LinearOpMode {
         long now = System.nanoTime();
 
         telemetry.addLine("--- INTAKE ---");
-        telemetry.addData("Intake", reverseIntake.down() ? "REVERSE" : (toggleIntake.active ? "ON" : "OFF"));
+        telemetry.addData("Intake", !INTAKE_ENABLED ? "DISABLED (Tune tab)"
+                : reverseIntake.down() ? "REVERSE" : (toggleIntake.active ? "ON" : "OFF"));
         telemetry.addData("Intake speed", rpmLine(intakeRpm, intake.getTargetRPM()));
         telemetry.addLine("");
         telemetry.addLine("--- SHOOTERS ---");

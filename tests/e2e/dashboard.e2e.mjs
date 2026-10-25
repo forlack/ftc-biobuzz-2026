@@ -208,7 +208,7 @@ try {
   check(saved.FieldCentricJava.POLLEN_FLYWHEEL_RPM === 3000 && saved.version === 1, 'Save writes robot.json on the robot');
   await b.waitFor(`document.querySelectorAll('#settings .dot.unsaved').length === 0`);
   check(true, 'after Save to robot every dot is green again');
-  check(!('FLYWHEELS_ON' in saved.FieldCentricJava) && !('Simulator' in saved), 'live switches are not saved');
+  check(!('FLYWHEELS_ON' in saved.FieldCentricJava) && !('INTAKE_ENABLED' in saved.FieldCentricJava) && !('Simulator' in saved), 'live switches are not saved');
   await b.screenshot(join(OUT, '2-tune.png'));
 
   // History: a second save, then the Tune tab's History button shows both and restores the first.

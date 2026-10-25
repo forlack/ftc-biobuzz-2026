@@ -75,6 +75,9 @@ public final class SimOpModes {
         SimMechanisms(SimWorld world) { this.world = world; }
 
         @Override public void intake(boolean on) { intakeOn = on; }
+
+        /** On, and not switched off on the Tune tab (FieldCentricJava.INTAKE_ENABLED). */
+        boolean intakeRunning() { return intakeOn && FieldCentricJava.INTAKE_ENABLED; }
         @Override public void flywheels(boolean on) { flywheelsOn = on; }
         @Override public void feed(boolean on) { world.setFeeding(on); }
         @Override public void stinger(boolean down) { stingerDown = down; }
@@ -95,7 +98,7 @@ public final class SimOpModes {
             world.intake.setPIDF(FieldCentricJava.INTAKE_P, 0, 0, FieldCentricJava.INTAKE_F);
             world.pollen.setTargetRPM(flywheelsOn ? FieldCentricJava.POLLEN_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
             world.nectar.setTargetRPM(flywheelsOn ? FieldCentricJava.NECTAR_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
-            world.intake.setTargetRPM(intakeOn ? FieldCentricJava.INTAKE_RPM : 0, SimWorld.INTAKE_TICKS_PER_REV);
+            world.intake.setTargetRPM(intakeRunning() ? FieldCentricJava.INTAKE_RPM : 0, SimWorld.INTAKE_TICKS_PER_REV);
             world.setStinger(stingerDown ? FieldCentricJava.STINGER_DOWN : FieldCentricJava.STINGER_UP);
         }
 
@@ -106,7 +109,7 @@ public final class SimOpModes {
             Dash.put("Nectar RPM", world.nectar.rpm(SimWorld.FLYWHEEL_TICKS_PER_REV));
             Dash.put("Nectar target", flywheelsOn ? FieldCentricJava.NECTAR_FLYWHEEL_RPM : 0);
             Dash.put("Intake RPM", world.intake.rpm(SimWorld.INTAKE_TICKS_PER_REV));
-            Dash.put("Intake target", intakeOn ? FieldCentricJava.INTAKE_RPM : 0);
+            Dash.put("Intake target", intakeRunning() ? FieldCentricJava.INTAKE_RPM : 0);
             Dash.put("Pollen power", world.pollen.output());
             Dash.put("Nectar power", world.nectar.output());
             Dash.put("Feeding", world.feeding());
@@ -150,7 +153,7 @@ public final class SimOpModes {
             robot.feed(volley || Simulator.FEED);
             robot.apply();
             robot.telemetry();
-            Dash.put("Intake", robot.intakeOn ? "ON" : "OFF");
+            Dash.put("Intake", !FieldCentricJava.INTAKE_ENABLED ? "DISABLED (Tune tab)" : robot.intakeOn ? "ON" : "OFF");
             Dash.put("Settings", settings.status());
             common();
         }
