@@ -836,6 +836,11 @@ try {
   await b.waitFor(`document.getElementById('auton-preview-time') && parseFloat(document.getElementById('auton-preview-time').textContent) > 0.5`);
   check(await b.eval(`document.getElementById('auton-preview').textContent.includes('Stop')`) && await b.eval(`!!document.querySelector('.auton-step.playing')`),
     'Preview plays the auton on the field and marks the step it is on');
+  const bar = await b.eval(`document.getElementById('auton-scrub').style.background`);
+  check(/linear-gradient/.test(bar) && /245, 179, 1|f5b301/i.test(bar) && /139, 152, 168|8b98a8/i.test(bar),
+    'the preview bar is coloured by step: drives in their field colour, functions in grey');
+  check(/rgba\(\d+, \d+, \d+, 0\.4\d*\)/.test(bar),
+    'a drive that must face another way first shows a paler stretch: the robot turns in place, then drives (as on the robot)');
   await b.eval(`document.getElementById('auton-preview').click()`);
   await b.eval(`document.getElementById('auton-preview-close').click()`);
   // Unsaved changes survive a reload (kept in this browser).

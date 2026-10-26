@@ -210,6 +210,13 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   profile-predicted end with text along the curve, labels for every function (steps stacked at
   their point), face-a-point placing mode (appears 16 in above the end pose, follows the mouse,
   click places; held clicks keep dragging until release). e2e 163.
+- **Preview turns first (2026-10-25, user saw it on the robot):** when a drive's heading at its
+  start (face a point, face travel) differs from the robot's by more than 10°, Pedro turns the
+  robot in place, then drives (sim: ~280°/s, 180° ≈ 0.65 s, 90° ≈ 0.35 s). timeline() adds a
+  turn phase (0.1 s + |Δ|/300°/s) and poseAt() rotates in place during it; times and the total
+  include it. The preview bar is a gradient by step (drive colours as on the field, paler while
+  turning first, functions grey; function rows are grey too, since the second drive colour is
+  blue). Estimate accel/decel now 90/70 in/s² (sim ~100). e2e 165.
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -265,7 +272,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (163
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (165
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

@@ -7,7 +7,13 @@ import { api, escapeHtml, getFile, putFile, toast } from './api.js';
 
 const FIELD = 144;
 const TOP_SPEED = 68.5;            // in/s, Foresight maxAchievableForwardVelocity (for the estimate)
-const ACCEL = 50, DECEL = 40;      // in/s², rough, for the time estimate only
+const ACCEL = 90, DECEL = 70;      // in/s², a bit under what the simulator measures (~100)
+// A drive that starts facing another way than the robot: Pedro turns it in place first, then
+// drives (seen on the robot and in the simulator: about 280°/s). Smaller differences it turns
+// while driving.
+const TURN_FIRST = 10;             // degrees
+const TURN_RATE = 300;             // degrees per second
+const TURN_SETTLE = 0.1;           // seconds
 const COLORS = ['#f5b301', '#58a6ff', '#3fb950', '#bc8cff', '#ff7b72', '#39c5cf', '#ffa657', '#d2a8ff'];
 const HEADINGS = [
   ['travel', 'Face where it is going'],
@@ -518,17 +524,49 @@ export class AutonTab {
 
   // ---- Preview -----------------------------------------------------------------------------------------
 
-  /** Each step's time window, and the whole auton's length. */
+  /**
+   * Each step's time window, and the whole auton's length. A drive that has to face another way
+   * at its start first turns in place (turn: degrees, turnTime: seconds), as the robot does.
+   */
   timeline() {
     const info = layout(this.route);
     let t = 0;
     const entries = this.route.steps.map((step, i) => {
-      const duration = step.drive ? driveSeconds(info[i].length, step.drive.speedPercent) : functionSeconds(step);
-      const entry = { i, t0: t, t1: t + duration, info: info[i], step };
+      let turn = 0, turnTime = 0, duration;
+      if (step.drive) {
+        turn = shortest(info[i].start.h, headingAlong(step.drive, info[i], 0));
+        if (Math.abs(turn) > TURN_FIRST) turnTime = TURN_SETTLE + Math.abs(turn) / TURN_RATE;
+        else turn = 0;
+        duration = turnTime + driveSeconds(info[i].length, step.drive.speedPercent);
+      } else {
+        duration = functionSeconds(step);
+      }
+      const entry = { i, t0: t, t1: t + duration, info: info[i], step, turn, turnTime };
       t += duration;
       return entry;
     });
     return { entries, total: t };
+  }
+
+  /** The preview bar: each step's stretch of time in its colour (drives as on the field). */
+  timelineGradient() {
+    const { entries, total } = this.timeline();
+    if (!total) return '#2b3542';
+    let n = 0;
+    const stops = [];
+    for (const e of entries) {
+      const from = (e.t0 / total) * 100, to = (e.t1 / total) * 100;
+      if (to <= from) { if (e.step.drive) n++; continue; }
+      if (e.step.drive) {
+        const color = COLORS[n++ % COLORS.length];
+        const turned = ((e.t0 + e.turnTime) / total) * 100;
+        if (e.turnTime) stops.push(`${color}77 ${from}%`, `${color}77 ${turned}%`);
+        stops.push(`${color} ${turned}%`, `${color} ${to}%`);
+      } else {
+        stops.push(`#8b98a8 ${from}%`, `#8b98a8 ${to}%`);
+      }
+    }
+    return `linear-gradient(to right, ${stops.join(', ')})`;
   }
 
   /** The robot's pose at a time in the preview, and the step it is on. */
@@ -539,8 +577,16 @@ export class AutonTab {
       if (time < e.t0) break;
       current = e.i;
       if (e.step.drive) {
+        const into = Math.min(time, e.t1) - e.t0;
+        if (into < e.turnTime) {
+          // Turning in place to face the way the drive starts.
+          const k = into / e.turnTime;
+          const eased = k * k * (3 - 2 * k);
+          pose = { x: e.info.start.x, y: e.info.start.y, h: e.info.start.h + e.turn * eased };
+          continue;
+        }
         const p = profile(e.info.length, e.step.drive.speedPercent);
-        const f = e.info.length ? p.distance(Math.min(time, e.t1) - e.t0) / e.info.length : 1;
+        const f = e.info.length ? p.distance(into - e.turnTime) / e.info.length : 1;
         const at = pointAlong(e.info, f);
         pose = { x: at[0], y: at[1], h: headingAlong(e.step.drive, e.info, f) };
       } else {
@@ -995,7 +1041,8 @@ export class AutonTab {
     const step = route.steps[this.selected];
     this.panel.innerHTML = `
       <button class="auton-preview ${playing ? 'playing' : ''}" id="auton-preview" data-testid="auton-preview">${playing ? '■ Stop preview' : '▶ Preview'}</button>
-      ${this.preview ? `<div class="auton-scrub"><input type="range" id="auton-scrub" min="0" max="${total}" step="0.05" value="${this.preview.t}">
+      ${this.preview ? `<div class="auton-scrub"><input type="range" id="auton-scrub" min="0" max="${total}" step="0.05" value="${this.preview.t}"
+          style="background: ${this.timelineGradient()}" title="Each stretch is a step: drives in their colour on the field (paler while turning in place first), functions in grey">
         <span id="auton-preview-time" class="muted">${this.preview.t.toFixed(1)} s of ${total.toFixed(1)}</span>
         <button class="icon" id="auton-preview-close" title="Close the preview">✕</button></div>` : ''}
 

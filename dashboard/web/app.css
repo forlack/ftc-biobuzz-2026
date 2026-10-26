@@ -312,7 +312,11 @@ body.locked .undo { opacity: .4; pointer-events: none; }
 .auton-preview:hover { background: #ffc426; }
 .auton-preview.playing { background: #2b3542; color: var(--honey); box-shadow: inset 0 0 0 2px var(--honey); }
 .auton-scrub { display: flex; gap: 10px; align-items: center; margin-top: -4px; }
-.auton-scrub input { flex: 1; accent-color: var(--honey); }
+.auton-scrub input { flex: 1; -webkit-appearance: none; appearance: none; height: 12px; border-radius: 6px; cursor: pointer; outline: none; }
+.auton-scrub input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 8px; height: 22px; border-radius: 3px;
+  background: #fff; border: 2px solid #0d1117; box-shadow: 0 0 4px #000a; }
+.auton-scrub input::-moz-range-thumb { width: 6px; height: 20px; border-radius: 3px; background: #fff; border: 2px solid #0d1117; }
+.auton-scrub input::-moz-range-track { background: transparent; }
 .auton-card { background: var(--panel); border: 1px solid #36404d; border-radius: 12px; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 9px; flex: none; }
 .auton-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 -12px; padding: 8px 12px;
   background: #1f2732; border-bottom: 1px solid #36404d; border-radius: 12px 12px 0 0; font-size: 12px; font-weight: 800;
@@ -332,7 +336,7 @@ body.locked .undo { opacity: .4; pointer-events: none; }
 .auton-step { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 7px 8px;
   background: var(--panel-2); border: 1px solid var(--line); border-left: 4px solid #4a5668; border-radius: 8px; cursor: pointer; font-size: 13px; }
 .auton-step.drive { border-left-color: var(--honey); }
-.auton-step.function { border-left-color: var(--blue); }
+.auton-step.function { border-left-color: #8b98a8; }
 .auton-step.start { border-left-color: var(--green); }
 .auton-step:hover { border-color: #4a5668; }
 .auton-step.selected { border-color: var(--honey); background: #f5b30114; box-shadow: 0 0 0 1px var(--honey) inset; }
