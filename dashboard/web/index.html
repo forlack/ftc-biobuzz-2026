@@ -22,7 +22,8 @@
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="live" class="active">Live</button>
       <button role="tab" data-tab="tune">Tune</button>
-      <button role="tab" data-tab="paths">Paths</button>
+      <button role="tab" data-tab="auton">Auton</button>
+      <button role="tab" data-tab="paths" title="The old Pedro path editor (the Auton tab replaces it)">Pedro</button>
       <button role="tab" data-tab="robot">Robot</button>
     </nav>
 
@@ -91,6 +92,14 @@
         <code>./robot-sync pull</code> then copies robot.json into Git.</p>
       <div class="settings" id="settings"></div>
       <div class="settings-hidden" id="settings-hidden" hidden></div>
+    </section>
+
+    <!-- AUTON: our auton editor (js/auton.js) -->
+    <section class="tab-page" id="tab-auton">
+      <div class="auton-grid">
+        <div class="auton-panel" id="auton-panel"></div>
+        <div class="auton-field-box"><canvas id="auton-field" width="600" height="600"></canvas></div>
+      </div>
     </section>
 
     <!-- PATHS -->

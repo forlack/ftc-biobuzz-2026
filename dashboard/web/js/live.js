@@ -69,7 +69,7 @@ export class LiveTab {
     this.bindChartDialog();
     this.field = document.getElementById('field');
     this.fieldImage = new Image();
-    this.fieldImage.src = 'visualizer/fields/biobuzz.webp';
+    this.fieldImage.src = 'fields/biobuzz.webp';
     this.fieldImage.onload = () => this.drawField();
     this.bindToolbar();
     window.addEventListener('resize', () => this.resize());

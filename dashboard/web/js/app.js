@@ -5,10 +5,12 @@ import { LiveTab } from './live.js';
 import { TuneTab } from './tune.js';
 import { RobotTab } from './robot.js';
 import { GamepadDrawer } from './gamepad.js';
+import { AutonTab } from './auton.js';
 
 const live = new LiveTab();
 const tune = new TuneTab();
 const robot = new RobotTab();
+const auton = new AutonTab();
 let state = null;
 let tab = 'live';
 let connection = null;   // the live websocket
@@ -21,6 +23,7 @@ function showTab(name) {
   if (name === 'robot') robot.refresh(state ? state.hardwareMap : undefined);
   if (name === 'live') { live.resize(); live.dirty = true; }
   if (name === 'paths') loadVisualizer();
+  if (name === 'auton') { auton.resize(); auton.refresh(); }
   try { localStorage.setItem('biobuzz.tab', name); } catch { /* private window */ }
   if (connection) subscribe();
 }
@@ -53,7 +56,9 @@ function showState(next) {
   }
   if (next.active && select.value !== next.active && document.activeElement !== select) select.value = next.active;
   const pill = document.getElementById('op-state');
-  pill.textContent = next.active ? `${next.state}: ${next.active}` : 'stopped';
+  // The OpMode's name is in the dropdown next to it; the pill only repeats it when they differ.
+  pill.textContent = !next.active ? 'stopped' : select.value === next.active ? next.state : `${next.state}: ${next.active}`;
+  pill.title = next.active ? `${next.state}: ${next.active}` : 'No OpMode running';
   pill.className = `pill ${next.state}`;
   const battery = document.getElementById('battery');
   battery.textContent = next.battery == null ? '— V' : `${next.battery.toFixed(2)} V`;

@@ -183,7 +183,7 @@ try {
   await b.waitFor(`document.querySelector('#pad-take').textContent === 'Release'`);
   const aButton = await b.eval(`(() => { const r = document.querySelector('[data-btn="a"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
   await mouse('mousePressed', aButton.x, aButton.y);
-  await sleep(250);
+  await sleep(450);   // a few robot loops and gamepad messages, so the press is seen
   await mouse('mouseReleased', aButton.x, aButton.y);
   const flywheelsOn = async () => (await api('/api/settings')).data.items.find((i) => i.group === 'Flywheels' && i.name === 'FLYWHEELS_ON').value;
   for (let i = 0; i < 30 && await flywheelsOn(); i++) await sleep(100);
@@ -742,6 +742,96 @@ try {
   const firstDown = through.find((r) => r.stinger > 0.2);
   check(through[0].stinger < 0.2 && firstDown && firstDown.y > 45,
     `a function at 50% fires part way along the whole drive, not at its start (stinger down at y ${firstDown ? firstDown.y.toFixed(0) : '—'})`);
+  await api('/api/settings', { method: 'POST', body: { group: 'PedroAutonomous', name: 'ROUTE', value: 'saturday' } });
+
+  // ---- 7. The Auton tab: our own editor ------------------------------------------------------------------
+  console.log('Auton tab');
+  await b.eval(`document.querySelector('[data-tab="auton"]').click()`);
+  await b.waitFor(`document.querySelectorAll('#auton-file option').length >= 2`);
+  await b.eval(`(() => { const s = document.getElementById('auton-file'); s.value = 'autos/saturday.json'; s.dispatchEvent(new Event('change')); })()`);
+  await b.waitFor(`document.getElementById('auton-name').value === 'Saturday' || document.getElementById('auton-steps').innerText.includes('path2')`);
+  const stepRows = await b.eval(`[...document.querySelectorAll('.auton-step:not(.start) .what')].map((e) => e.innerText)`);
+  check(stepRows.length >= 4 && /Drive path1/.test(stepRows.join('|')) && /shoot/.test(stepRows.join('|')),
+    `the Auton tab lists the start and every step, drives and functions in one list (${stepRows.length} steps)`);
+  check(await b.eval(`document.querySelector('.auton-step.start').innerText.includes('Start')`) && await b.eval(`document.querySelector('[data-start="heading"]').value === '270'`),
+    'the start pose is the first row, editable');
+  const fieldClick = async (x, y, type = 'click', button = 'left') => {
+    const r = await b.eval(`(() => { const r = document.getElementById('auton-field').getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; })()`);
+    const cx = r.l + (x / 144) * r.w, cy = r.t + ((144 - y) / 144) * r.h;
+    const send = (t, extra = {}) => b.send('Input.dispatchMouseEvent', { type: t, x: cx, y: cy, button, buttons: t === 'mouseReleased' ? 0 : 1, clickCount: 1, ...extra });
+    if (type === 'click') { await send('mousePressed'); await send('mouseReleased'); }
+    if (type === 'dblclick') { await send('mousePressed'); await send('mouseReleased'); await send('mousePressed', { clickCount: 2 }); await send('mouseReleased', { clickCount: 2 }); }
+    return { cx, cy, send };
+  };
+  // + Drive, then click the field: a drive from where the selected step ends.
+  const lastStep = stepRows.length - 1;
+  await b.eval(`document.querySelector('.auton-step[data-step="${lastStep}"]').click()`);
+  await b.eval(`document.getElementById('auton-add-drive').click()`);
+  await fieldClick(100, 100);
+  await b.waitFor(`document.querySelectorAll('.auton-step:not(.start)').length === ${stepRows.length + 1}`);
+  const newDrive = await b.eval(`document.querySelector('.auton-step.selected .what').innerText`);
+  check(/Drive path3 to 100, 100 · keep facing/.test(newDrive), `+ Drive then a click on the field adds a drive there, keeping the heading it starts with (${newDrive})`);
+  // Drag its end point.
+  const { send } = await fieldClick(100, 100, 'none');
+  await send('mousePressed');
+  const r2 = await b.eval(`(() => { const r = document.getElementById('auton-field').getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; })()`);
+  await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: r2.l + (110 / 144) * r2.w, y: r2.t + ((144 - 104) / 144) * r2.h, button: 'left', buttons: 1 });
+  await b.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: r2.l + (110 / 144) * r2.w, y: r2.t + ((144 - 104) / 144) * r2.h, button: 'left', buttons: 0 });
+  await b.waitFor(`document.querySelector('.auton-step.selected .what').innerText.includes('to 110, 104')`);
+  check(true, 'dragging the yellow end point moves the drive (snapped to half inches)');
+  // Double-click the drive half way: a waypoint, then Smooth lines the bends up through it.
+  const fromPose = await b.eval(`(() => { const t = document.querySelector('.auton-detail .muted').innerText.match(/at (-?[\\d.]+), (-?[\\d.]+)/); return [Number(t[1]), Number(t[2])]; })()`);
+  await fieldClick((fromPose[0] + 110) / 2, (fromPose[1] + 104) / 2, 'dblclick');
+  await b.waitFor(`document.querySelector('.auton-step.selected .what').innerText.includes('1 waypoint')`);
+  check(true, 'double-clicking a drive adds a waypoint on it');
+  await b.eval(`document.querySelector('[data-smooth="0"]').click()`);
+  await b.waitFor(`document.querySelector('.auton-points').innerText.includes('1 bend')`);
+  check(true, 'Smooth gives the waypoint lined-up bends on both sides');
+  // Heading: face a point, picked on the field.
+  await b.eval(`(() => { const s = document.getElementById('drive-heading'); s.value = 'face'; s.dispatchEvent(new Event('change')); })()`);
+  await b.waitFor(`document.querySelector('.auton-add .muted').innerText.includes('Click the point to face')`);
+  await fieldClick(72, 140);
+  await b.waitFor(`document.getElementById('drive-face-x') && document.getElementById('drive-face-x').value === '72' && document.getElementById('drive-face-y').value === '140'`);
+  check(true, 'Face a point: click the point on the field');
+  // A function on the drive, then undo / redo.
+  await b.eval(`(() => { const s = document.getElementById('event-new'); s.value = 'deployStinger'; document.getElementById('event-add').click(); })()`);
+  await b.waitFor(`document.querySelector('[data-event-at="0"]') && document.querySelector('[data-event-at="0"]').value === '50'`);
+  check(true, 'a function on the drive starts at 50% (a ◆ to drag along it)');
+  await b.eval(`document.getElementById('auton-undo').click()`);
+  await b.waitFor(`!document.querySelector('[data-event-at="0"]')`);
+  await b.eval(`document.getElementById('auton-redo').click()`);
+  await b.waitFor(`!!document.querySelector('[data-event-at="0"]')`);
+  check(true, 'undo and redo');
+  await b.eval(`(() => { const s = document.getElementById('auton-function'); s.value = 'stowStinger'; document.getElementById('auton-add-function').click(); })()`);
+  await b.waitFor(`document.querySelector('.auton-step.selected .what').innerText.includes('stinger up')`);
+  check(true, '+ Function adds a function step after the selected one');
+  await b.screenshot(join(OUT, '6-auton-editor.png'));
+  // Save as a new auton: the robot accepts it, and it runs.
+  await b.eval(`(() => { window.prompt = () => 'editor-test'; document.getElementById('auton-save-as').click(); })()`);
+  await b.waitFor(`document.querySelector('#toast').textContent.includes('Saved autos/editor-test.json')`);
+  const made = (await api('/api/file?path=autos/editor-test.json')).data;
+  const madeDrive = made.steps.filter((st) => st.drive).at(-1).drive;
+  check(made.version === 3 && madeDrive.segments.length === 2 && madeDrive.segments[0].via && madeDrive.segments[1].via
+    && madeDrive.heading.type === 'face' && madeDrive.events[0].action === 'deployStinger' && made.steps.at(-1).action === 'stowStinger',
+    'Save as… writes a version 3 auton the robot accepts: the waypoint, its bends, face a point, the function');
+  await api('/api/settings', { method: 'POST', body: { group: 'PedroAutonomous', name: 'ROUTE', value: 'editor-test' } });
+  const editorSince = (await api('/api/state')).data.time;   // a new connection first gets the last seconds of frames
+  const editorInit = await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Pedro Pathing Autonomous' } });
+  check(editorInit.status === 200, `the edited auton passes INIT${editorInit.data && editorInit.data.error ? `: ${editorInit.data.error}` : ''}`);
+  await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
+  const ws3 = new WebSocket(`ws://localhost:${PORT}/ws`);
+  const decoder3 = new FrameDecoder();
+  let editorDone = null, editorRunning = false;   // ignore the last run's frames until this one starts
+  ws3.onmessage = (event) => { const t = decoder3.handle(JSON.parse(event.data)); if (t) for (const f of t.frames) {
+    if (f.t < editorSince) continue;
+    if (f.n['Route done'] === 0) editorRunning = true;
+    else if (editorRunning && f.n['Route done'] === 1) editorDone = f;
+  } };
+  const deadline3 = Date.now() + 25000;
+  while (Date.now() < deadline3 && !editorDone) await sleep(250);
+  ws3.close();
+  check(editorDone && Math.hypot(editorDone.n.X - 110, editorDone.n.Y - 104) < 3,
+    `the simulator runs the edited auton to its end (${editorDone ? `${editorDone.n.X.toFixed(1)}, ${editorDone.n.Y.toFixed(1)}` : 'not finished'})`);
   await api('/api/settings', { method: 'POST', body: { group: 'PedroAutonomous', name: 'ROUTE', value: 'saturday' } });
 
   const errors = b.errors.filter((e) => !/favicon/.test(e));

@@ -186,6 +186,19 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   measures whole-drive progress with segment lengths (`follow(path, lengths)`). The old
   visualizer Paths tab converts v2<->v3 on save/open (lossy for waypoints and face-a-point,
   which it reports). e2e 143. Next: phase 2, the new editor (plain JS dashboard tab).
+- **Auton editor phase 2, first version (2026-10-25, branch `auton-editor`):** `dashboard/web/js/auton.js`,
+  tab "Auton" (the old visualizer tab is now labelled "Pedro"). Edits the v3 JSON directly:
+  layout() mirrors AutoRoute (drive starts at the previous end pose; end heading per type;
+  turn = shorter way). Canvas field (`dashboard/web/fields/biobuzz.webp`, now also used by the
+  Live tab), handles: start body + heading dot, selected drive's `to` / `via` / ◆ events / face
+  point, every drive's end point. + Drive (click), double-click splits a segment with de
+  Casteljau (same shape), right-click removes, Smooth makes the bends collinear through a
+  waypoint, heading dropdown, speed %, events, + Function, undo/redo (JSON snapshots), Save /
+  Save as (PUT with X-Base-Hash; the robot validates) / History. Time estimate: trapezoid with
+  68.5 in/s × speed %, accel 50, decel 40 (+ step times). The state pill shows only the state
+  when the dropdown already names the OpMode (keeps the top bar on one line at 1600 px). e2e 156
+  (adds, drags, waypoint, smooth, face, event, undo, Save as, then the sim runs it). Not yet:
+  preview animation / Run in simulator, alliance mirror, snapping to tiles.
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -241,7 +254,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (143
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (156
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

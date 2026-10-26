@@ -34,7 +34,7 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .02em; text-t
 .topbar {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
   padding: 10px 18px;
   background: linear-gradient(180deg, #161d27, #11161e);
   border-bottom: 1px solid var(--line);
@@ -50,7 +50,7 @@ h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .02em; text-t
 .tabs { display: flex; gap: 4px; background: var(--panel); padding: 4px; border-radius: 999px; border: 1px solid var(--line); }
 .tabs button {
   background: none; border: 0; color: var(--muted); font: inherit; font-weight: 600;
-  padding: 6px 16px; border-radius: 999px; cursor: pointer;
+  padding: 6px 13px; border-radius: 999px; cursor: pointer;
 }
 .tabs button:hover { color: var(--text); }
 .tabs button.active { background: var(--honey); color: #1a1300; }
@@ -300,3 +300,37 @@ body.locked #adb-restart { opacity: .4; pointer-events: none; }
 .undo { background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--honey); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 5px; }
 .undo:hover { border-color: var(--honey); background: var(--honey-dim); }
 body.locked .undo { opacity: .4; pointer-events: none; }
+
+/* ---- Auton editor ---------------------------------------------------------------- */
+#tab-auton { overflow: hidden; }
+.auton-grid { display: grid; grid-template-columns: minmax(380px, 470px) minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; }
+.auton-panel { display: flex; flex-direction: column; gap: 10px; overflow: auto; min-height: 0; padding-right: 4px; }
+.auton-field-box { min-width: 0; min-height: 0; display: flex; align-items: flex-start; justify-content: center; }
+#auton-field { border-radius: 8px; background: #20262e; touch-action: none; }
+.auton-files, .auton-meta, .auton-add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.auton-files select { flex: 1; min-width: 140px; }
+.auton-meta label { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+.auton-meta input { width: 150px; }
+.auton-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.auton-step { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: 13px; }
+.auton-step:hover { border-color: #3d4856; }
+.auton-step.selected { border-color: var(--honey); background: #f5b30110; }
+.auton-step .num { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.auton-step.drive .num { color: var(--honey); }
+.auton-step .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.auton-step .xyz input { width: 64px; padding: 2px 5px; font-size: 12.5px; }
+.auton-step .tools { display: flex; gap: 2px; }
+.icon { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 5px; }
+.icon:hover { background: var(--panel-2); color: var(--text); }
+.icon.bad:hover { color: var(--red); }
+.auton-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.auton-detail h4 { margin: 0; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.auton-detail .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.auton-detail input[type=number] { width: 70px; padding: 3px 6px; }
+.auton-detail .sub { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; margin-top: 4px; }
+.auton-points td { vertical-align: middle; }
+.auton-points td:last-child { text-align: left; font-family: inherit; }
+.auton-help { font-size: 12px; }
+body.locked #auton-save, body.locked #auton-save-as { opacity: .4; pointer-events: none; }
+@media (max-width: 1100px) { .auton-grid { grid-template-columns: 1fr; } }
