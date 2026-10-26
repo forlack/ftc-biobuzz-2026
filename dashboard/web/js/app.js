@@ -47,6 +47,8 @@ function showState(next) {
   // The OpMode stopped or another one started: its telemetry no longer applies (the charts
   // keep their history).
   if (!first && next.active !== state.active) live.clearTelemetry(next.time);
+  // A new INIT starts a clean field: no line left from the run before.
+  if (!first && next.state === 'init' && (state.state !== 'init' || next.active !== state.active)) live.clearField(next.time);
   state = next;
   document.getElementById('robot-name').textContent = next.robot;
   document.getElementById('sim-badge').hidden = !next.simulated;

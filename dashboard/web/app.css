@@ -371,3 +371,6 @@ body.locked #auton-save, body.locked #auton-save-as { opacity: .4; pointer-event
 @media (max-width: 1100px) { .auton-grid { grid-template-columns: 1fr; } }
 .robot-size label { display: flex; gap: 5px; align-items: center; color: var(--muted); font-size: 12.5px; }
 .robot-size input { width: 62px; padding: 3px 6px; }
+/* Locked: the Auton tab and the hardware map editor are view only (Preview, picking a file and History still work). */
+body.locked #auton-panel :is(button, input, select):not(#auton-file, #auton-preview, #auton-preview-close, #auton-scrub, #auton-history),
+body.locked #hardware :is(button, input, select):not(#hw-map) { opacity: .4; pointer-events: none; }

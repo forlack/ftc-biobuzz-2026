@@ -162,6 +162,9 @@ function functionSeconds(step) {
 
 // ---- The tab ---------------------------------------------------------------------------------
 
+/** Locked dashboard (view only): the field and the panel do not edit. */
+const locked = () => document.body.classList.contains('locked');
+
 const DRAFT = 'biobuzz.auton.draft:';   // + autos/NAME.json, or "(new)": unsaved changes in this browser
 const NOT_ON_PATH_HINT = 'turn to, wait and wait for flywheels are steps of their own';
 
@@ -351,6 +354,7 @@ export class AutonTab {
   }
 
   change(fn) {
+    if (locked()) { toast('The dashboard is locked: view only. Unlock it with the PIN to edit.', true); this.render(); return; }
     this.remember();
     fn(this.route);
     this.render();
@@ -375,6 +379,7 @@ export class AutonTab {
     if (!this.root.classList.contains('active')) return;
     if (event.key === 'Escape') { this.closeMenu(); if (this.mode) { this.mode = null; this.render(); } return; }
     if (event.target.closest && event.target.closest('input, select, textarea')) return;
+    if (locked()) return;
     const mod = event.ctrlKey || event.metaKey;
     if (mod && event.key.toLowerCase() === 'z') { event.preventDefault(); if (event.shiftKey) this.redo(); else this.undo(); }
     else if (mod && event.key.toLowerCase() === 'y') { event.preventDefault(); this.redo(); }
@@ -716,6 +721,7 @@ export class AutonTab {
     const canvas = this.canvas;
     canvas.addEventListener('contextmenu', (event) => {
       event.preventDefault();
+      if (locked()) return;
       const handle = this.hit(event);
       if (!handle || handle.step === undefined) return;
       const drive = this.route.steps[handle.step].drive;
@@ -724,7 +730,7 @@ export class AutonTab {
       else if (handle.kind === 'event') this.change(() => { drive.events.splice(handle.index, 1); if (!drive.events.length) delete drive.events; });
     });
     canvas.addEventListener('dblclick', (event) => {
-      if (!this.route || this.mode) return;
+      if (!this.route || this.mode || locked()) return;
       const point = this.fieldPoint(event);
       const near = this.nearestOnDrive(point, this.route.steps[this.selected]?.drive ? this.selected : null);
       if (near && near[3] < 4 && near[2] > 0.02 && near[2] < 0.98) {
@@ -733,7 +739,7 @@ export class AutonTab {
       }
     });
     canvas.addEventListener('pointerdown', (event) => {
-      if (!this.route || event.button !== 0) return;
+      if (!this.route || event.button !== 0 || locked()) return;
       const point = this.fieldPoint(event);
       if (this.mode === 'add-drive') { this.addDriveTo(point); return; }
       if (this.mode === 'place-face') {

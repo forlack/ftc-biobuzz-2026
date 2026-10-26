@@ -650,6 +650,29 @@ try {
   check(refused.status === 423, 'while locked the robot refuses changes, even straight to the API');
   check((await api('/api/opmode', { method: 'POST', body: { action: 'stop' } })).status === 423, 'and OpMode control');
   check((await api('/api/settings')).status === 200, 'but watching still works');
+  const lockedTries = [
+    await api('/api/file?path=autos/saturday.json', { method: 'PUT', body: '{}' }),
+    await api('/api/snapshots', { method: 'POST', body: { name: 'locked' } }),
+    await api('/api/hardware/active', { method: 'POST', body: { name: 'CamBot.xml' } }),
+    await api('/api/adb/restart', { method: 'POST' }),
+  ];
+  check(lockedTries.every((r) => r.status === 423), 'and saving files, snapshots, the hardware map and Restart adb');
+  await b.eval(`document.querySelector('[data-tab="auton"]').click()`);
+  await b.waitFor(`document.getElementById('auton-add-drive')`);
+  const lockedLook = await b.eval(`(() => {
+    const off = (el) => !!el && getComputedStyle(el).pointerEvents === 'none';
+    return { add: off(document.getElementById('auton-add-drive')), save: off(document.getElementById('auton-save')),
+      preview: off(document.getElementById('auton-preview')), file: off(document.getElementById('auton-file')) };
+  })()`);
+  const stepsLocked = await b.eval(`document.querySelectorAll('.auton-step').length`);
+  await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }))`);
+  check(lockedLook.add && lockedLook.save && !lockedLook.preview && !lockedLook.file
+    && await b.eval(`document.querySelectorAll('.auton-step').length`) === stepsLocked,
+    'the Auton tab is view only while locked (Preview and picking a file still work)');
+  await b.eval(`document.querySelector('[data-tab="robot"]').click()`);
+  await b.waitFor(`document.getElementById('hw-save')`);
+  check(await b.eval(`getComputedStyle(document.querySelector('#hardware [data-field], #hw-new')).pointerEvents === 'none'`),
+    'and so is the hardware map editor');
   await enterPin('1111');
   await b.waitFor(`document.querySelector('#toast').textContent.includes('Wrong PIN')`, 8000);
   check(await b.eval(`document.body.classList.contains('locked')`), 'a wrong PIN keeps it locked');
@@ -659,7 +682,11 @@ try {
 
   // ---- 5. Run it as the autonomous ----------------------------------------------------------------
   console.log('Autonomous run');
+  await b.eval(`document.querySelector('[data-tab="live"]').click()`);
+  await b.waitFor(`Number(document.getElementById('field').dataset.trail) > 1`);
   await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Pedro Pathing Autonomous' } });
+  await b.waitFor(`document.getElementById('field').dataset.trail === '0'`);
+  check(true, 'INIT clears the line the robot drew on the Live field');
   await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
   const { WebSocket: _ } = globalThis;
   const ws = new WebSocket(`ws://localhost:${PORT}/ws`);

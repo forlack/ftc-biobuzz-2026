@@ -223,6 +223,13 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   side = `width`, 6-30 in) in the Auton file card writes `route.robot`; inputs are
   `auton-robot-*` because the old visualizer bundle already uses `robot-width`. Sim: start 180,
   face (20,40) away → turns in place to 0°, drives. e2e 167.
+- **Live clears at INIT; lock covers the editors (2026-10-25):** live.clearField(time) on a new
+  INIT (trail wiped; frames from before not drawn again; canvas `data-trail` for the tests). The
+  server already refuses every non-GET /api and gamepad take while locked; now the Auton tab
+  (change() refuses; canvas and keys ignore; Preview, file pick and History still work) and the
+  hardware map editor are view only too. Snapshots hold robot.json, every autos/*.json and every
+  *.xml map (managedNames), not which map is active. Preview vs real robot: saturday preview
+  6.7 s, sim ~8 s, real robot 13 s (user timed): needs per-step times from the robot. e2e 171.
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -278,7 +285,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (167
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (171
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

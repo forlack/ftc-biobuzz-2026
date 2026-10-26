@@ -265,11 +265,22 @@ export class LiveTab {
     this.dirty = true;
   }
 
+  /**
+   * An OpMode was just INIT: wipe the line the robot drew on the field (the robot itself stays).
+   * Frames from before {@code robotTime} (still on their way) do not draw it again.
+   */
+  clearField(robotTime) {
+    this.trail = [];
+    this.trailFrom = robotTime ?? null;
+    this.dirty = true;
+  }
+
   /** The robot app restarted: start the charts over. */
   reset() {
     this.tableFrom = null;
     this.frames = [];
     this.trail = [];
+    this.trailFrom = null;
     this.lastSeq = 0;
     this.shownTime = null;
   }
@@ -287,7 +298,7 @@ export class LiveTab {
           for (const key of Object.keys(frame.s)) delete this.latest[key];
         }
       }
-      if (frame.pose) {
+      if (frame.pose && (this.trailFrom == null || frame.t >= this.trailFrom)) {
         this.lastPose = frame.pose;
         const last = this.trail[this.trail.length - 1];
         if (!last || Math.hypot(last[0] - frame.pose[0], last[1] - frame.pose[1]) > 0.5) {
@@ -437,6 +448,7 @@ export class LiveTab {
         g.beginPath(); g.moveTo(0, i * 24 * s); g.lineTo(size, i * 24 * s); g.stroke();
       }
     }
+    canvas.dataset.trail = this.trail.length;   // for the tests
     if (this.trail.length > 1) {
       g.strokeStyle = '#f5b301aa';
       g.lineWidth = 2;
