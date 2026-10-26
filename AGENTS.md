@@ -217,6 +217,12 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   include it. The preview bar is a gradient by step (drive colours as on the field, paler while
   turning first, functions grey; function rows are grey too, since the second drive colour is
   blue). Estimate accel/decel now 90/70 in/s² (sim ~100). e2e 165.
+- **Face away + robot size (2026-10-25):** heading `face` takes `"away": true` (robot:
+  `Interpolator.facingPoint(p).reverse()`; editor: +180° in layout/headingAlong, select option
+  "Face away from a point", placed like face). Robot size (front to back = `length`, side to
+  side = `width`, 6-30 in) in the Auton file card writes `route.robot`; inputs are
+  `auton-robot-*` because the old visualizer bundle already uses `robot-width`. Sim: start 180,
+  face (20,40) away → turns in place to 0°, drives. e2e 167.
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -272,7 +278,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (165
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (167
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

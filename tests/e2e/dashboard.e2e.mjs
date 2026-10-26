@@ -807,6 +807,21 @@ try {
   await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: faceBox.l + (60 / 144) * faceBox.w, y: faceBox.t + ((144 - 60) / 144) * faceBox.h });
   await sleep(200);
   check(await b.eval(`document.getElementById('drive-face-x').value === '72'`), 'a click places it; after that it stays put');
+  // Face away from a point: placed the same way; the robot keeps its back to it.
+  await b.eval(`(() => { const s = document.getElementById('drive-heading'); s.value = 'away'; s.dispatchEvent(new Event('change')); })()`);
+  await b.waitFor(`document.getElementById('auton-hint').innerText.includes('Click the point')`);
+  await fieldClick(72, 140);
+  await b.waitFor(`document.getElementById('drive-heading') && document.getElementById('drive-heading').value === 'away' && document.getElementById('drive-face-y').value === '140'`);
+  check(await b.eval(`document.querySelector('.auton-step.selected .what').innerText.includes('face away from a point')`),
+    'Face away from a point: placed like face, and the step says so');
+  // Robot size (in the Auton file card): the outlines on the field use it.
+  const widthBefore = await b.eval(`document.getElementById('auton-robot-width').value`);
+  await b.eval(`(() => { const i = document.getElementById('auton-robot-length'); i.value = '17.5'; i.dispatchEvent(new Event('change')); })()`);
+  await b.waitFor(`document.getElementById('auton-robot-length').value === '17.5'`);
+  await b.eval(`(() => { const i = document.getElementById('auton-robot-width'); i.value = '40'; i.dispatchEvent(new Event('change')); })()`);
+  await sleep(150);
+  check(await b.eval(`document.getElementById('auton-robot-width').value === '${widthBefore}' && document.getElementById('auton-robot-length').value === '17.5'`),
+    'robot size can be set (front to back 17.5 in); an impossible size (40 in) is refused');
   // A function on the drive, then undo / redo.
   await b.eval(`document.getElementById('event-add').click()`);
   await b.waitFor(`document.querySelector('.auton-menu [data-pick="deployStinger"]')`);
@@ -856,8 +871,8 @@ try {
   const made = (await api('/api/file?path=autos/editor-test.json')).data;
   const madeDrive = made.steps.filter((st) => st.drive).at(-1).drive;
   check(made.version === 3 && madeDrive.segments.length === 2 && madeDrive.segments[0].via && madeDrive.segments[1].via
-    && madeDrive.heading.type === 'face' && madeDrive.events[0].action === 'deployStinger' && madeDrive.events[1].action === 'shoot' && made.steps.at(-1).action === 'stowStinger',
-    'Save as… writes a version 3 auton the robot accepts: the waypoint, its bends, face a point, the function');
+    && madeDrive.heading.type === 'face' && madeDrive.heading.away === true && made.robot.length === 17.5 && madeDrive.events[0].action === 'deployStinger' && madeDrive.events[1].action === 'shoot' && made.steps.at(-1).action === 'stowStinger',
+    'Save as… writes a version 3 auton the robot accepts: the waypoint, its bends, face away from a point, the robot size, the function');
   await api('/api/settings', { method: 'POST', body: { group: 'PedroAutonomous', name: 'ROUTE', value: 'editor-test' } });
   const editorSince = (await api('/api/state')).data.time;   // a new connection first gets the last seconds of frames
   const editorInit = await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Pedro Pathing Autonomous' } });

@@ -4,6 +4,7 @@ import com.pedropathing.api.Paths;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
+import com.pedropathing.paths.interpolator.Interpolator;
 
 import org.firstinspires.ftc.teamcode.pedro.ForesightConstants;
 import org.json.JSONArray;
@@ -44,7 +45,7 @@ import java.util.List;
  * Headings (degrees): "travel" faces where it is going ("reverse": true drives backwards),
  * "keep" keeps the heading it starts with, "turn" turns to "degrees" while driving, the shorter
  * way round (exactly half a turn: clockwise), done by "by" (a fraction of the drive, default 1),
- * "face" keeps facing the point "x", "y".
+ * "face" keeps facing the point "x", "y" ("away": true keeps its back to it instead).
  * "speedPercent" (1 to 100) caps the drive's top speed as a % of the robot's calibrated top
  * speed (Foresight maxAchievableForwardVelocity); absent: full speed. "events" fire part way
  * along the drive ("at", 0 to 1, of the whole drive).
@@ -201,9 +202,12 @@ public class AutoRoute {
                 path = path.linear(startHeading, endHeading, by);
                 break;
             }
-            case "face":
-                path = path.facingPoint(new Pose(finite(heading.getDouble("x")), finite(heading.getDouble("y")), 0));
+            case "face": {
+                Pose target = new Pose(finite(heading.getDouble("x")), finite(heading.getDouble("y")), 0);
+                Interpolator facing = Interpolator.facingPoint(target);
+                path = path.heading(heading.optBoolean("away", false) ? facing.reverse() : facing);
                 break;
+            }
             default:
                 throw new IllegalArgumentException(driveName + ": unknown heading type \"" + type
                         + "\" (travel, keep, turn or face)");

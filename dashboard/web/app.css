@@ -369,3 +369,5 @@ body.locked .undo { opacity: .4; pointer-events: none; }
 .auton-menu .note { padding: 6px 9px; font-size: 12px; }
 body.locked #auton-save, body.locked #auton-save-as { opacity: .4; pointer-events: none; }
 @media (max-width: 1100px) { .auton-grid { grid-template-columns: 1fr; } }
+.robot-size label { display: flex; gap: 5px; align-items: center; color: var(--muted); font-size: 12.5px; }
+.robot-size input { width: 62px; padding: 3px 6px; }

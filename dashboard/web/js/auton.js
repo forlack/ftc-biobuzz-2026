@@ -21,6 +21,7 @@ const HEADINGS = [
   ['keep', 'Keep facing'],
   ['turn', 'Turn to…'],
   ['face', 'Face a point'],
+  ['away', 'Face away from a point'],
 ];
 
 // ---- Geometry ------------------------------------------------------------------------------
@@ -79,7 +80,7 @@ function layout(route) {
     let h;
     if (heading.type === 'keep') h = start.h;
     else if (heading.type === 'turn') h = start.h + shortest(start.h, heading.degrees);
-    else if (heading.type === 'face') h = degrees(Math.atan2(heading.y - end[1], heading.x - end[0]));
+    else if (heading.type === 'face') h = degrees(Math.atan2(heading.y - end[1], heading.x - end[0])) + (heading.away ? 180 : 0);
     else {
       const before = last[last.length - 2];
       h = degrees(Math.atan2(end[1] - before[1], end[0] - before[0])) + (heading.reverse ? 180 : 0);
@@ -142,7 +143,7 @@ function headingAlong(drive, info, f) {
   if (heading.type === 'keep') return start;
   if (heading.type === 'turn') return start + shortest(start, heading.degrees) * Math.min(1, f / (heading.by || 1));
   const p = pointAlong(info, f);
-  if (heading.type === 'face') return degrees(Math.atan2(heading.y - p[1], heading.x - p[0]));
+  if (heading.type === 'face') return degrees(Math.atan2(heading.y - p[1], heading.x - p[0])) + (heading.away ? 180 : 0);
   const a = pointAlong(info, Math.max(0, f - 0.01)), b = pointAlong(info, Math.min(1, f + 0.01));
   return degrees(Math.atan2(b[1] - a[1], b[0] - a[0])) + (heading.reverse ? 180 : 0);
 }
@@ -491,13 +492,16 @@ export class AutonTab {
     });
   }
 
-  /** Face a point: the point appears just ahead of the robot and follows the mouse until a click. */
-  startPlacingFace() {
+  /**
+   * Face (or face away from) a point: the point appears just above the robot and follows the
+   * mouse until a click places it.
+   */
+  startPlacingFace(away = false) {
     const drive = this.route.steps[this.selected]?.drive;
     if (!drive) return;
     const end = layout(this.route)[this.selected].end;
     this.change(() => {
-      drive.heading = { type: 'face', x: round(Math.min(FIELD, Math.max(0, end.x))), y: round(Math.min(FIELD, Math.max(0, end.y + 16))) };
+      drive.heading = { type: 'face', x: round(Math.min(FIELD, Math.max(0, end.x))), y: round(Math.min(FIELD, Math.max(0, end.y + 16))), ...(away ? { away: true } : {}) };
     });
     this.mode = 'place-face';
     this.render();
@@ -898,6 +902,7 @@ export class AutonTab {
           const [ex, ey] = this.px([d.end.x, d.end.y]);
           g.strokeStyle = '#ff7b72';
           g.beginPath(); g.moveTo(ex, ey); g.lineTo(fx, fy); g.stroke();
+          if (step.drive.heading.away) { g.setLineDash([]); label('back to this', [fx + 12 * k, fy - 10 * k], '#ff9b94'); g.setLineDash([4 * k, 4 * k]); }
         }
         g.setLineDash([]);
         this.drawRobot(g, d.end, robot, color);
@@ -1013,7 +1018,7 @@ export class AutonTab {
     if (step.drive) {
       const d = step.drive;
       const heading = d.heading || { type: 'travel' };
-      const how = heading.type === 'turn' ? `turn to ${heading.degrees}°` : heading.type === 'face' ? 'face a point'
+      const how = heading.type === 'turn' ? `turn to ${heading.degrees}°` : heading.type === 'face' ? (heading.away ? 'face away from a point' : 'face a point')
         : heading.type === 'keep' ? 'keep facing' : heading.reverse ? 'backwards' : 'face travel';
       const parts = [`to ${round(info.end.x)}, ${round(info.end.y)}`, how];
       if (d.segments.length > 1) parts.push(`${d.segments.length - 1} waypoint${d.segments.length > 2 ? 's' : ''}`);
@@ -1059,6 +1064,11 @@ export class AutonTab {
           <button class="btn primary ${dirty ? 'pulse' : ''}" id="auton-save" data-testid="auton-save">Save</button>
           <button class="btn" id="auton-save-as">Save as…</button>
         </div>
+        <div class="auton-files robot-size">
+          <span class="muted">Robot</span>
+          <label>front to back <input type="number" step="0.5" min="6" max="30" id="auton-robot-length" value="${route.robot?.length ?? 18}"> in</label>
+          <label>side to side <input type="number" step="0.5" min="6" max="30" id="auton-robot-width" value="${route.robot?.width ?? 18}"> in</label>
+        </div>
         ${this.restored && dirty ? `<div class="auton-restored">Your unsaved changes from this browser are back.
           <button class="btn small" id="auton-discard">Discard them</button></div>` : ''}
       </section>
@@ -1087,7 +1097,7 @@ export class AutonTab {
           <button class="btn" id="auton-add-function">+ Function</button>
         </div>
         <div class="muted auton-hint" id="auton-hint">${this.mode === 'add-drive' ? 'Click the field where the drive should go (Esc cancels).'
-          : this.mode === 'place-face' ? 'Click the point to face: it follows the mouse (Esc keeps it where it is).' : 'New steps go after the selected one.'}</div>
+          : this.mode === 'place-face' ? `Click the point to face${step && step.drive && step.drive.heading && step.drive.heading.away ? ' away from' : ''}: it follows the mouse (Esc keeps it where it is).` : 'New steps go after the selected one.'}</div>
       </section>
 
       <section class="auton-card selected-card">
@@ -1112,7 +1122,7 @@ export class AutonTab {
     }
     const d = step.drive;
     const heading = d.heading || { type: 'travel' };
-    const kind = heading.type === 'travel' && heading.reverse ? 'backwards' : heading.type;
+    const kind = heading.type === 'travel' && heading.reverse ? 'backwards' : heading.type === 'face' && heading.away ? 'away' : heading.type;
     const di = info[this.selected];
     const start = di.start;
     return `
@@ -1122,7 +1132,7 @@ export class AutonTab {
       <div class="row"><select id="drive-heading" data-testid="drive-heading">
         ${HEADINGS.map(([value, text]) => `<option value="${value}" ${value === kind ? 'selected' : ''}>${text}</option>`).join('')}</select>
         ${kind === 'turn' ? `<input type="number" step="5" id="drive-turn" value="${heading.degrees}">° by <input type="number" step="10" min="10" max="100" id="drive-by" value="${Math.round((heading.by ?? 1) * 100)}">% of the drive` : ''}
-        ${kind === 'face' ? `x <input type="number" step="0.5" id="drive-face-x" value="${heading.x}"> y <input type="number" step="0.5" id="drive-face-y" value="${heading.y}">
+        ${kind === 'face' || kind === 'away' ? `x <input type="number" step="0.5" id="drive-face-x" value="${heading.x}"> y <input type="number" step="0.5" id="drive-face-y" value="${heading.y}">
           <button class="btn small" id="drive-face-pick">Move it</button>` : ''}
       </div>
       <div class="sub">Speed</div>
@@ -1196,6 +1206,13 @@ export class AutonTab {
     $('auton-undo').addEventListener('click', () => this.undo());
     $('auton-redo').addEventListener('click', () => this.redo());
     $('auton-name').addEventListener('change', (event) => this.change((r) => { r.name = event.target.value; }));
+    for (const side of ['length', 'width']) {
+      $(`auton-robot-${side}`).addEventListener('change', (event) => {
+        const v = Number(event.target.value);
+        if (!(v >= 6 && v <= 30)) { toast('Robot size: 6 to 30 inches', true); this.render(); return; }
+        this.change((r) => { r.robot = { width: 18, length: 18, ...(r.robot || {}), [side]: v }; });
+      });
+    }
     $('auton-add-drive').addEventListener('click', () => { this.mode = this.mode === 'add-drive' ? null : 'add-drive'; this.render(); });
     $('auton-add-function').addEventListener('click', (event) => this.menu(event.currentTarget, this.actions, (name) => this.addFunction(name)));
     on('[data-start]', 'change', (el) => { const v = Number(el.value); if (Number.isFinite(v)) this.change((r) => { r.start[el.dataset.start] = v; }); });
@@ -1217,7 +1234,7 @@ export class AutonTab {
     $('drive-name').addEventListener('change', (event) => this.change(() => { d.name = event.target.value.trim() || d.name; }));
     $('drive-heading').addEventListener('change', (event) => {
       const value = event.target.value;
-      if (value === 'face') { this.startPlacingFace(); return; }
+      if (value === 'face' || value === 'away') { this.startPlacingFace(value === 'away'); return; }
       const end = layout(this.route)[this.selected].end;
       this.change(() => {
         if (value === 'travel') d.heading = { type: 'travel' };
