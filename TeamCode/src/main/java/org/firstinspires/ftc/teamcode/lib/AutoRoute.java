@@ -144,7 +144,7 @@ public class AutoRoute {
                         throw new IllegalArgumentException(drive.name + ": a function is at " + at
                                 + "; it must be between 0 (start) and 1 (end)");
                     }
-                    sequence.at(at, actions.onPath(event.getString("action"), event.optJSONObject("params")));
+                    actions.addOnPath(sequence, at, event.getString("action"), event.optJSONObject("params"));
                 }
             } else {
                 JSONObject step = (JSONObject) item;

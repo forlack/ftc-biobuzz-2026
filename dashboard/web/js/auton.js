@@ -97,14 +97,48 @@ function pointAlong(info, f) {
   return info.segments.at(-1).samples.at(-1);
 }
 
-/** Seconds a drive takes, from a simple speed-up / cruise / slow-down profile. */
+/**
+ * A rough speed-up / cruise / slow-down profile for a drive of this length: how long it takes,
+ * how far along it is at a time, and when it reaches a distance.
+ */
+function profile(length, percent) {
+  const top = (TOP_SPEED * (percent || 100)) / 100;
+  const v = length > 0 ? Math.min(top, Math.sqrt((2 * length * ACCEL * DECEL) / (ACCEL + DECEL))) : 0;
+  const ta = v / ACCEL, td = v / DECEL;
+  const da = (v * ta) / 2, dd = (v * td) / 2;
+  const tc = v > 0 ? Math.max(0, (length - da - dd) / v) : 0;
+  const total = ta + tc + td;
+  const distance = (t) => {
+    if (t <= 0) return 0;
+    if (t < ta) return (ACCEL * t * t) / 2;
+    if (t < ta + tc) return da + v * (t - ta);
+    if (t < total) { const r = total - t; return length - (DECEL * r * r) / 2; }
+    return length;
+  };
+  const time = (d) => {
+    if (d <= 0) return 0;
+    if (d < da) return Math.sqrt((2 * d) / ACCEL);
+    if (d < da + v * tc) return ta + (d - da) / v;
+    if (d < length) return total - Math.sqrt((2 * (length - d)) / DECEL);
+    return total;
+  };
+  return { total, distance, time };
+}
+
 function driveSeconds(length, percent) {
-  const v = (TOP_SPEED * (percent || 100)) / 100;
-  if (length <= 0) return 0;
-  const ramps = (v * v) / (2 * ACCEL) + (v * v) / (2 * DECEL);
-  if (length >= ramps) return length / v + v / (2 * ACCEL) + v / (2 * DECEL);
-  const peak = Math.sqrt((2 * length * ACCEL * DECEL) / (ACCEL + DECEL));
-  return peak / ACCEL + peak / DECEL;
+  return profile(length, percent).total;
+}
+
+/** The robot's heading (degrees) at fraction f of a laid-out drive. */
+function headingAlong(drive, info, f) {
+  const heading = drive.heading || { type: 'travel' };
+  const start = info.start.h;
+  if (heading.type === 'keep') return start;
+  if (heading.type === 'turn') return start + shortest(start, heading.degrees) * Math.min(1, f / (heading.by || 1));
+  const p = pointAlong(info, f);
+  if (heading.type === 'face') return degrees(Math.atan2(heading.y - p[1], heading.x - p[0]));
+  const a = pointAlong(info, Math.max(0, f - 0.01)), b = pointAlong(info, Math.min(1, f + 0.01));
+  return degrees(Math.atan2(b[1] - a[1], b[0] - a[0])) + (heading.reverse ? 180 : 0);
 }
 
 /** Seconds a function step takes (the robot's own steps; instant functions take none). */
@@ -121,6 +155,36 @@ function functionSeconds(step) {
 
 // ---- The tab ---------------------------------------------------------------------------------
 
+const DRAFT = 'biobuzz.auton.draft:';   // + autos/NAME.json, or "(new)": unsaved changes in this browser
+const NOT_ON_PATH_HINT = 'turn to, wait and wait for flywheels are steps of their own';
+
+/** Text placed along a curve (canvas pixels), centred, above it, reading left to right. */
+function textAlong(g, points, text, offset) {
+  if (points.length < 2) return;
+  if (points[points.length - 1][0] < points[0][0]) points = [...points].reverse();
+  const lengths = [0];
+  for (let i = 1; i < points.length; i++) lengths.push(lengths[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+  const total = lengths.at(-1);
+  const width = g.measureText(text).width;
+  let d = Math.max(0, (total - width) / 2);
+  for (const ch of text) {
+    const w = g.measureText(ch).width;
+    const mid = Math.min(total, d + w / 2);
+    let i = 1;
+    while (i < lengths.length - 1 && lengths[i] < mid) i++;
+    const a = points[i - 1], b = points[i];
+    const seg = lengths[i] - lengths[i - 1] || 1;
+    const t = (mid - lengths[i - 1]) / seg;
+    const angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    g.save();
+    g.translate(a[0] + (b[0] - a[0]) * t + Math.sin(angle) * offset, a[1] + (b[1] - a[1]) * t - Math.cos(angle) * offset);
+    g.rotate(angle);
+    g.fillText(ch, -w / 2, 0);
+    g.restore();
+    d += w;
+  }
+}
+
 export class AutonTab {
   constructor() {
     this.root = document.getElementById('tab-auton');
@@ -134,13 +198,15 @@ export class AutonTab {
     this.route = null;       // the auton being edited (version 3 JSON)
     this.path = null;        // autos/NAME.json it came from, or null for a new one
     this.hash = 'new';       // its hash when opened, so a save refuses someone else's change
+    this.saved = '';         // JSON as last opened or saved, to show unsaved changes
+    this.restored = false;   // unsaved changes were brought back from this browser
     this.selected = -1;      // step index
-    this.mode = null;        // null | 'add-drive' | 'pick-face'
+    this.mode = null;        // null | 'add-drive' | 'place-face'
     this.drag = null;
     this.hover = null;       // field point under the mouse
     this.undoStack = [];
     this.redoStack = [];
-    this.saved = '';         // JSON as last opened or saved, to show unsaved changes
+    this.preview = null;     // { t, total, playing, last } while previewing
 
     this.bindField();
     new ResizeObserver(() => this.resize()).observe(this.canvas.parentElement);
@@ -150,7 +216,7 @@ export class AutonTab {
   /** Called when the tab is shown. */
   async refresh() {
     try {
-      if (!this.actions.length) this.actions = await api('/api/actions');
+      this.actions = await api('/api/actions');
       this.files = (await api('/api/files')).map((f) => f.path).filter((p) => /^autos\/[^/]+\.json$/.test(p)).sort();
     } catch (error) {
       toast(`Could not reach the robot: ${error.message}`, true);
@@ -158,28 +224,56 @@ export class AutonTab {
     if (!this.route) {
       let last = null;
       try { last = localStorage.getItem('biobuzz.auton'); } catch { /* private window */ }
-      const first = this.files.includes(last) ? last : this.files[0];
-      if (first) await this.open(first); else this.newAuton();
+      if (last === '(new)' && this.readDraft('(new)')) this.newAuton();
+      else {
+        const first = this.files.includes(last) ? last : this.files[0];
+        if (first) await this.open(first); else this.newAuton();
+      }
     }
     this.render();
   }
 
-  // ---- Files ---------------------------------------------------------------------------------
+  // ---- Files and drafts ------------------------------------------------------------------------
+
+  draftKey() { return DRAFT + (this.path || '(new)'); }
+
+  readDraft(key) {
+    try { return JSON.parse(localStorage.getItem(DRAFT + key) || 'null'); } catch { return null; }
+  }
+
+  /** Keeps unsaved changes in this browser (per auton), so a reload or a closed tab loses nothing. */
+  storeDraft() {
+    try {
+      if (this.dirty()) localStorage.setItem(this.draftKey(), JSON.stringify({ route: this.route, hash: this.hash, saved: this.saved }));
+      else localStorage.removeItem(this.draftKey());
+    } catch { /* private window or full */ }
+  }
+
+  remember_(path) {
+    try { localStorage.setItem('biobuzz.auton', path || '(new)'); } catch { /* private window */ }
+  }
 
   async open(path) {
-    if (this.dirty() && !window.confirm('Discard the changes to this auton?')) { this.render(); return; }
     try {
       const { text, hash } = await getFile(path);
       const route = JSON.parse(text);
       if (route.version !== 3) throw new Error(`${path} is version ${route.version}: convert it with tools/autos_v2_to_v3.py`);
-      this.route = route;
       this.path = path;
+      this.saved = JSON.stringify(route);
       this.hash = hash;
+      this.route = route;
+      const draft = this.readDraft(path);
+      this.restored = !!(draft && JSON.stringify(draft.route) !== this.saved);
+      if (this.restored) {
+        this.route = draft.route;
+        this.hash = draft.hash;     // saving then refuses if the robot's copy changed since
+        if (draft.hash !== hash) toast(`${path} changed on the robot since your unsaved changes: Save will ask`, true);
+      }
       this.selected = -1;
       this.undoStack = [];
       this.redoStack = [];
-      this.saved = JSON.stringify(route);
-      try { localStorage.setItem('biobuzz.auton', path); } catch { /* private window */ }
+      this.stopPreview();
+      this.remember_(path);
     } catch (error) {
       toast(error.message, true);
     }
@@ -187,15 +281,26 @@ export class AutonTab {
   }
 
   newAuton() {
+    const draft = this.readDraft('(new)');
     const start = this.route ? { ...this.route.start } : { x: 56, y: 9, heading: 90 };
-    this.route = { version: 3, name: 'new auton', start, steps: [] };
+    this.route = draft ? draft.route : { version: 3, name: 'new auton', start, steps: [] };
+    this.restored = !!draft;
     this.path = null;
     this.hash = 'new';
+    this.saved = '';
     this.selected = -1;
     this.undoStack = [];
     this.redoStack = [];
-    this.saved = '';
+    this.stopPreview();
+    this.remember_(null);
     this.render();
+  }
+
+  /** Throws the unsaved changes away: back to the file on the robot. */
+  discard() {
+    try { localStorage.removeItem(this.draftKey()); } catch { /* private window */ }
+    if (this.path) this.open(this.path);
+    else { this.route = null; this.newAuton(); }
   }
 
   dirty() {
@@ -215,11 +320,13 @@ export class AutonTab {
     const base = path === this.path ? this.hash : (this.files.includes(path) ? '*' : 'new');
     try {
       const result = await putFile(path, `${JSON.stringify(this.route, null, 2)}\n`, base);
+      try { localStorage.removeItem(this.draftKey()); } catch { /* private window */ }
       this.path = path;
       this.hash = result.hash;
       this.saved = JSON.stringify(this.route);
+      this.restored = false;
       if (!this.files.includes(path)) this.files = [...this.files, path].sort();
-      try { localStorage.setItem('biobuzz.auton', path); } catch { /* private window */ }
+      this.remember_(path);
       toast(`Saved ${path} on the robot`);
     } catch (error) {
       toast(error.message, true);   // the robot checks the whole auton: its message says what is wrong
@@ -259,11 +366,11 @@ export class AutonTab {
 
   key(event) {
     if (!this.root.classList.contains('active')) return;
+    if (event.key === 'Escape') { this.closeMenu(); if (this.mode) { this.mode = null; this.render(); } return; }
     if (event.target.closest && event.target.closest('input, select, textarea')) return;
     const mod = event.ctrlKey || event.metaKey;
     if (mod && event.key.toLowerCase() === 'z') { event.preventDefault(); if (event.shiftKey) this.redo(); else this.undo(); }
     else if (mod && event.key.toLowerCase() === 'y') { event.preventDefault(); this.redo(); }
-    else if (event.key === 'Escape' && this.mode) { this.mode = null; this.render(); }
   }
 
   // ---- Steps ---------------------------------------------------------------------------------------
@@ -272,13 +379,9 @@ export class AutonTab {
     return this.selected >= 0 ? this.selected + 1 : this.route.steps.length;
   }
 
-  driveCount() {
-    return this.route.steps.filter((s) => s.drive).length;
-  }
-
   addDriveTo(point) {
     const used = new Set(this.route.steps.filter((s) => s.drive).map((s) => s.drive.name));
-    let n = this.driveCount() + 1;
+    let n = this.route.steps.filter((s) => s.drive).length + 1;
     while (used.has(`path${n}`)) n++;
     const at = this.insertIndex();
     this.change((route) => route.steps.splice(at, 0, { drive: { name: `path${n}`, segments: [{ to: point }], heading: { type: 'keep' } } }));
@@ -287,14 +390,24 @@ export class AutonTab {
     this.render();
   }
 
+  defaults(def) {
+    return Object.fromEntries(def.params.map((p) => [p.name, p.default]));
+  }
+
   addFunction(name) {
     const def = this.actions.find((a) => a.name === name);
     if (!def) return;
-    const params = Object.fromEntries(def.params.map((p) => [p.name, p.default]));
     const at = this.insertIndex();
-    this.change((route) => route.steps.splice(at, 0, { action: name, params }));
+    this.change((route) => route.steps.splice(at, 0, { action: name, params: this.defaults(def) }));
     this.selected = at;
     this.render();
+  }
+
+  addOnDrive(name) {
+    const def = this.actions.find((a) => a.name === name);
+    const drive = this.route.steps[this.selected]?.drive;
+    if (!def || !drive) return;
+    this.change(() => { drive.events = [...(drive.events || []), { at: 0.5, action: name, params: this.defaults(def) }]; });
   }
 
   move(index, by) {
@@ -311,15 +424,16 @@ export class AutonTab {
     this.render();
   }
 
-  /** Splits the selected drive at a point on it: a new waypoint, same shape. */
+  /** Splits a drive at a point on it: a new waypoint, same shape. */
   splitAt(stepIndex, segmentIndex, t) {
     this.change((route) => {
       const info = layout(route)[stepIndex];
       const [left, right] = splitBezier(info.segments[segmentIndex].pts, t);
       const point = left[left.length - 1].map(round);
-      route.steps[stepIndex].drive.segments.splice(segmentIndex, 1,
+      const segments = route.steps[stepIndex].drive.segments;
+      segments.splice(segmentIndex, 1,
         { ...(left.length > 2 ? { via: left.slice(1, -1).map((p) => p.map(round)) } : {}), to: point },
-        { ...(right.length > 2 ? { via: right.slice(1, -1).map((p) => p.map(round)) } : {}), to: route.steps[stepIndex].drive.segments[segmentIndex].to });
+        { ...(right.length > 2 ? { via: right.slice(1, -1).map((p) => p.map(round)) } : {}), to: segments[segmentIndex].to });
     });
   }
 
@@ -336,15 +450,14 @@ export class AutonTab {
   /** Adds a bend point to a segment: half way along, pushed sideways so it can be seen. */
   addBend(stepIndex, segmentIndex) {
     this.change((route) => {
-      const info = layout(route)[stepIndex];
-      const pts = info.segments[segmentIndex].pts;
+      const pts = layout(route)[stepIndex].segments[segmentIndex].pts;
       const a = pts[0], b = pts[pts.length - 1];
       const mid = bezier(pts, 0.5);
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
       const side = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
-      const point = [round(mid[0] + side[0] * Math.min(12, len / 4)), round(mid[1] + side[1] * Math.min(12, len / 4))];
+      const push = Math.min(12, len / 4);
       const segment = route.steps[stepIndex].drive.segments[segmentIndex];
-      segment.via = [...(segment.via || []), point];
+      segment.via = [...(segment.via || []), [round(mid[0] + side[0] * push), round(mid[1] + side[1] * push)]];
     });
   }
 
@@ -360,7 +473,6 @@ export class AutonTab {
       const p = a.to;
       const before = info.segments[segmentIndex].pts.at(-2);
       const after = info.segments[segmentIndex + 1].pts[1];
-      // The direction through the waypoint: from the point before to the point after.
       let dx = after[0] - before[0], dy = after[1] - before[1];
       const d = Math.hypot(dx, dy) || 1;
       dx /= d; dy /= d;
@@ -371,6 +483,107 @@ export class AutonTab {
       a.via = a.via?.length ? [...a.via.slice(0, -1), inPoint] : [inPoint];
       b.via = b.via?.length ? [outPoint, ...b.via.slice(1)] : [outPoint];
     });
+  }
+
+  /** Face a point: the point appears just ahead of the robot and follows the mouse until a click. */
+  startPlacingFace() {
+    const drive = this.route.steps[this.selected]?.drive;
+    if (!drive) return;
+    const end = layout(this.route)[this.selected].end;
+    this.change(() => {
+      drive.heading = { type: 'face', x: round(Math.min(FIELD, Math.max(0, end.x))), y: round(Math.min(FIELD, Math.max(0, end.y + 16))) };
+    });
+    this.mode = 'place-face';
+    this.render();
+  }
+
+  // ---- Functions on drives: where they are -------------------------------------------------------
+
+  def(name) { return this.actions.find((a) => a.name === name); }
+
+  /** Seconds a function takes (0: instant). */
+  seconds(event) {
+    const def = this.def(event.action);
+    return def && def.kind === 'step' ? functionSeconds(event) : 0;
+  }
+
+  /** Where a function on a drive starts and ends (fractions); a timed one ends later along it. */
+  span(drive, info, event) {
+    const duration = this.seconds(event);
+    if (!duration) return { from: event.at, to: event.at, timed: false, beyond: false };
+    const p = profile(info.length, drive.speedPercent);
+    const t = p.time(event.at * info.length) + duration;
+    return { from: event.at, to: Math.min(1, p.distance(t) / info.length), timed: true, beyond: t > p.total };
+  }
+
+  // ---- Preview -----------------------------------------------------------------------------------------
+
+  /** Each step's time window, and the whole auton's length. */
+  timeline() {
+    const info = layout(this.route);
+    let t = 0;
+    const entries = this.route.steps.map((step, i) => {
+      const duration = step.drive ? driveSeconds(info[i].length, step.drive.speedPercent) : functionSeconds(step);
+      const entry = { i, t0: t, t1: t + duration, info: info[i], step };
+      t += duration;
+      return entry;
+    });
+    return { entries, total: t };
+  }
+
+  /** The robot's pose at a time in the preview, and the step it is on. */
+  poseAt(time) {
+    const { entries } = this.timeline();
+    let pose = { x: this.route.start.x, y: this.route.start.y, h: this.route.start.heading }, current = -1;
+    for (const e of entries) {
+      if (time < e.t0) break;
+      current = e.i;
+      if (e.step.drive) {
+        const p = profile(e.info.length, e.step.drive.speedPercent);
+        const f = e.info.length ? p.distance(Math.min(time, e.t1) - e.t0) / e.info.length : 1;
+        const at = pointAlong(e.info, f);
+        pose = { x: at[0], y: at[1], h: headingAlong(e.step.drive, e.info, f) };
+      } else {
+        pose = { x: e.info.start.x, y: e.info.start.y, h: e.info.start.h };
+      }
+    }
+    return { pose, current };
+  }
+
+  togglePreview() {
+    if (this.preview && this.preview.playing) { this.preview.playing = false; this.render(); return; }
+    const total = this.timeline().total;
+    if (!this.preview || this.preview.t >= total) this.preview = { t: 0, total };
+    this.preview.playing = true;
+    this.preview.last = performance.now();
+    const tick = (now) => {
+      const preview = this.preview;
+      if (!preview || !preview.playing) return;
+      preview.t = Math.min(preview.total, preview.t + (now - preview.last) / 1000);
+      preview.last = now;
+      if (preview.t >= preview.total) preview.playing = false;
+      this.renderPreview();
+      if (preview.playing) requestAnimationFrame(tick);
+      else this.render();
+    };
+    this.render();
+    requestAnimationFrame(tick);
+  }
+
+  stopPreview() {
+    this.preview = null;
+  }
+
+  /** Cheap per-frame update while previewing: the field, the time and the current step. */
+  renderPreview() {
+    this.draw();
+    const preview = this.preview;
+    const slider = document.getElementById('auton-scrub');
+    if (!preview || !slider) return;
+    slider.value = String(preview.t);
+    document.getElementById('auton-preview-time').textContent = `${preview.t.toFixed(1)} s of ${preview.total.toFixed(1)}`;
+    const { current } = this.poseAt(preview.t);
+    this.panel.querySelectorAll('.auton-step').forEach((row) => row.classList.toggle('playing', Number(row.dataset.step) === current));
   }
 
   // ---- Field -----------------------------------------------------------------------------------------
@@ -386,7 +599,7 @@ export class AutonTab {
     this.draw();
   }
 
-  /** Field inches -> canvas pixels, and back. */
+  /** Field inches -> canvas pixels. */
   px([x, y]) { const s = this.canvas.width / FIELD; return [x * s, this.canvas.height - y * s]; }
 
   fieldPoint(event) {
@@ -405,21 +618,18 @@ export class AutonTab {
     const list = [];
     const info = layout(this.route);
     const route = this.route;
-    // The start pose: its body moves it, the dot ahead of it turns it.
-    const ahead = 12;
     const sh = (route.start.heading * Math.PI) / 180;
-    list.push({ kind: 'start-heading', at: [route.start.x + Math.cos(sh) * ahead, route.start.y + Math.sin(sh) * ahead] });
+    list.push({ kind: 'start-heading', at: [route.start.x + Math.cos(sh) * 12, route.start.y + Math.sin(sh) * 12] });
     const step = route.steps[this.selected];
     if (step && step.drive) {
       const drive = step.drive;
       if (drive.heading && drive.heading.type === 'face') list.push({ kind: 'face', at: [drive.heading.x, drive.heading.y] });
+      (drive.events || []).forEach((event, e) => list.push({ kind: 'event', step: this.selected, index: e, at: pointAlong(info[this.selected], event.at) }));
       drive.segments.forEach((segment, s) => {
         (segment.via || []).forEach((via, v) => list.push({ kind: 'via', step: this.selected, segment: s, index: v, at: via }));
         list.push({ kind: 'to', step: this.selected, segment: s, at: segment.to });
       });
-      (drive.events || []).forEach((event, e) => list.push({ kind: 'event', step: this.selected, index: e, at: pointAlong(info[this.selected], event.at) }));
     }
-    // Every drive's end point (its shared corner with the next drive), then the start.
     route.steps.forEach((s, i) => {
       if (s.drive && i !== this.selected) list.push({ kind: 'to', step: i, segment: s.drive.segments.length - 1, at: s.drive.segments.at(-1).to });
     });
@@ -457,11 +667,11 @@ export class AutonTab {
     canvas.addEventListener('contextmenu', (event) => {
       event.preventDefault();
       const handle = this.hit(event);
-      if (!handle) return;
-      const drive = handle.step !== undefined && this.route.steps[handle.step].drive;
+      if (!handle || handle.step === undefined) return;
+      const drive = this.route.steps[handle.step].drive;
       if (handle.kind === 'via') this.change(() => { drive.segments[handle.segment].via.splice(handle.index, 1); if (!drive.segments[handle.segment].via.length) delete drive.segments[handle.segment].via; });
       else if (handle.kind === 'to' && handle.segment < drive.segments.length - 1) this.removeWaypoint(handle.step, handle.segment);
-      else if (handle.kind === 'event') this.change(() => drive.events.splice(handle.index, 1));
+      else if (handle.kind === 'event') this.change(() => { drive.events.splice(handle.index, 1); if (!drive.events.length) delete drive.events; });
     });
     canvas.addEventListener('dblclick', (event) => {
       if (!this.route || this.mode) return;
@@ -476,9 +686,13 @@ export class AutonTab {
       if (!this.route || event.button !== 0) return;
       const point = this.fieldPoint(event);
       if (this.mode === 'add-drive') { this.addDriveTo(point); return; }
-      if (this.mode === 'pick-face') {
-        this.change(() => { const d = this.route.steps[this.selected].drive; d.heading = { type: 'face', x: point[0], y: point[1] }; });
+      if (this.mode === 'place-face') {
+        // Placing: it is under the mouse already; held, it keeps following until let go.
+        const heading = this.route.steps[this.selected].drive.heading;
+        heading.x = point[0]; heading.y = point[1];
         this.mode = null;
+        this.drag = { kind: 'face', placed: true };
+        canvas.setPointerCapture(event.pointerId);
         this.render();
         return;
       }
@@ -490,25 +704,30 @@ export class AutonTab {
         if (handle.step !== undefined && handle.kind !== 'event' && this.selected !== handle.step) { this.selected = handle.step; this.render(); }
         return;
       }
-      // Clicking a drive selects it.
       const near = this.nearestOnDrive(point);
       if (near && near[3] < 4) { this.selected = near[0]; this.render(); }
     });
     canvas.addEventListener('pointermove', (event) => {
       if (!this.route) return;
       this.hover = this.fieldPoint(event);
+      const point = this.hover;
+      if (this.mode === 'place-face' && !this.drag) {
+        const heading = this.route.steps[this.selected]?.drive?.heading;
+        if (heading && heading.type === 'face') { heading.x = point[0]; heading.y = point[1]; this.render(); }
+        return;
+      }
       const handle = this.drag;
       if (!handle) {
         canvas.style.cursor = this.mode ? 'crosshair' : this.hit(event) ? 'grab' : 'default';
         if (this.mode) this.draw();
         return;
       }
-      const point = this.hover;
       const route = this.route;
       if (handle.kind === 'start') { route.start.x = point[0]; route.start.y = point[1]; }
       else if (handle.kind === 'start-heading') {
         const h = degrees(Math.atan2(point[1] - route.start.y, point[0] - route.start.x));
-        route.start.heading = Math.round(wrap(h) / (event.shiftKey ? 1 : 15)) * (event.shiftKey ? 1 : 15) % 360;
+        const step = event.shiftKey ? 1 : 15;
+        route.start.heading = (Math.round(wrap(h) / step) * step) % 360;
       } else if (handle.kind === 'face') { const d = route.steps[this.selected].drive; d.heading.x = point[0]; d.heading.y = point[1]; }
       else if (handle.kind === 'via') route.steps[handle.step].drive.segments[handle.segment].via[handle.index] = point;
       else if (handle.kind === 'to') route.steps[handle.step].drive.segments[handle.segment].to = point;
@@ -518,8 +737,7 @@ export class AutonTab {
           const info = layout(route)[handle.step];
           let before = 0;
           for (let s = 0; s < near[1]; s++) before += info.segments[s].length;
-          const segment = info.segments[near[1]];
-          const along = before + segment.length * near[2];   // close enough for placing by hand
+          const along = before + info.segments[near[1]].length * near[2];
           route.steps[handle.step].drive.events[handle.index].at = Math.round((along / info.length) * 100) / 100;
         }
       }
@@ -527,8 +745,8 @@ export class AutonTab {
     });
     const end = () => {
       if (!this.drag) return;
-      // A drag that changed nothing is not an undo step.
-      if (this.undoStack.at(-1) === JSON.stringify(this.route)) this.undoStack.pop();
+      // A drag that changed nothing is not an undo step (placing was recorded when it began).
+      if (!this.drag.placed && this.undoStack.at(-1) === JSON.stringify(this.route)) this.undoStack.pop();
       this.drag = null;
       this.render();
     };
@@ -558,20 +776,31 @@ export class AutonTab {
     if (!this.route) return;
     const info = layout(this.route);
     const robot = this.route.robot || { width: 18, length: 18 };
-    let drive = 0;
+    const font = (px, weight = 600) => { g.font = `${weight} ${px * k}px system-ui, sans-serif`; };
+    const label = (text, [x, y], color = '#e6edf3') => {
+      font(12);
+      const w = g.measureText(text).width;
+      g.fillStyle = '#0d1117cc';
+      g.fillRect(x - 3 * k, y - 11 * k, w + 6 * k, 15 * k);
+      g.fillStyle = color;
+      g.fillText(text, x, y);
+    };
+    let colorIndex = 0;
+    const colors = [];
     // Drives: others dim, the selected one bright with its control lines.
     this.route.steps.forEach((step, i) => {
       if (!step.drive) return;
-      const color = COLORS[drive++ % COLORS.length];
+      const color = COLORS[colorIndex++ % COLORS.length];
+      colors[i] = color;
       const selected = i === this.selected;
       const d = info[i];
-      g.globalAlpha = selected ? 1 : 0.55;
+      g.globalAlpha = selected ? 1 : 0.6;
       g.strokeStyle = color;
       g.lineWidth = (selected ? 4 : 3) * k;
       g.beginPath();
-      d.segments.forEach((segment) => segment.samples.forEach((p, j) => { const [x, y] = this.px(p); if (j === 0 && segment === d.segments[0]) g.moveTo(x, y); else g.lineTo(x, y); }));
+      d.segments.forEach((segment, si) => segment.samples.forEach((p, j) => { const [x, y] = this.px(p); if (j === 0 && si === 0) g.moveTo(x, y); else g.lineTo(x, y); }));
       g.stroke();
-      // An arrow half way, showing which way it goes.
+      // Which way it goes: a chevron half way.
       const mid = pointAlong(d, 0.5), ahead = pointAlong(d, 0.53);
       const angle = Math.atan2(-(ahead[1] - mid[1]), ahead[0] - mid[0]);
       const [mx, my] = this.px(mid);
@@ -581,6 +810,33 @@ export class AutonTab {
       g.lineTo(mx + Math.cos(angle + 2.5) * 7 * k, my + Math.sin(angle + 2.5) * 7 * k);
       g.lineTo(mx + Math.cos(angle - 2.5) * 7 * k, my + Math.sin(angle - 2.5) * 7 * k);
       g.fill();
+      // Functions on the drive: instant ones a ◆ with their name; timed ones a thicker stretch
+      // from where they start to where the robot will be when they end, named along it.
+      (step.drive.events || []).forEach((event) => {
+        const span = this.span(step.drive, d, event);
+        const name = this.def(event.action)?.label || event.action;
+        if (span.timed) {
+          const pts = [];
+          for (let f = span.from; f <= span.to + 1e-9; f += Math.max(0.005, (span.to - span.from) / 60)) pts.push(this.px(pointAlong(d, f)));
+          pts.push(this.px(pointAlong(d, span.to)));
+          g.strokeStyle = '#f5b301';
+          g.lineWidth = 8 * k;
+          g.lineCap = 'round';
+          g.beginPath(); pts.forEach(([x, y], j) => (j ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke();
+          g.lineCap = 'butt';
+          for (const f of [span.from, span.to]) {
+            const [x, y] = this.px(pointAlong(d, f));
+            g.fillStyle = '#f5b301'; g.strokeStyle = '#151b23'; g.lineWidth = 2 * k;
+            g.fillRect(x - 5 * k, y - 5 * k, 10 * k, 10 * k); g.strokeRect(x - 5 * k, y - 5 * k, 10 * k, 10 * k);
+          }
+          font(12, 700);
+          g.fillStyle = '#ffe08a';
+          textAlong(g, pts, `${name}${span.beyond ? ' (keeps going after)' : ''}`, 12 * k);
+        } else {
+          const [x, y] = this.px(pointAlong(d, event.at));
+          label(name, [x + 10 * k, y - 8 * k], '#ffe08a');
+        }
+      });
       if (selected) {
         g.setLineDash([4 * k, 4 * k]);
         g.lineWidth = 1 * k;
@@ -598,15 +854,35 @@ export class AutonTab {
           g.beginPath(); g.moveTo(ex, ey); g.lineTo(fx, fy); g.stroke();
         }
         g.setLineDash([]);
-        this.drawRobot(g, d.start, robot, '#ffffff55');
         this.drawRobot(g, d.end, robot, color);
+        // The heading at each waypoint too.
+        let before = 0;
+        d.segments.slice(0, -1).forEach((segment) => {
+          before += segment.length;
+          const f = before / d.length;
+          const p = pointAlong(d, f);
+          this.drawArrow(g, { x: p[0], y: p[1], h: headingAlong(step.drive, d, f) }, '#ffffffcc', 7);
+        });
       } else {
-        this.drawRobot(g, d.end, robot, `${color}55`, true);
+        this.drawRobot(g, d.end, robot, `${color}88`, true);
       }
       g.globalAlpha = 1;
     });
     // The start pose.
     this.drawRobot(g, { x: this.route.start.x, y: this.route.start.y, h: this.route.start.heading }, robot, '#3fb950');
+    // Function steps of their own: named where they happen (stacked when several are there).
+    const stacks = new Map();
+    this.route.steps.forEach((step, i) => {
+      if (step.drive) return;
+      const p = info[i].start;
+      const key = `${Math.round(p.x)},${Math.round(p.y)}`;
+      const n = stacks.get(key) || 0;
+      stacks.set(key, n + 1);
+      const def = this.def(step.action);
+      const values = (def?.params || []).map((q) => `${step.params?.[q.name] ?? q.default}${q.unit === '°' ? '°' : q.unit}`);
+      const [x, y] = this.px([p.x, p.y]);
+      label(`${i + 1}. ${def?.label || step.action}${values.length ? ` ${values.join(' ')}` : ''}`, [x + 14 * k, y + (16 + 16 * n) * k], i === this.selected ? '#f5b301' : '#c9d4e0');
+    });
     // Handles.
     for (const h of this.handles()) {
       const [x, y] = this.px(h.at);
@@ -617,6 +893,8 @@ export class AutonTab {
         g.fillStyle = last ? '#f5b301' : '#ffffff'; g.strokeStyle = '#151b23';
         g.beginPath(); g.arc(x, y, (last ? 7 : 6) * k, 0, Math.PI * 2); g.fill(); g.stroke();
       } else if (h.kind === 'event') {
+        const event = this.route.steps[h.step].drive.events[h.index];
+        if (this.seconds(event)) continue;   // timed: drawn as squares above
         g.fillStyle = '#f5b301'; g.strokeStyle = '#151b23';
         g.beginPath(); g.moveTo(x, y - 7 * k); g.lineTo(x + 7 * k, y); g.lineTo(x, y + 7 * k); g.lineTo(x - 7 * k, y); g.closePath(); g.fill(); g.stroke();
       } else if (h.kind === 'face') {
@@ -634,14 +912,36 @@ export class AutonTab {
       g.setLineDash([6 * k, 5 * k]); g.strokeStyle = '#f5b301'; g.lineWidth = 2 * k;
       g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke(); g.setLineDash([]);
     }
+    // Preview: the robot where it would be now.
+    if (this.preview) {
+      const { pose } = this.poseAt(this.preview.t);
+      this.drawRobot(g, pose, robot, '#f5b301', false, true);
+    }
     if (this.hover) {
+      font(12, 500);
       g.fillStyle = '#e6edf3';
-      g.font = `${12 * k}px system-ui`;
       g.fillText(`${this.hover[0]}, ${this.hover[1]}`, 8 * k, size - 8 * k);
     }
   }
 
-  drawRobot(g, pose, robot, color, faint = false) {
+  /** A heading arrow from a point: a shaft and a head. */
+  drawArrow(g, pose, color, inches = 10) {
+    const s = this.canvas.width / FIELD;
+    const k = window.devicePixelRatio || 1;
+    const [x, y] = this.px([pose.x, pose.y]);
+    const a = (-pose.h * Math.PI) / 180;
+    const len = inches * s;
+    const tx = x + Math.cos(a) * len, ty = y + Math.sin(a) * len;
+    g.strokeStyle = color; g.fillStyle = color; g.lineWidth = 2.5 * k;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(tx - Math.cos(a) * 5 * k, ty - Math.sin(a) * 5 * k); g.stroke();
+    g.beginPath();
+    g.moveTo(tx, ty);
+    g.lineTo(tx + Math.cos(a + 2.6) * 9 * k, ty + Math.sin(a + 2.6) * 9 * k);
+    g.lineTo(tx + Math.cos(a - 2.6) * 9 * k, ty + Math.sin(a - 2.6) * 9 * k);
+    g.closePath(); g.fill();
+  }
+
+  drawRobot(g, pose, robot, color, faint = false, filled = false) {
     const s = this.canvas.width / FIELD;
     const k = window.devicePixelRatio || 1;
     const [x, y] = this.px([pose.x, pose.y]);
@@ -649,18 +949,18 @@ export class AutonTab {
     g.translate(x, y);
     g.rotate((-pose.h * Math.PI) / 180);
     const w = (robot.length || 18) * s, h = (robot.width || 18) * s;
+    if (filled) { g.fillStyle = `${color}33`; g.fillRect(-w / 2, -h / 2, w, h); }
     g.strokeStyle = color;
     g.lineWidth = (faint ? 1 : 2) * k;
     g.strokeRect(-w / 2, -h / 2, w, h);
-    g.beginPath(); g.moveTo(0, 0); g.lineTo(w / 2 + 4 * k, 0); g.stroke();
     g.restore();
+    this.drawArrow(g, pose, color, faint ? 7 : 11);
   }
 
   // ---- Panel -----------------------------------------------------------------------------------------
 
   label(name) {
-    const def = this.actions.find((a) => a.name === name);
-    return def ? def.label : name;
+    return this.def(name)?.label || name;
   }
 
   summary(step, info) {
@@ -669,13 +969,14 @@ export class AutonTab {
       const heading = d.heading || { type: 'travel' };
       const how = heading.type === 'turn' ? `turn to ${heading.degrees}°` : heading.type === 'face' ? 'face a point'
         : heading.type === 'keep' ? 'keep facing' : heading.reverse ? 'backwards' : 'face travel';
-      const parts = [`to ${info.end.x}, ${info.end.y}`, how];
+      const parts = [`to ${round(info.end.x)}, ${round(info.end.y)}`, how];
       if (d.segments.length > 1) parts.push(`${d.segments.length - 1} waypoint${d.segments.length > 2 ? 's' : ''}`);
       if (d.speedPercent) parts.push(`${d.speedPercent}%`);
-      if (d.events?.length) parts.push(`◆ ${d.events.length}`);
-      return `<b>Drive ${escapeHtml(d.name)}</b> <span class="muted">${escapeHtml(parts.join(' · '))}</span>`;
+      const events = (d.events || []).map((e) => this.label(e.action));
+      return `<b>Drive ${escapeHtml(d.name)}</b> <span class="muted">${escapeHtml(parts.join(' · '))}</span>`
+        + (events.length ? `<div class="on-drive">◆ ${escapeHtml(events.join(', '))}</div>` : '');
     }
-    const def = this.actions.find((a) => a.name === step.action);
+    const def = this.def(step.action);
     const values = (def?.params || []).map((p) => `${step.params?.[p.name] ?? p.default}${p.unit === '°' ? '°' : ` ${p.unit}`}`);
     return `<b>${escapeHtml(this.label(step.action))}</b> <span class="muted">${escapeHtml(values.join(', '))}</span>`;
   }
@@ -683,54 +984,69 @@ export class AutonTab {
   render() {
     this.draw();
     if (!this.route) { this.panel.innerHTML = '<div class="muted">Loading…</div>'; return; }
+    this.storeDraft();
     const route = this.route;
     const info = layout(route);
-    let total = 0;
-    const times = route.steps.map((step, i) => {
-      const t = step.drive ? driveSeconds(info[i].length, step.drive.speedPercent) : functionSeconds(step);
-      total += t;
-      return t;
-    });
+    const { total, entries } = this.timeline();
+    if (this.preview) this.preview.total = total;
     const fileOptions = this.files.map((f) => `<option value="${escapeHtml(f)}" ${f === this.path ? 'selected' : ''}>${escapeHtml(f.replace(/^autos\/|\.json$/g, ''))}</option>`).join('');
-    const stepFunctions = this.actions.map((a) => `<option value="${escapeHtml(a.name)}">${escapeHtml(a.label)}</option>`).join('');
     const dirty = this.dirty();
+    const playing = this.preview && this.preview.playing;
+    const step = route.steps[this.selected];
     this.panel.innerHTML = `
-      <div class="auton-files">
-        <select id="auton-file" aria-label="Auton file">${this.path ? '' : '<option selected>(new, not saved)</option>'}${fileOptions}</select>
-        <button class="btn small" id="auton-new">New</button>
-        <button class="btn small primary ${dirty ? 'pulse' : ''}" id="auton-save" data-testid="auton-save">Save</button>
-        <button class="btn small" id="auton-save-as">Save as…</button>
-        <button class="btn small" id="auton-history" ${this.path ? '' : 'disabled'}>History</button>
-      </div>
-      <div class="auton-meta">
-        <label>Name <input id="auton-name" value="${escapeHtml(route.name || '')}"></label>
-        <span class="${total > 30 ? 'bad-text' : 'muted'}" id="auton-time">about ${total.toFixed(1)} s of 30${total > 30 ? ': too long!' : ''}</span>
-        <span class="muted">${dirty ? '<b class="warn-text">not saved</b>' : this.path ? 'saved' : ''}</span>
-        <button class="btn small" id="auton-undo" ${this.undoStack.length ? '' : 'disabled'} title="Undo (Ctrl+Z)">↶</button>
-        <button class="btn small" id="auton-redo" ${this.redoStack.length ? '' : 'disabled'} title="Redo (Ctrl+Shift+Z)">↷</button>
-      </div>
-      <ol class="auton-steps" id="auton-steps">
-        <li class="auton-step start ${this.selected === -1 ? 'selected' : ''}" data-step="-1">
-          <span class="num">●</span><span class="what"><b>Start</b>
-            <span class="xyz">x <input type="number" step="0.5" data-start="x" value="${route.start.x}">
-            y <input type="number" step="0.5" data-start="y" value="${route.start.y}">
-            facing <input type="number" step="5" data-start="heading" value="${route.start.heading}">°</span></span>
-        </li>
-        ${route.steps.map((step, i) => `
-        <li class="auton-step ${i === this.selected ? 'selected' : ''} ${step.drive ? 'drive' : 'function'}" data-step="${i}">
-          <span class="num">${i + 1}</span><span class="what">${this.summary(step, info[i])}</span>
-          <span class="time muted">${times[i] ? `${times[i].toFixed(1)} s` : ''}</span>
-          <span class="tools"><button class="icon" data-up="${i}" title="Move up">↑</button><button class="icon" data-down="${i}" title="Move down">↓</button><button class="icon bad" data-remove="${i}" title="Remove">✕</button></span>
-        </li>`).join('')}
-      </ol>
-      <div class="auton-add">
-        <button class="btn small ${this.mode === 'add-drive' ? 'primary' : ''}" id="auton-add-drive" data-testid="auton-add-drive">+ Drive</button>
-        <select id="auton-function" aria-label="Function">${stepFunctions}</select>
-        <button class="btn small" id="auton-add-function">+ Function</button>
-        <span class="muted">${this.mode === 'add-drive' ? 'Click the field where the drive should go (Esc cancels).'
-          : this.mode === 'pick-face' ? 'Click the point to face (Esc cancels).' : 'Adds after the selected step.'}</span>
-      </div>
-      <div class="auton-detail" id="auton-detail">${this.detail(info)}</div>
+      <button class="auton-preview ${playing ? 'playing' : ''}" id="auton-preview" data-testid="auton-preview">${playing ? '■ Stop preview' : '▶ Preview'}</button>
+      ${this.preview ? `<div class="auton-scrub"><input type="range" id="auton-scrub" min="0" max="${total}" step="0.05" value="${this.preview.t}">
+        <span id="auton-preview-time" class="muted">${this.preview.t.toFixed(1)} s of ${total.toFixed(1)}</span>
+        <button class="icon" id="auton-preview-close" title="Close the preview">✕</button></div>` : ''}
+
+      <section class="auton-card">
+        <div class="auton-card-head">Auton file
+          <span class="state">${dirty ? '<b class="warn-text">● not saved</b>' : this.path ? '<span class="ok-text">✓ saved</span>' : ''}</span></div>
+        <div class="auton-files">
+          <select id="auton-file" aria-label="Auton file">${this.path ? '' : '<option selected>(new, not saved)</option>'}${fileOptions}</select>
+          <button class="btn small" id="auton-new">New</button>
+          <button class="btn small" id="auton-history" ${this.path ? '' : 'disabled'}>History</button>
+        </div>
+        <div class="auton-files">
+          <label class="grow-label">Name <input id="auton-name" value="${escapeHtml(route.name || '')}"></label>
+          <button class="btn primary ${dirty ? 'pulse' : ''}" id="auton-save" data-testid="auton-save">Save</button>
+          <button class="btn" id="auton-save-as">Save as…</button>
+        </div>
+        ${this.restored && dirty ? `<div class="auton-restored">Your unsaved changes from this browser are back.
+          <button class="btn small" id="auton-discard">Discard them</button></div>` : ''}
+      </section>
+
+      <section class="auton-card">
+        <div class="auton-card-head">Sequence
+          <span class="state"><span class="${total > 30 ? 'bad-text' : ''}" id="auton-time">about ${total.toFixed(1)} s of 30${total > 30 ? ': too long!' : ''}</span>
+          <button class="icon" id="auton-undo" ${this.undoStack.length ? '' : 'disabled'} title="Undo (Ctrl+Z)">↶</button>
+          <button class="icon" id="auton-redo" ${this.redoStack.length ? '' : 'disabled'} title="Redo (Ctrl+Shift+Z)">↷</button></span></div>
+        <ol class="auton-steps" id="auton-steps">
+          <li class="auton-step start ${this.selected === -1 ? 'selected' : ''}" data-step="-1">
+            <span class="num">●</span><span class="what"><b>Start</b>
+              <span class="xyz">x <input type="number" step="0.5" data-start="x" value="${route.start.x}">
+              y <input type="number" step="0.5" data-start="y" value="${route.start.y}">
+              facing <input type="number" step="5" data-start="heading" value="${route.start.heading}">°</span></span>
+          </li>
+          ${route.steps.map((st, i) => `
+          <li class="auton-step ${i === this.selected ? 'selected' : ''} ${st.drive ? 'drive' : 'function'}" data-step="${i}">
+            <span class="num">${i + 1}</span><span class="what">${this.summary(st, info[i])}</span>
+            <span class="time muted">${entries[i].t1 > entries[i].t0 ? `${(entries[i].t1 - entries[i].t0).toFixed(1)} s` : ''}</span>
+            <span class="tools"><button class="icon" data-up="${i}" title="Move up">↑</button><button class="icon" data-down="${i}" title="Move down">↓</button><button class="icon bad" data-remove="${i}" title="Remove">✕</button></span>
+          </li>`).join('')}
+        </ol>
+        <div class="auton-add">
+          <button class="btn ${this.mode === 'add-drive' ? 'primary' : ''}" id="auton-add-drive" data-testid="auton-add-drive">+ Drive</button>
+          <button class="btn" id="auton-add-function">+ Function</button>
+        </div>
+        <div class="muted auton-hint" id="auton-hint">${this.mode === 'add-drive' ? 'Click the field where the drive should go (Esc cancels).'
+          : this.mode === 'place-face' ? 'Click the point to face: it follows the mouse (Esc keeps it where it is).' : 'New steps go after the selected one.'}</div>
+      </section>
+
+      <section class="auton-card selected-card">
+        <div class="auton-card-head">${step ? (step.drive ? `Selected: drive ${escapeHtml(step.drive.name)}` : `Selected: ${escapeHtml(this.label(step.action))}`) : 'Selected: start'}</div>
+        <div class="auton-detail" id="auton-detail">${this.detail(info)}</div>
+      </section>
       <div class="muted auton-help">Drag the yellow end points, white waypoints and hollow bend points. Double-click a drive to add a
         waypoint; right-click a waypoint, bend point or ◆ to remove it. Drag the start (green); its dot turns it.
         Snaps to half inches (Shift: free).</div>`;
@@ -740,62 +1056,101 @@ export class AutonTab {
   /** The selected step's settings. */
   detail(info) {
     const step = this.route.steps[this.selected];
-    if (!step) return '<div class="muted">Select a step to change it. The start: drag the green robot, or type above.</div>';
+    if (!step) return '<div class="muted">The start: drag the green robot on the field (its dot turns it), or type x, y and heading in the Start row. Select a step to change it.</div>';
     if (!step.drive) {
-      const def = this.actions.find((a) => a.name === step.action);
-      return `<h4>${escapeHtml(this.label(step.action))}</h4><div class="muted">${escapeHtml(def?.description || '')}</div>
+      const def = this.def(step.action);
+      return `<div class="muted">${escapeHtml(def?.description || '')}</div>
         ${(def?.params || []).map((p) => `<label class="row">${escapeHtml(p.label)} <input type="number" step="0.1" min="${p.min}" max="${p.max}"
           data-param="${escapeHtml(p.name)}" value="${step.params?.[p.name] ?? p.default}"> ${escapeHtml(p.unit)}</label>`).join('')}`;
     }
     const d = step.drive;
     const heading = d.heading || { type: 'travel' };
     const kind = heading.type === 'travel' && heading.reverse ? 'backwards' : heading.type;
-    const start = info[this.selected].start;
-    const pathFunctions = this.actions.filter((a) => a.onPath);
+    const di = info[this.selected];
+    const start = di.start;
     return `
-      <h4>Drive <input id="drive-name" value="${escapeHtml(d.name)}" aria-label="Drive name"></h4>
-      <div class="muted">Starts at ${start.x}, ${start.y} facing ${Math.round(wrap(start.h))}° (where the step before ends).</div>
-      <label class="row">Heading <select id="drive-heading" data-testid="drive-heading">
+      <label class="row">Name <input id="drive-name" value="${escapeHtml(d.name)}" aria-label="Drive name"></label>
+      <div class="muted">Starts at ${round(start.x)}, ${round(start.y)} facing ${Math.round(wrap(start.h))}° (where the step before ends).</div>
+      <div class="sub">Heading</div>
+      <div class="row"><select id="drive-heading" data-testid="drive-heading">
         ${HEADINGS.map(([value, text]) => `<option value="${value}" ${value === kind ? 'selected' : ''}>${text}</option>`).join('')}</select>
         ${kind === 'turn' ? `<input type="number" step="5" id="drive-turn" value="${heading.degrees}">° by <input type="number" step="10" min="10" max="100" id="drive-by" value="${Math.round((heading.by ?? 1) * 100)}">% of the drive` : ''}
         ${kind === 'face' ? `x <input type="number" step="0.5" id="drive-face-x" value="${heading.x}"> y <input type="number" step="0.5" id="drive-face-y" value="${heading.y}">
-          <button class="btn small" id="drive-face-pick">Pick on field</button>` : ''}
-      </label>
-      <label class="row">Speed <input type="number" step="5" min="1" max="100" id="drive-speed" placeholder="100" value="${d.speedPercent ?? ''}"> % of top speed</label>
+          <button class="btn small" id="drive-face-pick">Move it</button>` : ''}
+      </div>
+      <div class="sub">Speed</div>
+      <label class="row"><input type="number" step="5" min="1" max="100" id="drive-speed" placeholder="100" value="${d.speedPercent ?? ''}"> % of top speed (empty: full speed)</label>
       <div class="sub">Points</div>
       <table class="kv auton-points">
         ${d.segments.map((segment, s) => `<tr>
           <td>${s === d.segments.length - 1 ? 'End' : `Waypoint ${s + 1}`}</td>
           <td>x <input type="number" step="0.5" data-to="${s}" data-axis="0" value="${segment.to[0]}"> y <input type="number" step="0.5" data-to="${s}" data-axis="1" value="${segment.to[1]}"></td>
-          <td>${(segment.via || []).length} bend${(segment.via || []).length === 1 ? '' : 's'} <button class="btn small" data-bend="${s}" title="Add a bend point to the part before this point">+ bend</button>
+          <td><span class="muted">${(segment.via || []).length} bend${(segment.via || []).length === 1 ? '' : 's'}</span>
+            <button class="btn small" data-bend="${s}" title="Add a bend point to the part before this point">+ bend</button>
             ${s < d.segments.length - 1 ? `<button class="btn small" data-smooth="${s}" title="Line up the bends on both sides so the robot drives smoothly through">Smooth</button>
             <button class="icon bad" data-unwaypoint="${s}" title="Remove this waypoint">✕</button>` : ''}</td></tr>`).join('')}
       </table>
       <div class="sub">Functions on this drive</div>
       ${(d.events || []).map((event, e) => {
-        const def = this.actions.find((a) => a.name === event.action);
-        return `<div class="row">◆ <select data-event-action="${e}">${pathFunctions.map((a) => `<option value="${escapeHtml(a.name)}" ${a.name === event.action ? 'selected' : ''}>${escapeHtml(a.label)}</option>`).join('')}</select>
-          at <input type="number" step="5" min="0" max="100" data-event-at="${e}" value="${Math.round(event.at * 100)}">%
-          ${(def?.params || []).map((p) => `${escapeHtml(p.label)} <input type="number" step="0.1" data-event-param="${e}" data-name="${escapeHtml(p.name)}" value="${event.params?.[p.name] ?? p.default}">`).join('')}
-          <button class="icon bad" data-event-remove="${e}" title="Remove">✕</button></div>`;
+        const def = this.def(event.action);
+        const span = this.span(d, di, event);
+        return `<div class="row event-row">${span.timed ? '■' : '◆'} <b>${escapeHtml(def?.label || event.action)}</b>
+          ${span.timed ? 'starts' : ''} at <input type="number" step="5" min="0" max="100" data-event-at="${e}" value="${Math.round(event.at * 100)}">%
+          ${(def?.params || []).map((p) => `${escapeHtml(p.label)} <input type="number" step="0.1" data-event-param="${e}" data-name="${escapeHtml(p.name)}" value="${event.params?.[p.name] ?? p.default}"> ${escapeHtml(p.unit)}`).join('')}
+          <button class="icon bad" data-event-remove="${e}" title="Remove">✕</button>
+          ${span.timed ? `<div class="muted">The robot keeps driving: done at ${Math.round(span.to * 100)}% of the drive${span.beyond ? ', still going when the drive ends' : ''}.</div>` : ''}</div>`;
       }).join('')}
-      <div class="row"><select id="event-new">${pathFunctions.map((a) => `<option value="${escapeHtml(a.name)}">${escapeHtml(a.label)}</option>`).join('')}</select>
-        <button class="btn small" id="event-add">+ on this drive</button> <span class="muted">(drag the ◆ along the drive)</span></div>`;
+      <div class="row"><button class="btn small" id="event-add">+ Function on this drive</button>
+        <span class="muted">drag it along the drive on the field</span></div>`;
+  }
+
+  /** A list of functions to pick from, under a button. */
+  menu(anchor, defs, onPick, note) {
+    this.closeMenu();
+    const box = document.createElement('div');
+    box.className = 'auton-menu';
+    box.innerHTML = defs.map((d) => `<button data-pick="${escapeHtml(d.name)}"><b>${escapeHtml(d.label)}</b>
+      <span>${escapeHtml(d.description || '')}${d.kind === 'step' ? ' <i>(takes time)</i>' : ''}</span></button>`).join('')
+      + (note ? `<div class="muted note">${escapeHtml(note)}</div>` : '');
+    document.body.appendChild(box);
+    const r = anchor.getBoundingClientRect();
+    box.style.left = `${Math.min(r.left, window.innerWidth - box.offsetWidth - 8)}px`;
+    box.style.top = `${Math.min(r.bottom + 4, window.innerHeight - box.offsetHeight - 8)}px`;
+    box.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => { this.closeMenu(); onPick(b.dataset.pick); }));
+    setTimeout(() => {
+      this.outside = (event) => { if (!box.contains(event.target)) this.closeMenu(); };
+      document.addEventListener('pointerdown', this.outside);
+    });
+    this.openMenu = box;
+  }
+
+  closeMenu() {
+    if (this.openMenu) this.openMenu.remove();
+    this.openMenu = null;
+    if (this.outside) document.removeEventListener('pointerdown', this.outside);
+    this.outside = null;
   }
 
   bindPanel() {
     const $ = (id) => document.getElementById(id);
     const on = (selector, type, fn) => this.panel.querySelectorAll(selector).forEach((el) => el.addEventListener(type, (event) => fn(el, event)));
+    $('auton-preview').addEventListener('click', () => this.togglePreview());
+    if ($('auton-scrub')) {
+      $('auton-scrub').addEventListener('input', (event) => { this.preview.playing = false; this.preview.t = Number(event.target.value); this.renderPreview(); });
+      $('auton-preview-close').addEventListener('click', () => { this.stopPreview(); this.render(); });
+      this.renderPreview();
+    }
     $('auton-file').addEventListener('change', (event) => this.open(event.target.value));
-    $('auton-new').addEventListener('click', () => { if (!this.dirty() || window.confirm('Discard the changes to this auton?')) this.newAuton(); });
+    $('auton-new').addEventListener('click', () => this.newAuton());
     $('auton-save').addEventListener('click', () => this.save(false));
     $('auton-save-as').addEventListener('click', () => this.save(true));
+    if ($('auton-discard')) $('auton-discard').addEventListener('click', () => { if (window.confirm('Throw away your unsaved changes?')) this.discard(); });
     $('auton-history').addEventListener('click', () => window.dispatchEvent(new CustomEvent('biobuzz:history', { detail: this.path })));
     $('auton-undo').addEventListener('click', () => this.undo());
     $('auton-redo').addEventListener('click', () => this.redo());
     $('auton-name').addEventListener('change', (event) => this.change((r) => { r.name = event.target.value; }));
     $('auton-add-drive').addEventListener('click', () => { this.mode = this.mode === 'add-drive' ? null : 'add-drive'; this.render(); });
-    $('auton-add-function').addEventListener('click', () => this.addFunction($('auton-function').value));
+    $('auton-add-function').addEventListener('click', (event) => this.menu(event.currentTarget, this.actions, (name) => this.addFunction(name)));
     on('[data-start]', 'change', (el) => { const v = Number(el.value); if (Number.isFinite(v)) this.change((r) => { r.start[el.dataset.start] = v; }); });
     on('.auton-step', 'click', (el, event) => {
       if (event.target.closest('button, input')) return;
@@ -815,15 +1170,14 @@ export class AutonTab {
     $('drive-name').addEventListener('change', (event) => this.change(() => { d.name = event.target.value.trim() || d.name; }));
     $('drive-heading').addEventListener('change', (event) => {
       const value = event.target.value;
+      if (value === 'face') { this.startPlacingFace(); return; }
       const end = layout(this.route)[this.selected].end;
       this.change(() => {
         if (value === 'travel') d.heading = { type: 'travel' };
         else if (value === 'backwards') d.heading = { type: 'travel', reverse: true };
         else if (value === 'keep') d.heading = { type: 'keep' };
-        else if (value === 'turn') d.heading = { type: 'turn', degrees: Math.round(wrap(end.h)) };
-        else d.heading = { type: 'face', x: 72, y: 144 };
+        else d.heading = { type: 'turn', degrees: Math.round(wrap(end.h)) };
       });
-      if (value === 'face') { this.mode = 'pick-face'; this.render(); }
     });
     const number = (id, fn) => { const el = $(id); if (el) el.addEventListener('change', () => { const v = Number(el.value); if (el.value.trim() === '' || Number.isFinite(v)) this.change(() => fn(el.value.trim() === '' ? null : v)); }); };
     number('drive-turn', (v) => { if (v !== null) d.heading.degrees = v; });
@@ -831,24 +1185,15 @@ export class AutonTab {
     number('drive-face-x', (v) => { if (v !== null) d.heading.x = v; });
     number('drive-face-y', (v) => { if (v !== null) d.heading.y = v; });
     number('drive-speed', (v) => { if (v === null || v >= 100) delete d.speedPercent; else d.speedPercent = Math.max(1, Math.round(v)); });
-    if ($('drive-face-pick')) $('drive-face-pick').addEventListener('click', () => { this.mode = 'pick-face'; this.render(); });
+    if ($('drive-face-pick')) $('drive-face-pick').addEventListener('click', () => { this.remember(); this.mode = 'place-face'; this.render(); });
     on('[data-to]', 'change', (el) => { const v = Number(el.value); if (Number.isFinite(v)) this.change(() => { d.segments[Number(el.dataset.to)].to[Number(el.dataset.axis)] = v; }); });
     on('[data-bend]', 'click', (el) => this.addBend(this.selected, Number(el.dataset.bend)));
     on('[data-smooth]', 'click', (el) => this.smooth(this.selected, Number(el.dataset.smooth)));
     on('[data-unwaypoint]', 'click', (el) => this.removeWaypoint(this.selected, Number(el.dataset.unwaypoint)));
-    on('[data-event-action]', 'change', (el) => this.change(() => {
-      const event = d.events[Number(el.dataset.eventAction)];
-      const def = this.actions.find((a) => a.name === el.value);
-      event.action = el.value;
-      event.params = Object.fromEntries((def?.params || []).map((p) => [p.name, p.default]));
-    }));
     on('[data-event-at]', 'change', (el) => { const v = Number(el.value); if (Number.isFinite(v)) this.change(() => { d.events[Number(el.dataset.eventAt)].at = Math.min(1, Math.max(0, v / 100)); }); });
     on('[data-event-param]', 'change', (el) => { const v = Number(el.value); if (Number.isFinite(v)) this.change(() => { const e = d.events[Number(el.dataset.eventParam)]; e.params = { ...(e.params || {}), [el.dataset.name]: v }; }); });
     on('[data-event-remove]', 'click', (el) => this.change(() => { d.events.splice(Number(el.dataset.eventRemove), 1); if (!d.events.length) delete d.events; }));
-    $('event-add').addEventListener('click', () => {
-      const def = this.actions.find((a) => a.name === $('event-new').value);
-      if (!def) return;
-      this.change(() => { d.events = [...(d.events || []), { at: 0.5, action: def.name, params: Object.fromEntries(def.params.map((p) => [p.name, p.default])) }]; });
-    });
+    $('event-add').addEventListener('click', (event) => this.menu(event.currentTarget, this.actions.filter((a) => a.onPath),
+      (name) => this.addOnDrive(name), `Not here: ${NOT_ON_PATH_HINT}.`));
   }
 }

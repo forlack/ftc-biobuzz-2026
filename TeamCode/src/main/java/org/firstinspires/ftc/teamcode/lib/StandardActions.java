@@ -49,6 +49,8 @@ public final class StandardActions {
                 .step("turnTo", "turn to",
                         "Stand still and turn to face a field heading.",
                         (sequence, p) -> sequence.turnTo(Math.toRadians(p.getDouble("degrees"))),
-                        new Actions.Param("degrees", "Heading", "°", 0, -360, 360));
+                        new Actions.Param("degrees", "Heading", "°", 0, -360, 360))
+                // Steering or waiting while a path is being followed makes no sense: steps only.
+                .betweenDrivesOnly("wait", "waitForFlywheels", "turnTo");
     }
 }

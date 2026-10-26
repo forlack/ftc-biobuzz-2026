@@ -53,6 +53,7 @@ public class Actions {
     private static final class Action {
         final String name, label, description;
         final Kind kind;
+        boolean onPath = true;   // may go part way along a path (see betweenDrivesOnly)
         final Param[] params;
         final Instant instant;
         final Step step;
@@ -81,6 +82,15 @@ public class Actions {
         return this;
     }
 
+    /**
+     * These STEP actions can only be steps of their own, never part way along a path: ones that
+     * steer the robot (it is following the path) or only wait (nothing to wait for while driving).
+     */
+    public Actions betweenDrivesOnly(String... names) {
+        for (String name : names) get(name).onPath = false;
+        return this;
+    }
+
     public boolean has(String name) {
         return actions.containsKey(name);
     }
@@ -96,13 +106,23 @@ public class Actions {
         }
     }
 
-    /** The code for an INSTANT action, to fire part way along a path. */
-    public Runnable onPath(String name, JSONObject params) throws JSONException {
+    /**
+     * Adds an action part way along the path just added to the sequence. An INSTANT one fires
+     * there; a STEP one (shoot) starts there and runs while the robot keeps driving.
+     */
+    public void addOnPath(AutoSequence sequence, double completion, String name, JSONObject params) throws JSONException {
         Action action = get(name);
-        if (action.kind != Kind.INSTANT) {
-            throw new IllegalArgumentException("\"" + name + "\" takes time, so it can only go between paths");
+        if (!action.onPath) {
+            throw new IllegalArgumentException("\"" + action.label + "\" can only be a step of its own, not part way along a path");
         }
-        return action.instant.create(check(action, params));
+        JSONObject checked = check(action, params);
+        if (action.kind == Kind.INSTANT) {
+            sequence.at(completion, action.instant.create(checked));
+        } else {
+            AutoSequence alongside = sequence.newAlongside();
+            action.step.add(alongside, checked);
+            sequence.alongside(completion, alongside);
+        }
     }
 
     /** The list the dashboard and path editor show: names, kinds and settings with units. */
@@ -114,7 +134,7 @@ public class Actions {
             item.put("label", action.label);
             item.put("description", action.description);
             item.put("kind", action.kind == Kind.INSTANT ? "instant" : "step");
-            item.put("onPath", action.kind == Kind.INSTANT);
+            item.put("onPath", action.onPath);
             JSONArray params = new JSONArray();
             for (Param param : action.params) {
                 JSONObject p = new JSONObject();

@@ -33,6 +33,8 @@ public class AutoSequence {
 
     private final Follower follower;
     private final List<Step> steps = new ArrayList<>();
+    /** Sequences started part way along a path, running alongside the steps (see alongside()). */
+    private final List<AutoSequence> running = new ArrayList<>();
     private long waitStartNanos;   // plain Java clock, so the desktop simulator can run this too
     private int index;
     private boolean startedCurrent;
@@ -130,11 +132,39 @@ public class AutoSequence {
         return this;
     }
 
+    /**
+     * Start a whole sequence PART WAY THROUGH the path you just added, and keep driving while it
+     * runs (such as shooting while the robot drives on). It runs alongside the following steps
+     * until it is done; the auton is only finished when it is. Build it with {@link #newAlongside()}.
+     */
+    public AutoSequence alongside(double completion, final AutoSequence sequence) {
+        return at(completion, () -> {
+            sequence.restart();
+            if (!running.contains(sequence)) running.add(sequence);
+        });
+    }
+
+    /** An empty sequence for alongside(), using the same follower. Do not follow paths in it. */
+    public AutoSequence newAlongside() {
+        return new AutoSequence(follower);
+    }
+
+    private void restart() {
+        index = 0;
+        startedCurrent = false;
+        running.clear();
+    }
+
     // ---- Running ----------------------------------------------------------
 
     /** Call once per loop, after follower.update(). */
     public void update() {
-        if (finished()) {
+        for (int i = running.size() - 1; i >= 0; i--) {
+            AutoSequence sequence = running.get(i);
+            sequence.update();
+            if (sequence.finished()) running.remove(i);
+        }
+        if (index >= steps.size()) {
             return;
         }
         Step step = steps.get(index);
@@ -149,8 +179,9 @@ public class AutoSequence {
         }
     }
 
+    /** Every step done, and everything started alongside them too. */
     public boolean finished() {
-        return index >= steps.size();
+        return index >= steps.size() && running.isEmpty();
     }
 
     /** 1-based, for telemetry. */
@@ -163,7 +194,9 @@ public class AutoSequence {
     }
 
     public String stepName() {
-        return finished() ? "done" : steps.get(index).name();
+        if (finished()) return "done";
+        if (index >= steps.size()) return "finishing " + running.get(0).stepName();
+        return steps.get(index).name();
     }
 
     // ---- Steps ------------------------------------------------------------

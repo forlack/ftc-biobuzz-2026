@@ -199,6 +199,17 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   when the dropdown already names the OpMode (keeps the top bar on one line at 1600 px). e2e 156
   (adds, drags, waypoint, smooth, face, event, undo, Save as, then the sim runs it). Not yet:
   preview animation / Run in simulator, alliance mirror, snapping to tiles.
+- **Auton editor round 2 (2026-10-25):** timed functions on drives: `Actions.addOnPath` puts a STEP
+  action (shoot) in its own `AutoSequence` started by a marker (`alongside()` / `newAlongside()`)
+  and updated every loop next to the main steps, so the robot keeps driving; `finished()` waits
+  for them; `betweenDrivesOnly("wait", "waitForFlywheels", "turnTo")` keeps those as steps
+  (catalog `onPath`). Editor: drafts in localStorage `biobuzz.auton.draft:<path|(new)>` (restored
+  on open with Discard; saving clears), full-width ▶ Preview + scrubber (trapezoid profile per
+  drive, headingAlong per type), function pickers as menus (`.auton-menu`), cards per section,
+  heading arrows (start, drive ends, waypoints), timed events drawn as squares + thick span to the
+  profile-predicted end with text along the curve, labels for every function (steps stacked at
+  their point), face-a-point placing mode (appears 16 in above the end pose, follows the mouse,
+  click places; held clicks keep dragging until release). e2e 163.
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -254,7 +265,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (156
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (163
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

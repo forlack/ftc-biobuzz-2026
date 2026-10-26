@@ -708,7 +708,8 @@ try {
   const waypointRoute = { version: 3, name: 'waypoints', start: { x: 56, y: 9, heading: 90 }, steps: [
     { drive: { name: 'through', segments: [{ to: [56, 50] }, { via: [[56, 80]], to: [90, 90] }],
       heading: { type: 'face', x: 72, y: 140 }, events: [{ at: 0.5, action: 'deployStinger' }] } },
-    { drive: { name: 'back', segments: [{ to: [60, 40] }], heading: { type: 'turn', degrees: 0 } } }] };
+    { drive: { name: 'back', segments: [{ to: [60, 40] }], heading: { type: 'turn', degrees: 0 }, speedPercent: 40,
+      events: [{ at: 0.1, action: 'shoot', params: { seconds: 1 } }] } }] };
   check((await api('/api/file?path=autos/waypoints.json', { method: 'PUT', headers: { 'X-Base-Hash': '*' },
     body: JSON.stringify(waypointRoute, null, 2) })).status === 200, 'a version 3 auton with a waypoint and "face a point" is accepted');
   await api('/api/settings', { method: 'POST', body: { group: 'PedroAutonomous', name: 'ROUTE', value: 'waypoints' } });
@@ -722,7 +723,7 @@ try {
     const t = decoder2.handle(JSON.parse(event.data));
     if (t) for (const f of t.frames) {
       if (f.s && f.s.Step) traceStep = f.s.Step;
-      if (f.n.X !== undefined) trace.push({ t: f.t, x: f.n.X, y: f.n.Y, stinger: f.n.Stinger, step: traceStep, done: f.n['Route done'] });
+      if (f.n.X !== undefined) trace.push({ t: f.t, x: f.n.X, y: f.n.Y, stinger: f.n.Stinger, feed: f.n.Feeding, step: traceStep, done: f.n['Route done'] });
     }
   };
   const deadline2 = Date.now() + 15000;
@@ -742,6 +743,10 @@ try {
   const firstDown = through.find((r) => r.stinger > 0.2);
   check(through[0].stinger < 0.2 && firstDown && firstDown.y > 45,
     `a function at 50% fires part way along the whole drive, not at its start (stinger down at y ${firstDown ? firstDown.y.toFixed(0) : '—'})`);
+  const backDrive = trace.filter((r) => /follow back/.test(r.step));
+  const feeding = backDrive.filter((r) => r.feed === 1);
+  const feedSpeed = feeding.length > 1 ? Math.hypot(feeding.at(-1).x - feeding[0].x, feeding.at(-1).y - feeding[0].y) / (feeding.at(-1).t - feeding[0].t) : 0;
+  check(feeding.length > 3 && feedSpeed > 10, `shoot placed on a drive feeds while the robot keeps driving (${feedSpeed.toFixed(0)} in/s while feeding)`);
   await api('/api/settings', { method: 'POST', body: { group: 'PedroAutonomous', name: 'ROUTE', value: 'saturday' } });
 
   // ---- 7. The Auton tab: our own editor ------------------------------------------------------------------
@@ -787,14 +792,27 @@ try {
   await b.eval(`document.querySelector('[data-smooth="0"]').click()`);
   await b.waitFor(`document.querySelector('.auton-points').innerText.includes('1 bend')`);
   check(true, 'Smooth gives the waypoint lined-up bends on both sides');
-  // Heading: face a point, picked on the field.
+  // Heading: face a point. It appears just ahead of the robot's end (16 in up) and follows the
+  // mouse until a click places it.
   await b.eval(`(() => { const s = document.getElementById('drive-heading'); s.value = 'face'; s.dispatchEvent(new Event('change')); })()`);
-  await b.waitFor(`document.querySelector('.auton-add .muted').innerText.includes('Click the point to face')`);
+  await b.waitFor(`document.getElementById('auton-hint').innerText.includes('Click the point to face')`);
+  check(await b.eval(`document.getElementById('drive-face-x').value === '110' && document.getElementById('drive-face-y').value === '120'`),
+    'Face a point: the point appears just above the robot at the end of the drive');
+  const faceBox = await b.eval(`(() => { const r = document.getElementById('auton-field').getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; })()`);
+  await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: faceBox.l + (90 / 144) * faceBox.w, y: faceBox.t + ((144 - 130) / 144) * faceBox.h });
+  await b.waitFor(`document.getElementById('drive-face-x').value === '90' && document.getElementById('drive-face-y').value === '130'`);
+  check(true, 'and follows the mouse over the field without holding a button');
   await fieldClick(72, 140);
   await b.waitFor(`document.getElementById('drive-face-x') && document.getElementById('drive-face-x').value === '72' && document.getElementById('drive-face-y').value === '140'`);
-  check(true, 'Face a point: click the point on the field');
+  await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: faceBox.l + (60 / 144) * faceBox.w, y: faceBox.t + ((144 - 60) / 144) * faceBox.h });
+  await sleep(200);
+  check(await b.eval(`document.getElementById('drive-face-x').value === '72'`), 'a click places it; after that it stays put');
   // A function on the drive, then undo / redo.
-  await b.eval(`(() => { const s = document.getElementById('event-new'); s.value = 'deployStinger'; document.getElementById('event-add').click(); })()`);
+  await b.eval(`document.getElementById('event-add').click()`);
+  await b.waitFor(`document.querySelector('.auton-menu [data-pick="deployStinger"]')`);
+  check(await b.eval(`!!document.querySelector('.auton-menu [data-pick="shoot"]') && !document.querySelector('.auton-menu [data-pick="turnTo"]')`),
+    '+ Function on this drive opens a list: timed ones like shoot too, not turn to');
+  await b.eval(`document.querySelector('.auton-menu [data-pick="deployStinger"]').click()`);
   await b.waitFor(`document.querySelector('[data-event-at="0"]') && document.querySelector('[data-event-at="0"]').value === '50'`);
   check(true, 'a function on the drive starts at 50% (a ◆ to drag along it)');
   await b.eval(`document.getElementById('auton-undo').click()`);
@@ -802,9 +820,30 @@ try {
   await b.eval(`document.getElementById('auton-redo').click()`);
   await b.waitFor(`!!document.querySelector('[data-event-at="0"]')`);
   check(true, 'undo and redo');
-  await b.eval(`(() => { const s = document.getElementById('auton-function'); s.value = 'stowStinger'; document.getElementById('auton-add-function').click(); })()`);
+  // A timed function on the drive: it starts at its % and the robot keeps driving.
+  await b.eval(`document.getElementById('event-add').click()`);
+  await b.waitFor(`document.querySelector('.auton-menu [data-pick="shoot"]')`);
+  await b.eval(`document.querySelector('.auton-menu [data-pick="shoot"]').click()`);
+  await b.waitFor(`document.querySelectorAll('.event-row').length === 2`);
+  check(await b.eval(`document.querySelectorAll('.event-row')[1].innerText.includes('The robot keeps driving')`), 'shoot on a drive says the robot keeps driving, and where it is done');
+  await b.eval(`document.getElementById('auton-add-function').click()`);
+  await b.waitFor(`document.querySelector('.auton-menu [data-pick="stowStinger"]')`);
+  await b.eval(`document.querySelector('.auton-menu [data-pick="stowStinger"]').click()`);
   await b.waitFor(`document.querySelector('.auton-step.selected .what').innerText.includes('stinger up')`);
-  check(true, '+ Function adds a function step after the selected one');
+  check(true, '+ Function opens a list of functions, and adds the one picked after the selected step');
+  // Preview: the robot drives the auton on the field.
+  await b.eval(`document.getElementById('auton-preview').click()`);
+  await b.waitFor(`document.getElementById('auton-preview-time') && parseFloat(document.getElementById('auton-preview-time').textContent) > 0.5`);
+  check(await b.eval(`document.getElementById('auton-preview').textContent.includes('Stop')`) && await b.eval(`!!document.querySelector('.auton-step.playing')`),
+    'Preview plays the auton on the field and marks the step it is on');
+  await b.eval(`document.getElementById('auton-preview').click()`);
+  await b.eval(`document.getElementById('auton-preview-close').click()`);
+  // Unsaved changes survive a reload (kept in this browser).
+  const stepsBefore = await b.eval(`document.querySelectorAll('.auton-step:not(.start)').length`);
+  await b.goto(URL);
+  await b.eval(`document.querySelector('[data-tab="auton"]').click()`);
+  await b.waitFor(`document.getElementById('auton-discard')`);
+  check(await b.eval(`document.querySelectorAll('.auton-step:not(.start)').length`) === stepsBefore, 'unsaved changes are still there after reloading the page, with a Discard button');
   await b.screenshot(join(OUT, '6-auton-editor.png'));
   // Save as a new auton: the robot accepts it, and it runs.
   await b.eval(`(() => { window.prompt = () => 'editor-test'; document.getElementById('auton-save-as').click(); })()`);
@@ -812,7 +851,7 @@ try {
   const made = (await api('/api/file?path=autos/editor-test.json')).data;
   const madeDrive = made.steps.filter((st) => st.drive).at(-1).drive;
   check(made.version === 3 && madeDrive.segments.length === 2 && madeDrive.segments[0].via && madeDrive.segments[1].via
-    && madeDrive.heading.type === 'face' && madeDrive.events[0].action === 'deployStinger' && made.steps.at(-1).action === 'stowStinger',
+    && madeDrive.heading.type === 'face' && madeDrive.events[0].action === 'deployStinger' && madeDrive.events[1].action === 'shoot' && made.steps.at(-1).action === 'stowStinger',
     'Save as… writes a version 3 auton the robot accepts: the waypoint, its bends, face a point, the function');
   await api('/api/settings', { method: 'POST', body: { group: 'PedroAutonomous', name: 'ROUTE', value: 'editor-test' } });
   const editorSince = (await api('/api/state')).data.time;   // a new connection first gets the last seconds of frames
