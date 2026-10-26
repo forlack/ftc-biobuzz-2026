@@ -108,8 +108,14 @@ sides since the last sync is a conflict and is skipped unless you add `--force`.
 
 Written by the path editor, read at INIT by `PedroAutonomous` (and the simulator). The
 setting `PedroAutonomous.ROUTE` picks the file; D-pad up/down during INIT picks another.
-Without the file, INIT shows what is missing. The format
-is documented in `TeamCode/.../lib/AutoRoute.java`. The robot refuses to save a route with an
+Without the file, INIT shows what is missing. The format (version 3, since 2026-10-25)
+is documented in `TeamCode/.../lib/AutoRoute.java`: the start pose, then the steps in order,
+drives and functions alike. A drive starts where the one before it ended (position and
+heading), so there is nothing to line up; its segments end at "to", bent by "via" control
+points, and several segments are driven through without stopping (separate drives stop).
+Headings: travel (face where it goes, or backwards), keep, turn (the shorter way), face a
+point. Old version 2 files: `python3 tools/autos_v2_to_v3.py autos/NAME.json`, then
+`./robot-sync push`; the robot refuses them with that message. The robot refuses to save a route with an
 unknown action or a bad path, so a typo never reaches INIT.
 
 Each route also saves the robot size and safety margin it was drawn with (`"robot":

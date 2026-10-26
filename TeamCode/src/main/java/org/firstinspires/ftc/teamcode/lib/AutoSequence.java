@@ -45,7 +45,17 @@ public class AutoSequence {
 
     /** Drive a path, and move on when the follower says it is finished. */
     public AutoSequence follow(Path path) {
-        steps.add(new FollowStep(path));
+        steps.add(new FollowStep(path, null));
+        return this;
+    }
+
+    /**
+     * Drive a path made of several segments followed as one (a Pedro compound path).
+     * {@code segmentLengths} (inches, in order) let at() markers mean a fraction of the whole
+     * path: Pedro's own completion starts again at 0 on each segment.
+     */
+    public AutoSequence follow(Path path, double[] segmentLengths) {
+        steps.add(new FollowStep(path, segmentLengths));
         return this;
     }
 
@@ -178,11 +188,17 @@ public class AutoSequence {
 
     private class FollowStep implements Step {
         private final Path path;
+        private final double[] lengths;   // per segment, or null for one segment
         private final List<Marker> markers = new ArrayList<>();
         private String name = "follow path";
+        private boolean fresh;
+        private int segment;
+        private Object currentSegment;
+        private double progress;
 
-        FollowStep(Path path) {
+        FollowStep(Path path, double[] segmentLengths) {
             this.path = path;
+            this.lengths = segmentLengths != null && segmentLengths.length > 1 ? segmentLengths : null;
         }
 
         public void start() {
@@ -190,10 +206,45 @@ public class AutoSequence {
                 m.fired = false;
             }
             follower.follow(path);
+            fresh = true;
+            segment = 0;
+            currentSegment = null;
+            progress = 0;
+        }
+
+        /** How far along the whole path, 0 to 1 (never goes back). */
+        private double progress() {
+            double now;
+            if (lengths == null) {
+                now = follower.completion();
+            } else {
+                Object current = follower.currentSegment();
+                if (currentSegment == null) {
+                    currentSegment = current;
+                } else if (current != currentSegment) {   // Pedro moved on to the next segment
+                    currentSegment = current;
+                    segment = Math.min(segment + 1, lengths.length - 1);
+                }
+                double before = 0, total = 0;
+                for (int i = 0; i < lengths.length; i++) {
+                    if (i < segment) before += lengths[i];
+                    total += lengths[i];
+                }
+                double done = Math.max(0, Math.min(lengths[segment], lengths[segment] - follower.remainingDistance()));
+                now = total > 0 ? (before + done) / total : 1;
+            }
+            progress = Math.max(progress, now);
+            return progress;
         }
 
         public boolean isDone() {
-            double progress = follower.completion();
+            // The first call comes straight after start(), before the follower has run the new
+            // path: its completion is still the last path's (1.0), which would fire every marker.
+            if (fresh) {
+                fresh = false;
+                return false;
+            }
+            double progress = progress();
             for (Marker m : markers) {
                 if (!m.fired && progress >= m.completion) {
                     m.fired = true;

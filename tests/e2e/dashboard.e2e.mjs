@@ -583,14 +583,17 @@ try {
   await b.eval(`${frame}.querySelector('[data-testid=route-save]').click()`);
   await b.waitFor(`${frame}.querySelector('[data-testid=route-message]').innerText.includes('Saved autos/saturday.json')`);
   const route = (await api('/api/file?path=autos/saturday.json')).data;
-  const path2 = route.paths.find((p) => p.name === 'path2');
+  const drives = route.steps.filter((st) => st.drive).map((st) => st.drive);
+  check(route.version === 3, 'the editor saves auton files as version 3');
+  const path2 = drives.find((d) => d.name === 'path2');
   check(path2.events.length === 2 && path2.events[0].action === 'flywheelsOn' && path2.events[0].at === 0.2
     && path2.events[1].action === 'deployStinger' && path2.events[1].at === 0.45,
     'the saved route has flywheels on at 20% and stinger down at 45% of path2, in order');
   check(route.steps[0].action === 'wait' && route.steps[0].params.seconds === 0.5, 'and the edited wait of 0.5 s');
-  check(path2.speedPercent === 40 && route.paths[0].speedPercent === undefined, 'and path2\'s speed (40%; path1 has none, full speed)');
+  check(path2.speedPercent === 40 && drives[0].speedPercent === undefined, 'and path2\'s speed (40%; path1 has none, full speed)');
   check(route.steps[route.steps.length - 1].action === 'stowStinger', 'and "stinger up" as the last step');
-  check(route.paths[1].points.length === 3 && route.start.heading === 270, 'geometry and start pose survive the round trip');
+  check(path2.segments.length === 1 && path2.segments[0].via.length === 1 && path2.heading.type === 'turn' && path2.heading.degrees === 90
+    && route.start.heading === 270, 'geometry, heading and start pose survive the round trip');
   check(route.robot && route.robot.width > 0 && route.robot.length > 0 && route.robot.safetyMargin >= 0,
     `the route saves the robot size and safety margin: ${JSON.stringify(route.robot)}`);
 
@@ -602,8 +605,7 @@ try {
   await b.eval(`${frame}.querySelector('[data-testid=route-save-as]').click()`);
   await b.waitFor(`${frame}.querySelector('[data-testid=route-message]').innerText.includes('Saved autos/Latest.json')`);
   const latest = (await api('/api/file?path=autos/Latest.json')).data;
-  check(latest.name === 'Latest' && JSON.stringify(latest.paths) === JSON.stringify(route.paths)
-    && JSON.stringify(latest.steps) === JSON.stringify(route.steps), 'Save as new… creates autos/Latest.json with the same auton');
+  check(latest.name === 'Latest' && JSON.stringify(latest.steps) === JSON.stringify(route.steps), 'Save as new… creates autos/Latest.json with the same auton');
   const after = (await api('/api/files')).data.find((f) => f.path === 'autos/saturday.json').hash;
   check(before === after, 'and leaves autos/saturday.json unchanged');
   check((await b.eval(`${frame}.querySelector('[data-testid=route-file]').innerText`)).includes('Editing autos/Latest.json'),
@@ -697,6 +699,50 @@ try {
   await b.eval(`document.querySelector('[data-tab="live"]').click()`);
   await sleep(1000);
   await b.screenshot(join(OUT, '5-auto.png'));
+
+  // ---- 6. Version 3 auton files: waypoints, face a point, functions part way --------------------
+  console.log('Auton files v3');
+  const v2 = await api('/api/file?path=autos/old.json', { method: 'PUT', headers: { 'X-Base-Hash': '*' },
+    body: JSON.stringify({ version: 2, name: 'old', start: { x: 0, y: 0, heading: 0 }, paths: [], steps: [] }) });
+  check(v2.status === 400 && /old version 2/.test(v2.data.error) && /autos_v2_to_v3/.test(v2.data.error), `an old version 2 file is refused with a clear message (${v2.data.error})`);
+  const waypointRoute = { version: 3, name: 'waypoints', start: { x: 56, y: 9, heading: 90 }, steps: [
+    { drive: { name: 'through', segments: [{ to: [56, 50] }, { via: [[56, 80]], to: [90, 90] }],
+      heading: { type: 'face', x: 72, y: 140 }, events: [{ at: 0.5, action: 'deployStinger' }] } },
+    { drive: { name: 'back', segments: [{ to: [60, 40] }], heading: { type: 'turn', degrees: 0 } } }] };
+  check((await api('/api/file?path=autos/waypoints.json', { method: 'PUT', headers: { 'X-Base-Hash': '*' },
+    body: JSON.stringify(waypointRoute, null, 2) })).status === 200, 'a version 3 auton with a waypoint and "face a point" is accepted');
+  await api('/api/settings', { method: 'POST', body: { group: 'PedroAutonomous', name: 'ROUTE', value: 'waypoints' } });
+  await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Pedro Pathing Autonomous' } });
+  await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
+  const ws2 = new WebSocket(`ws://localhost:${PORT}/ws`);
+  const decoder2 = new FrameDecoder();
+  const trace = [];
+  let traceStep = '';
+  ws2.onmessage = (event) => {
+    const t = decoder2.handle(JSON.parse(event.data));
+    if (t) for (const f of t.frames) {
+      if (f.s && f.s.Step) traceStep = f.s.Step;
+      if (f.n.X !== undefined) trace.push({ t: f.t, x: f.n.X, y: f.n.Y, stinger: f.n.Stinger, step: traceStep, done: f.n['Route done'] });
+    }
+  };
+  const deadline2 = Date.now() + 15000;
+  while (Date.now() < deadline2 && !(trace.length && trace.at(-1).done === 1)) await sleep(250);
+  ws2.close();
+  check(trace.length && trace.at(-1).done === 1, 'the waypoint auton finishes');
+  const through = trace.filter((r) => /follow through/.test(r.step));
+  const speedNear = (() => {
+    let best = 0;
+    for (let i = 1; i < through.length; i++) {
+      const a = through[i - 1], z = through[i];
+      if (z.t - a.t > 0 && Math.hypot(z.x - 56, z.y - 50) < 8) best = Math.max(best, Math.hypot(z.x - a.x, z.y - a.y) / (z.t - a.t));
+    }
+    return best;
+  })();
+  check(speedNear > 25, `it drives through the waypoint without stopping (${speedNear.toFixed(0)} in/s there)`);
+  const firstDown = through.find((r) => r.stinger > 0.2);
+  check(through[0].stinger < 0.2 && firstDown && firstDown.y > 45,
+    `a function at 50% fires part way along the whole drive, not at its start (stinger down at y ${firstDown ? firstDown.y.toFixed(0) : '—'})`);
+  await api('/api/settings', { method: 'POST', body: { group: 'PedroAutonomous', name: 'ROUTE', value: 'saturday' } });
 
   const errors = b.errors.filter((e) => !/favicon/.test(e));
   check(errors.length === 0, `no errors in the browser console${errors.length ? `: ${errors.join(' | ')}` : ''}`);

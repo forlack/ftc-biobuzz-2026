@@ -1,25 +1,40 @@
 {
-  "version": 2,
+  "version": 3,
   "name": "Saturday",
   "start": { "x": 56, "y": 9, "heading": 270 },
-  "paths": [
+  "steps": [
     {
-      "name": "path1",
-      "points": [[56, 9], [60, 16]],
-      "heading": { "type": "linear", "start": 270, "end": 270 },
-      "events": []
+      "action": "wait",
+      "params": { "seconds": 1 }
     },
     {
-      "name": "path2",
-      "points": [[60, 16], [15.6919, 29.3313], [13.2008, 96.0738]],
-      "heading": { "type": "linear", "start": 270, "end": 90 },
-      "events": []
+      "drive": {
+        "name": "path1",
+        "segments": [
+          {
+            "to": [60, 16]
+          }
+        ],
+        "heading": { "type": "keep" }
+      }
+    },
+    {
+      "action": "shoot",
+      "params": { "seconds": 3.5 }
+    },
+    {
+      "drive": {
+        "name": "path2",
+        "segments": [
+          {
+            "via": [
+              [15.6919, 29.3313]
+            ],
+            "to": [13.2008, 96.0738]
+          }
+        ],
+        "heading": { "type": "turn", "degrees": 90 }
+      }
     }
-  ],
-  "steps": [
-    { "action": "wait", "params": { "seconds": 1 } },
-    { "follow": "path1" },
-    { "action": "shoot", "params": { "seconds": 3.5 } },
-    { "follow": "path2" }
   ]
 }

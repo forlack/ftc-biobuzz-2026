@@ -168,6 +168,24 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   intakeOn/intakeOff, unaffected by the switch). Tune tab redraws when the robot's settings
   fingerprint (state `settingsFingerprint`) differs from what it shows. e2e 137; the test sim
   starts with `--no-seed` and only 24621-Biobuzz.xml + autos/saturday.json.
+- **Auton editor branch `auton-editor` (started 2026-10-25), phase 1 done (sim-verified):**
+  auton files are **version 3** (lib/AutoRoute): `start`, then `steps` with inline
+  `{drive: {name, segments: [{via?, to}], heading, speedPercent?, events?}}` or `{action}`.
+  A drive starts at the previous drive's end pose (no stored start). Multiple segments = one
+  Pedro compound path (`Paths.path(...)`), driven through without stopping. Headings: travel
+  (tangent / reverseTangent), keep (constant at start heading), turn (linear, shorter way in
+  [-180°, 180°), so exactly 180° goes clockwise like v2's linear(270, 90); optional `by`), face
+  (facingPoint). End heading is carried as an unwrapped angle (wrapping flipped the 180° turn
+  and moved saturday's park by ~0.8 in). v2 is refused at INIT/upload with a conversion hint;
+  `tools/autos_v2_to_v3.py` converted autos/saturday.json and Double.json exactly (sim: same
+  steps, time and end pose as main). **AutoSequence fixes:** on-path markers were checked on the
+  first update after follow(), before Pedro ran the new path, so they saw the previous path's
+  completion (1.0) and all fired at the start (pre-existing bug, now skipped once); for compound
+  paths Pedro's completion and remainingDistance are per segment (and it switches segment a
+  few inches early), so FollowStep tracks segment changes via `follower.currentSegment()` and
+  measures whole-drive progress with segment lengths (`follow(path, lengths)`). The old
+  visualizer Paths tab converts v2<->v3 on save/open (lossy for waypoints and face-a-point,
+  which it reports). e2e 143. Next: phase 2, the new editor (plain JS dashboard tab).
 - Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
   Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
@@ -223,7 +241,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
   `dashboard/web/visualizer/` by `./build-visualizer` (committed).
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (137
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (143
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so
