@@ -759,10 +759,6 @@ public class DashboardServer {
         if (relative.endsWith("/")) relative += "index.html";
         if (relative.contains("..")) return Response.error(404, "not found");
         InputStream input = host.openWebFile(relative);
-        if (input == null) {
-            // The path editor asks for its own files at the root (/fields/..., /robot.png).
-            input = host.openWebFile("visualizer/" + relative);
-        }
         if (input == null) return Response.error(404, "not found: " + relative);
         try {
             Response response = new Response();

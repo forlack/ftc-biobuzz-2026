@@ -22,7 +22,7 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   Wi-Fi drop (a refresh is needed; fix proposed: reconnect when no message for ~3 s); "Use
   this map" on the robot still gives Driver Station steps (switching from the app is unbuilt);
   ROBOT-TEST checks 2, 9 (./dashboard-load, optional), 11 not yet run.
-- Next agreed later: strip unneeded visualizer features.
+- The Pedro visualizer tab and its build are removed (2026-10-25); the Auton tab is the editor.
 
 **Handoff / state (2026-10-23, history):**
 - Name: **Total Chaos Dashboard** (team Total Chaos 24621; BIOBUZZ is the season's game).
@@ -230,8 +230,15 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   hardware map editor are view only too. Snapshots hold robot.json, every autos/*.json and every
   *.xml map (managedNames), not which map is active. Preview vs real robot: saturday preview
   6.7 s, sim ~8 s, real robot 13 s (user timed): needs per-step times from the robot. e2e 171.
-- Also later: strip unneeded visualizer features (code export, .pp File Manager, Multiple
-  Paths, optimizer, obstacles, GIF export, GitHub link) -- hide first, then delete.
+- **Preview fitted to the simulator; Pedro tab removed (2026-10-25):** user timed saturday at
+  13 s on one carpet, 8.7 s on another (surface). Preview profile now fitted to sim straight
+  drives (6-100 in, 50%, turn 180°): cruise 68.5×1.065, accel = decel 230 in/s², +0.1 s end
+  settle, turning while driving stretches the drive by Σ|Δheading|/235 °/s (driveProfile());
+  shoot = seconds + 0.1. Within ~0.05 s of the sim per drive; saturday 7.6 s (sim ~8). The
+  Pedro tab, dashboard/web/visualizer/, ./build-visualizer and the server's visualizer/
+  fallback are gone; a saved tab that no longer exists opens Live. The ~/ftc/Visualizer
+  checkout and GitHub fork are left untouched (not used). e2e 145 (the Pedro UI checks went
+  with it; saturday's test edits are now made through the API).
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
   and a Pedro add-on); robot pose on the field in teleop once Pinpoint coordinates are trusted;
   a per-viewer Detail selector; min/max thinning; listing USB cameras from the robot.
@@ -247,8 +254,7 @@ Key facts for agents:
 - **Server** on port 8686: static page + JSON API + websocket telemetry (`Dash.put`/`frame`,
   every loop, ring buffer). Files API limited to settings/robot.json, autos/*.json,
   root *.xml (history/ and snapshots/ read-only); PUT validates (routes are fully built against the action list) and supports
-  `X-Base-Hash` conflict refusal. Missing page files fall back to `visualizer/<path>`
-  because the visualizer requests `/fields/...` etc. at the root.
+  `X-Base-Hash` conflict refusal.
 - **Panels removed on this branch (2026-10-23)**: no `com.bylazar` dependency or Maven repo
   (verified: 0 references in the APK; `-Ptuning` still resolves). The dashboard replaces it and
   is in **every** build (`-Pdashboard` / `--dashboard` still accepted, no effect). Lost with
@@ -282,10 +288,10 @@ Key facts for agents:
   (RobotPanel, route export/import, field markers), `robotEvents` on paths, `robotAction` on
   sequence wait items, service worker removed (it cached the dashboard's `/`). Side panel
   has two tabs (2026-10-24): **Paths** (start point, selected path) and **Auton Sequence**
-  (RobotPanel); both stay mounted, the choice is remembered in localStorage. Built into
-  `dashboard/web/visualizer/` by `./build-visualizer` (committed).
+  (RobotPanel); both stay mounted, the choice is remembered in localStorage. (History: the
+  tab and its build were removed 2026-10-25.)
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (171
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (145
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

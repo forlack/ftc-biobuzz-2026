@@ -75,6 +75,6 @@ public interface RobotHost {
     /** The autonomous actions the path editor may use. */
     Actions actions();
 
-    /** A file of the web page (index.html, app.js, visualizer/...), or null if there is none. */
+    /** A file of the web page (index.html, js/app.js, fields/...), or null if there is none. */
     InputStream openWebFile(String path) throws IOException;
 }

@@ -85,8 +85,6 @@ select:focus, input:focus, textarea:focus { outline: none; border-color: var(--h
 main { flex: 1; min-height: 0; display: flex; }
 .tab-page { display: none; flex: 1; min-width: 0; padding: 16px 18px; overflow: auto; flex-direction: column; gap: 12px; }
 .tab-page.active { display: flex; }
-#tab-paths { padding: 0; }
-#visualizer { flex: 1; width: 100%; border: 0; background: #1e1e1e; }
 
 .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .seg { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }

@@ -159,7 +159,7 @@ same class: `@RobotSettings.Renamed("OLD_NAME")` on the field (`MecanumDrive.DRI
   the Live tab (built once for all viewers, names sent once, then numbers).
 - **Server:** plain Java, port 8686, in the Robot Controller app and in the simulator.
   API list at the top of `TeamCode/.../dashboard/DashboardServer.java`.
-- **Path editor:** our fork of the Pedro visualizer, <https://github.com/forlack/Visualizer>
-  (branch `biobuzz`), built into `dashboard/web/visualizer/` by `./build-visualizer`.
+- **Path editor:** the Auton tab, `dashboard/web/js/auton.js` (plain JS, no build). The old
+  fork of the Pedro visualizer (github.com/forlack/Visualizer) is no longer used.
 - **Tests:** `node tests/e2e/dashboard.e2e.mjs` drives the whole dashboard in a headless
   browser against the simulator.

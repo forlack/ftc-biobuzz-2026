@@ -22,19 +22,9 @@ function showTab(name) {
   if (name === 'tune') tune.refresh();
   if (name === 'robot') robot.refresh(state ? state.hardwareMap : undefined);
   if (name === 'live') { live.resize(); live.dirty = true; }
-  if (name === 'paths') loadVisualizer();
   if (name === 'auton') { auton.resize(); auton.refresh(); }
   try { localStorage.setItem('biobuzz.tab', name); } catch { /* private window */ }
   if (connection) subscribe();
-}
-
-async function loadVisualizer() {
-  const frame = document.getElementById('visualizer');
-  if (frame.src) return;
-  const exists = await fetch(frame.dataset.src, { method: 'GET' }).then((r) => r.ok).catch(() => false);
-  document.getElementById('visualizer-missing').hidden = exists;
-  frame.hidden = !exists;
-  if (exists) frame.src = frame.dataset.src;
 }
 
 document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
@@ -210,4 +200,5 @@ window.addEventListener('message', (event) => {
 
 let saved = 'live';
 try { saved = localStorage.getItem('biobuzz.tab') || 'live'; } catch { /* private window */ }
+if (!document.getElementById(`tab-${saved}`)) saved = 'live';   // a tab that is gone (the old Pedro tab)
 showTab(saved);

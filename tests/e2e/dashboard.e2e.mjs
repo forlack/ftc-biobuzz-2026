@@ -475,144 +475,25 @@ try {
   await api('/api/hardware/active', { method: 'POST', body: { path: '24621-Biobuzz.xml' } });
 
   // ---- 4. Path editor: robot actions on the route --------------------------------------------------
-  console.log('Paths tab');
+  console.log('Functions');
   // The functions come from the mechanisms' @AutoFunction methods: the same list as before.
   const functionNames = (await api('/api/actions')).data.map((a) => a.name).sort();
   check(JSON.stringify(functionNames) === JSON.stringify(['deployStinger', 'flywheelsOff', 'flywheelsOn', 'intakeOff', 'intakeOn',
     'shoot', 'stowStinger', 'turnTo', 'wait', 'waitForFlywheels']),
     `the Auton Sequence offers the mechanisms' functions plus the steps, nothing hidden (${functionNames.join(', ')})`);
-  await b.eval(`document.querySelector('[data-tab="paths"]').click()`);
-  const frame = `document.getElementById('visualizer').contentWindow.document`;
-  await b.waitFor(`${frame}.querySelector('[data-testid=robot-panel]') && ${frame}.querySelector('[data-testid=robot-panel]').innerText.includes('connected')`, 20000);
-  check(true, 'the path editor loads inside the dashboard and finds the robot');
-  const shown = (id) => `${frame}.querySelector('[data-testid=${id}]').offsetParent !== null`;
-  check(await b.eval(`${shown('panel-paths')} && !(${shown('panel-auton')})`),
-    'the side panel has tabs and opens on Paths (start point and the selected path)');
-  await b.eval(`${frame}.querySelector('[data-testid=panel-tab-auton]').click()`);
-  await sleep(200);
-  check(await b.eval(`${shown('panel-auton')} && !(${shown('panel-paths')})`),
-    'the Auton Sequence tab shows the sequence on its own');
-  await b.waitFor(`[...${frame}.querySelectorAll('[data-testid=route-load] option')].some((o) => o.value === 'autos/saturday.json')`);
-  await b.eval(`(() => { const s = ${frame}.querySelector('[data-testid=route-load]'); s.value = 'autos/saturday.json'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=route-message]') && ${frame}.querySelector('[data-testid=route-message]').innerText.includes('Loaded')`);
-  const steps = await b.eval(`${frame}.querySelector('[data-testid=route-steps]').innerText`);
-  check(/follow\s+path1/.test(steps) && /shoot/.test(steps) && /follow\s+path2/.test(steps), 'Saturday route opens with its steps');
-
-  // "Function on a path": choose path2 from the list, stinger down at 40%, then flywheels on at 20%.
-  const setIn = (testid, value, type = 'change') => b.eval(`(() => {
-    const e = ${frame}.querySelector('[data-testid=${testid}]'); e.value = ${JSON.stringify(String(value))};
-    e.dispatchEvent(new Event('${type}', { bubbles: true })); })()`);
-  await b.eval(`${frame}.querySelector('[data-testid=add-mode-path]').click()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=onpath-path]')`);
-  const path2Id = await b.eval(`[...${frame}.querySelectorAll('[data-testid=onpath-path] option')].find((o) => o.textContent.trim() === 'path2').value`);
-  await setIn('onpath-path', path2Id);
-  await setIn('onpath-action', 'deployStinger');
-  await setIn('onpath-at', 40, 'input');
-  await b.eval(`${frame}.querySelector('[data-testid=onpath-add]').click()`);
-  await setIn('onpath-action', 'flywheelsOn');
-  await setIn('onpath-at', 20, 'input');
-  await b.eval(`${frame}.querySelector('[data-testid=onpath-add]').click()`);
-  await b.waitFor(`${frame}.querySelectorAll('[data-testid=event-row]').length === 2`);
-  // "Function": stinger up, after the last step.
-  await b.eval(`${frame}.querySelector('[data-testid=add-mode-function]').click()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=fn-action]')`);
-  // Its settings are filled in before adding: a 1.25 s wait at the end (then removed again).
-  await setIn('fn-action', 'wait');
-  await b.waitFor(`${frame}.querySelector('[data-testid=fn-param]')`);
-  check(await b.eval(`${frame}.querySelector('[data-testid=fn-param]').value === '0.5'`), 'Add shows the function\'s settings with their defaults (wait: 0.5 s)');
-  await setIn('fn-param', 1.25, 'input');
-  await b.eval(`${frame}.querySelector('[data-testid=fn-add]').click()`);
-  await sleep(300);
-  const added = await b.eval(`[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].pop().innerText`);
-  check(/wait/.test(added) && /1\.25 s/.test(added), `a wait set to 1.25 s before adding is added as 1.25 s (${added.replace(/\s+/g, ' ').trim()})`);
-  await b.eval(`[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].pop().querySelector('[title=Remove]').click()`);
-  await sleep(200);
-  await setIn('fn-action', 'stowStinger');
-  await b.eval(`${frame}.querySelector('[data-testid=fn-add]').click()`);
-  await sleep(300);
-  const sequenceText = (await b.eval(`${frame}.querySelector('[data-testid=route-steps]').innerText`)).replace(/\s+/g, ' ');
-  check(/Sequence/.test(await b.eval(`${frame}.querySelector('[data-testid=robot-panel]').innerText`)), 'the list is called Sequence');
-  const rows = await b.eval(`[...${frame}.querySelectorAll('[data-testid=event-row]')].map((r) =>
-    [r.dataset.at, r.dataset.action])`);
-  check(JSON.stringify(rows) === JSON.stringify([['20', 'flywheelsOn'], ['40', 'deployStinger']]),
-    `on-path functions are listed under their path, sorted by when they fire: ${JSON.stringify(rows)}`);
-  const underPath2 = await b.eval(`(() => {
-    const row = ${frame}.querySelector('[data-testid=event-row]').closest('li');
-    return row.innerText.includes('follow') && row.innerText.includes('path2');
-  })()`);
-  check(underPath2, 'they sit under the "follow path2" step');
-  const last = await b.eval(`[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].pop().innerText`);
-  check(/stinger up/.test(last), 'the Function was added at the end of the sequence');
-
-  // Rows are read-only until the pencil is clicked.
-  check(await b.eval(`${frame}.querySelectorAll('[data-testid=route-steps] input').length === 0`),
-    'sequence rows show text, not boxes, until you click the pencil');
-  // Edit the first step (wait 1 s): 0.5 s.
-  await b.eval(`${frame}.querySelector('[data-testid=route-steps] > li [data-testid=step-edit]').click()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=step-edit-param]')`);
-  await setIn('step-edit-param', 0.5);
-  await b.eval(`${frame}.querySelector('[data-testid=edit-done]').click()`);
-  // Change the last step's function and back: stinger up -> intake off -> stinger up.
-  const lastEdit = `[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].pop()`;
-  await b.eval(`${lastEdit}.querySelector('[data-testid=step-edit]').click()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=step-edit-action]')`);
-  await setIn('step-edit-action', 'intakeOff');
-  check(await b.eval(`${lastEdit}.dataset.action === 'intakeOff'`), 'the pencil lets you change which function a step runs');
-  await setIn('step-edit-action', 'stowStinger');
-  await b.eval(`${frame}.querySelector('[data-testid=edit-done]').click()`);
-  // Edit the 40% stinger-down function on path2 to 45%.
-  await b.eval(`[...${frame}.querySelectorAll('[data-testid=event-row]')].find((r) => r.dataset.at === '40').querySelector('[data-testid=event-edit]').click()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=event-edit-at]')`);
-  await setIn('event-edit-at', 45);
-  await b.eval(`${frame}.querySelector('[data-testid=edit-done]').click()`);
-  const edited = await b.eval(`[...${frame}.querySelectorAll('[data-testid=event-row]')].map((r) => r.dataset.at + ' ' + r.dataset.action).join(', ')`);
-  check(edited === '20 flywheelsOn, 45 deployStinger', `editing a function on a path changes its %: ${edited}`);
-  const time = await b.eval(`${frame}.querySelector('[data-testid=route-time]').innerText`);
-  check(/of 30 s/.test(time), `timeline estimate includes the waits: ${time}`);
-  const markers = await b.eval(`${frame}.querySelectorAll('[id^="robot-event-"]').length`);
-  check(markers === 2, 'both on-path functions show as markers on the field');
-  // A path's top speed, as a % of the robot's: path2 at 40% (pencil on its "follow" row).
-  const path2Row = `[...${frame}.querySelectorAll('[data-testid=route-steps] > li')].find((li) => /follow\\s+path2/.test(li.innerText))`;
-  check(await b.eval(`${path2Row}.querySelector('[data-testid=path-speed-text]').textContent === 'full speed'`), 'paths go at full speed unless you set one');
-  await b.eval(`${path2Row}.querySelector('[data-testid=path-speed-edit]').click()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=path-speed]')`);
-  await setIn('path-speed', 40);
-  await b.eval(`${frame}.querySelector('[data-testid=path-speed-done]').click()`);
-  check(await b.eval(`${path2Row}.querySelector('[data-testid=path-speed-text]').textContent === '40% speed'`), 'the pencil on a path sets its top speed: path2 at 40%');
-  await b.screenshot(join(OUT, '4-paths.png'));
-  await b.eval(`${frame}.querySelector('[data-testid=route-save]').click()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=route-message]').innerText.includes('Saved autos/saturday.json')`);
-  const route = (await api('/api/file?path=autos/saturday.json')).data;
-  const drives = route.steps.filter((st) => st.drive).map((st) => st.drive);
-  check(route.version === 3, 'the editor saves auton files as version 3');
-  const path2 = drives.find((d) => d.name === 'path2');
-  check(path2.events.length === 2 && path2.events[0].action === 'flywheelsOn' && path2.events[0].at === 0.2
-    && path2.events[1].action === 'deployStinger' && path2.events[1].at === 0.45,
-    'the saved route has flywheels on at 20% and stinger down at 45% of path2, in order');
-  check(route.steps[0].action === 'wait' && route.steps[0].params.seconds === 0.5, 'and the edited wait of 0.5 s');
-  check(path2.speedPercent === 40 && drives[0].speedPercent === undefined, 'and path2\'s speed (40%; path1 has none, full speed)');
-  check(route.steps[route.steps.length - 1].action === 'stowStinger', 'and "stinger up" as the last step');
-  check(path2.segments.length === 1 && path2.segments[0].via.length === 1 && path2.heading.type === 'turn' && path2.heading.degrees === 90
-    && route.start.heading === 270, 'geometry, heading and start pose survive the round trip');
-  check(route.robot && route.robot.width > 0 && route.robot.length > 0 && route.robot.safetyMargin >= 0,
-    `the route saves the robot size and safety margin: ${JSON.stringify(route.robot)}`);
-
-  // Save as new: a second auton file, leaving the first one as it was.
-  check((await b.eval(`${frame}.querySelector('[data-testid=robot-panel]').innerText`)).includes('Auton Sequence'),
-    'the panel is called Auton Sequence');
-  const before = (await api('/api/files')).data.find((f) => f.path === 'autos/saturday.json').hash;
-  await b.eval(`(() => { document.getElementById('visualizer').contentWindow.prompt = () => 'Latest'; })()`);
-  await b.eval(`${frame}.querySelector('[data-testid=route-save-as]').click()`);
-  await b.waitFor(`${frame}.querySelector('[data-testid=route-message]').innerText.includes('Saved autos/Latest.json')`);
-  const latest = (await api('/api/file?path=autos/Latest.json')).data;
-  check(latest.name === 'Latest' && JSON.stringify(latest.steps) === JSON.stringify(route.steps), 'Save as new… creates autos/Latest.json with the same auton');
-  const after = (await api('/api/files')).data.find((f) => f.path === 'autos/saturday.json').hash;
-  check(before === after, 'and leaves autos/saturday.json unchanged');
-  check((await b.eval(`${frame}.querySelector('[data-testid=route-file]').innerText`)).includes('Editing autos/Latest.json'),
-    'the editor now shows it is editing the new file');
-  await b.eval(`(() => { const i = ${frame}.querySelector('[data-testid=route-name]'); i.value = 'Sunday'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  check((await b.eval(`${frame}.querySelector('[data-testid=route-file]').innerText`)).includes('will write a new file, autos/Sunday.json'),
-    'renaming warns that Save will write a new file');
+  check(await b.eval(`!document.querySelector('[data-tab="paths"]') && !document.getElementById('visualizer')`),
+    'the old Pedro tab is gone (the Auton tab is the path editor)');
+  check((await fetch(`${URL}/visualizer/index.html`)).status === 404, 'and so is its built copy');
+  // The auton the rest of the test runs: saturday with functions on path2, its speed and a last step.
+  const saturday = (await api('/api/file?path=autos/saturday.json')).data;
+  const route = JSON.parse(JSON.stringify(saturday));
+  route.steps[0].params.seconds = 0.5;
+  const path2 = route.steps.find((st) => st.drive && st.drive.name === 'path2').drive;
+  path2.events = [{ at: 0.2, action: 'flywheelsOn' }, { at: 0.45, action: 'deployStinger' }];
+  path2.speedPercent = 40;
+  route.steps.push({ action: 'stowStinger' });
+  const savedRoute = await api('/api/file?path=autos/saturday.json', { method: 'PUT', body: JSON.stringify(route, null, 2) });
+  check(savedRoute.status === 200, 'the robot accepts saturday with flywheels on at 20% and stinger down at 45% of path2, at 40% speed, then stinger up');
 
   // The robot refuses a broken route instead of keeping it.
   const bad = await api('/api/file?path=autos/broken.json', { method: 'PUT', body: JSON.stringify({ ...route, steps: [{ action: 'doABackflip' }] }) });

@@ -6,8 +6,13 @@
 import { api, escapeHtml, getFile, putFile, toast } from './api.js';
 
 const FIELD = 144;
-const TOP_SPEED = 68.5;            // in/s, Foresight maxAchievableForwardVelocity (for the estimate)
-const ACCEL = 90, DECEL = 70;      // in/s², a bit under what the simulator measures (~100)
+// The time estimate, fitted to the simulator (which follows paths with our Foresight tuning):
+// straight drives of 6 to 100 in, at 100% and 50%, and a drive that turns half way round.
+const TOP_SPEED = 68.5;            // in/s, Foresight maxAchievableForwardVelocity
+const CRUISE = 1.065;              // the simulator cruises a little above it (~73 in/s)
+const ACCEL = 230, DECEL = 230;    // in/s², as the simulator speeds up and brakes
+const END_SETTLE = 0.1;            // s, creeping onto the end point
+const TURN_WHILE_DRIVING = 235;    // degrees per second of turning add a second to a drive
 // A drive that starts facing another way than the robot: Pedro turns it in place first, then
 // drives (seen on the robot and in the simulator: about 280°/s). Smaller differences it turns
 // while driving.
@@ -108,32 +113,44 @@ function pointAlong(info, f) {
  * A rough speed-up / cruise / slow-down profile for a drive of this length: how long it takes,
  * how far along it is at a time, and when it reaches a distance.
  */
-function profile(length, percent) {
-  const top = (TOP_SPEED * (percent || 100)) / 100;
+function profile(length, percent, turning = 0) {
+  const top = (TOP_SPEED * CRUISE * (percent || 100)) / 100;
   const v = length > 0 ? Math.min(top, Math.sqrt((2 * length * ACCEL * DECEL) / (ACCEL + DECEL))) : 0;
   const ta = v / ACCEL, td = v / DECEL;
   const da = (v * ta) / 2, dd = (v * td) / 2;
   const tc = v > 0 ? Math.max(0, (length - da - dd) / v) : 0;
-  const total = ta + tc + td;
-  const distance = (t) => {
+  const moving = ta + tc + td;
+  // Turning while driving slows the whole drive: stretch it evenly.
+  const stretch = moving > 0 ? (moving + turning / TURN_WHILE_DRIVING) / moving : 1;
+  const total = moving * stretch + (length > 0 ? END_SETTLE : 0);
+  const base = (t) => {
     if (t <= 0) return 0;
     if (t < ta) return (ACCEL * t * t) / 2;
     if (t < ta + tc) return da + v * (t - ta);
-    if (t < total) { const r = total - t; return length - (DECEL * r * r) / 2; }
+    if (t < moving) { const r = moving - t; return length - (DECEL * r * r) / 2; }
     return length;
   };
-  const time = (d) => {
+  const baseTime = (d) => {
     if (d <= 0) return 0;
     if (d < da) return Math.sqrt((2 * d) / ACCEL);
     if (d < da + v * tc) return ta + (d - da) / v;
-    if (d < length) return total - Math.sqrt((2 * (length - d)) / DECEL);
-    return total;
+    if (d < length) return moving - Math.sqrt((2 * (length - d)) / DECEL);
+    return moving;
   };
+  const distance = (t) => base(t / stretch);
+  const time = (d) => (d >= length ? total : baseTime(d) * stretch);
   return { total, distance, time };
 }
 
-function driveSeconds(length, percent) {
-  return profile(length, percent).total;
+/** A drive's profile: its length, speed % and how much it turns on the way. */
+function driveProfile(drive, info) {
+  let turning = 0, before = headingAlong(drive, info, 0);
+  for (let i = 1; i <= 20; i++) {
+    const h = headingAlong(drive, info, i / 20);
+    turning += Math.abs(shortest(before, h));
+    before = h;
+  }
+  return profile(info.length, drive.speedPercent, turning);
 }
 
 /** The robot's heading (degrees) at fraction f of a laid-out drive. */
@@ -153,7 +170,7 @@ function functionSeconds(step) {
   const p = step.params || {};
   switch (step.action) {
     case 'wait': return p.seconds ?? 0.5;
-    case 'shoot': return (p.seconds ?? 3.5) + 0.6;
+    case 'shoot': return (p.seconds ?? 3.5) + 0.1;   // the flywheels run all match: usually ready
     case 'waitForFlywheels': return Math.min(p.timeout ?? 2, 1);
     case 'turnTo': return 0.8;
     default: return 0;
@@ -526,7 +543,7 @@ export class AutonTab {
   span(drive, info, event) {
     const duration = this.seconds(event);
     if (!duration) return { from: event.at, to: event.at, timed: false, beyond: false };
-    const p = profile(info.length, drive.speedPercent);
+    const p = driveProfile(drive, info);
     const t = p.time(event.at * info.length) + duration;
     return { from: event.at, to: Math.min(1, p.distance(t) / info.length), timed: true, beyond: t > p.total };
   }
@@ -546,7 +563,7 @@ export class AutonTab {
         turn = shortest(info[i].start.h, headingAlong(step.drive, info[i], 0));
         if (Math.abs(turn) > TURN_FIRST) turnTime = TURN_SETTLE + Math.abs(turn) / TURN_RATE;
         else turn = 0;
-        duration = turnTime + driveSeconds(info[i].length, step.drive.speedPercent);
+        duration = turnTime + driveProfile(step.drive, info[i]).total;
       } else {
         duration = functionSeconds(step);
       }
@@ -594,7 +611,7 @@ export class AutonTab {
           pose = { x: e.info.start.x, y: e.info.start.y, h: e.info.start.h + e.turn * eased };
           continue;
         }
-        const p = profile(e.info.length, e.step.drive.speedPercent);
+        const p = driveProfile(e.step.drive, e.info);
         const f = e.info.length ? p.distance(into - e.turnTime) / e.info.length : 1;
         const at = pointAlong(e.info, f);
         pose = { x: at[0], y: at[1], h: headingAlong(e.step.drive, e.info, f) };

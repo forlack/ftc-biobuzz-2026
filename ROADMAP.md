@@ -49,6 +49,8 @@ of steps was Java. Now:
 - **Several autos** (left, right, two-cycle) become several files, picked at INIT.
 
 ### 3. Our own Pedro visualizer: draw paths and put robot actions on them
+*Done differently (2026-10-25): the dashboard's Auton tab is our own editor; the Pedro visualizer fork is retired.*
+
 Fork the Pedro Pathing visualizer and add what `AutoSequence` can do:
 
 - Draw paths as now, then **drop actions onto the field**: on a path at a point along it
