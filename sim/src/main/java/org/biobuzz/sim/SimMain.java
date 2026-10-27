@@ -19,7 +19,8 @@ import java.nio.file.StandardCopyOption;
  * By default it starts "Field Centric (Java)" running, so the dashboard has live telemetry
  * straight away. Options: --port N, --storage DIR, --web DIR, --fresh (empty the SD card
  * first), --init "OpMode name" [--start], --idle (start with no OpMode running), --no-seed (do
- * not copy the repo's files: the tests fill the SD card themselves).
+ * not copy the repo's files: the tests fill the SD card themselves), --unset-clock (the robot's
+ * clock starts at 1970, like a Control Hub before the Driver Station sets it).
  */
 public final class SimMain {
     public static void main(String[] args) throws Exception {
@@ -38,6 +39,7 @@ public final class SimMain {
                 case "--start": start = true; break;
                 case "--idle": idle = true; break;
                 case "--no-seed": noSeed = true; break;
+                case "--unset-clock": System.setProperty("biobuzz.unsetClock", "true"); break;
                 default: throw new IllegalArgumentException("Unknown option " + args[i]);
             }
         }

@@ -3,6 +3,7 @@ import importlib.util
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 import subprocess
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -33,13 +34,21 @@ class LinuxDeployTests(unittest.TestCase):
         args = SimpleNamespace(robot='Robot', robot_ip='192.168.43.1', stay=stay,
                                hardware_map=hardware_map or map_only, map_only=map_only)
         run, commands = fake_run(failure)
-        with patch.object(module, 'run', side_effect=run), \
-             patch.object(module, 'bring_up', side_effect=bring_up_effect) as bring_up:
-            error = None
-            try:
-                module.deploy(args, 'Home', '/sdk/adb', {})
-            except BaseException as exc:
-                error = exc
+        # A scratch repo with one auton the robot does not have, not the team's real autos/.
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'autos').mkdir()
+            (Path(root) / 'autos' / 'test-auton.json').write_text('{}')
+            (Path(root) / 'robot-config').mkdir()
+            (Path(root) / 'robot-config' / 'test-map.xml').write_text('<Robot/>')
+            with patch.object(module, 'run', side_effect=run), \
+                 patch.object(module, 'ROOT', Path(root)), \
+                 patch.object(module, 'HARDWARE_MAP_DIR', Path(root) / 'robot-config'), \
+                 patch.object(module, 'bring_up', side_effect=bring_up_effect) as bring_up:
+                error = None
+                try:
+                    module.deploy(args, 'Home', '/sdk/adb', {})
+                except BaseException as exc:
+                    error = exc
         return bring_up, commands, error
 
     def test_success_restores_home(self):
@@ -82,8 +91,8 @@ class LinuxDeployTests(unittest.TestCase):
     def test_new_autos_uploaded_before_install(self):
         _, commands, error = self.deploy()
         self.assertIsNone(error)
-        push = next(i for i, c in enumerate(commands) if 'push' in c and c[-1].endswith('/autos/saturday.json.tmp'))
-        rename = next(i for i, c in enumerate(commands) if 'mv' in c and c[-1].endswith('/autos/saturday.json'))
+        push = next(i for i, c in enumerate(commands) if 'push' in c and c[-1].endswith('/autos/test-auton.json.tmp'))
+        rename = next(i for i, c in enumerate(commands) if 'mv' in c and c[-1].endswith('/autos/test-auton.json'))
         install = next(i for i, c in enumerate(commands) if ':TeamCode:installDebug' in c)
         self.assertLess(push, rename)
         self.assertLess(rename, install)

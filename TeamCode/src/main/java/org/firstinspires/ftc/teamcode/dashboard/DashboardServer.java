@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.dashboard;
 
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
+import org.firstinspires.ftc.teamcode.lib.RobotClock;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
 import org.firstinspires.ftc.teamcode.lib.RobotHistory;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
@@ -60,7 +61,9 @@ import javax.xml.parsers.DocumentBuilderFactory;
  *   GET  /api/history?path=...          saved versions of a file; /api/history/file?path=&id=
  *   POST /api/history/restore           {path, id}
  *   GET  /api/snapshots                 known-good snapshots; POST {name} makes one
- *   POST /api/snapshots/restore         {id}
+ *   POST /api/snapshots/restore         {id}; DELETE /api/snapshots?id=... deletes one
+ *   Every /api request may send X-Client-Time (browser ms): used for file dates while the
+ *   robot's clock is unset (see lib/RobotClock).
  *   POST /api/lock                      {action: lock|unlock, pin}. While locked, every change
  *                                       is refused with 423 until unlocked.
  *   GET  /api/adb                       adb on the robot: {listening, canRestart, note}
@@ -396,6 +399,12 @@ public class DashboardServer {
             return response;
         }
         if (path.startsWith("/api/")) {
+            // The browser's clock, for file dates while the robot's own clock is unset.
+            try {
+                if (!request.header("x-client-time").isEmpty()) RobotClock.heard(Long.parseLong(request.header("x-client-time")));
+            } catch (NumberFormatException ignored) {
+                // not a time: ignore
+            }
             boolean changes = !method.equals("GET") && !path.equals("/api/lock");
             if (changes && lock.locked()) {
                 return Response.error(423, "The dashboard is locked. Unlock it with the PIN to make changes.");
@@ -426,6 +435,10 @@ public class DashboardServer {
                 case "GET /api/snapshots": return Response.json(200, Snapshots.list());
                 case "POST /api/snapshots": return Response.json(200, Snapshots.create(request.json().getString("name"), managedNames(), host.activeHardwareMap()));
                 case "POST /api/snapshots/restore": return restoreSnapshot(request.json().getString("id"));
+                case "DELETE /api/snapshots": {
+                    Snapshots.delete(request.param("id"));
+                    return Response.json(200, Snapshots.list());
+                }
                 case "POST /api/lock": return lockAction(request.json());
                 case "POST /api/hardware/active": return useHardwareMap(request.json());
                 case "GET /api/adb": return adb(null);
@@ -551,7 +564,7 @@ public class DashboardServer {
         JSONObject info = new JSONObject();
         info.put("path", relative);
         info.put("size", file.length());
-        info.put("modified", file.lastModified());
+        info.put("modified", RobotClock.shown(file.lastModified()));
         try {
             info.put("hash", RobotFiles.hash(RobotFiles.readBytes(file)));
         } catch (IOException error) {
@@ -624,7 +637,7 @@ public class DashboardServer {
             File file = RobotHistory.version(relative, id);
             JSONObject item = new JSONObject();
             item.put("id", id);
-            item.put("time", file.lastModified());
+            item.put("time", RobotHistory.savedAt(id));
             item.put("size", file.length());
             item.put("original", id.contains("-original"));
             try {

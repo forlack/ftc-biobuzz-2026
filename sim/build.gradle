@@ -25,6 +25,7 @@ sourceSets {
             srcDirs = ['src/main/java', '../TeamCode/src/main/java']
             include 'org/biobuzz/sim/**'
             include 'org/firstinspires/ftc/teamcode/dashboard/**'
+            include 'org/firstinspires/ftc/teamcode/lib/RobotClock.java'
             include 'org/firstinspires/ftc/teamcode/lib/RobotFiles.java'
             include 'org/firstinspires/ftc/teamcode/lib/RobotHistory.java'
             include 'org/firstinspires/ftc/teamcode/lib/RobotSettings.java'

@@ -1,7 +1,7 @@
 // Talking to the robot (or the simulator): JSON API, raw files, the live websocket.
 
 export async function api(path, { method = 'GET', body, headers = {} } = {}) {
-  const options = { method, headers: { ...headers } };
+  const options = { method, headers: { 'X-Client-Time': String(Date.now()), ...headers } };
   if (body !== undefined) {
     options.body = typeof body === 'string' ? body : JSON.stringify(body);
     if (typeof body !== 'string') options.headers['Content-Type'] = 'application/json';
@@ -21,7 +21,7 @@ export async function api(path, { method = 'GET', body, headers = {} } = {}) {
 
 /** Raw file from the robot, with its hash so a later save can detect someone else's change. */
 export async function getFile(path) {
-  const response = await fetch(`/api/file?path=${encodeURIComponent(path)}`);
+  const response = await fetch(`/api/file?path=${encodeURIComponent(path)}`, { headers: { 'X-Client-Time': String(Date.now()) } });
   if (!response.ok) throw new Error((await response.json()).error);
   return { text: await response.text(), hash: response.headers.get('X-Hash') };
 }
@@ -70,4 +70,9 @@ export function toast(message, bad = false) {
 
 export function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/** A date the robot sent, for people: "date unknown" for a 1970 one (the robot's clock was unset). */
+export function formatTime(ms) {
+  return ms >= 1577836800000 ? new Date(ms).toLocaleString() : 'date unknown';
 }

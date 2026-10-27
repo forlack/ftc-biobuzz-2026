@@ -1,5 +1,5 @@
 // History of one robot file: every saved version, what changed, and Restore.
-import { api, escapeHtml, toast } from './api.js';
+import { api, escapeHtml, formatTime, toast } from './api.js';
 
 export class HistoryPanel {
   constructor(holder, onRestored) {
@@ -36,7 +36,7 @@ export class HistoryPanel {
     const rows = versions.map((v, index) => {
       const isCurrent = v.hash === history.currentHash;
       return `<tr data-id="${escapeHtml(v.id)}">
-        <td>${new Date(v.time).toLocaleString()}</td>
+        <td>${formatTime(v.time)}</td>
         <td>${isCurrent ? '<span class="pill running">current</span>' : ''}${v.original ? '<span class="pill">before the dashboard</span>' : ''}</td>
         <td class="r"><button class="btn small" data-changes>${index === versions.length - 1 ? 'Show' : 'Changes'}</button>
           <button class="btn small primary" data-restore ${isCurrent ? 'disabled' : ''}>Restore</button></td>
@@ -61,7 +61,7 @@ export class HistoryPanel {
         box.hidden = false;
       });
       row.querySelector('[data-restore]').addEventListener('click', async () => {
-        const when = new Date(versions[index].time).toLocaleString();
+        const when = formatTime(versions[index].time);
         if (!confirm(`Put ${history.path} back to the version from ${when}?`)) return;
         try {
           await api('/api/history/restore', { method: 'POST', body: { path: history.path, id } });

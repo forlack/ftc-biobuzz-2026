@@ -63,7 +63,7 @@ public final class RobotHistory {
         if (!tracked(relativePath)) return;
         File folder = folderFor(relativePath);
         try {
-            write(folder, stamp(System.currentTimeMillis()) + extension(relativePath), contents);
+            write(folder, stamp(RobotClock.now()) + extension(relativePath), contents);
             List<String> versions = versionIds(relativePath);
             for (int i = KEEP; i < versions.size(); i++) {
                 new File(folder, versions.get(i)).delete();
@@ -95,6 +95,15 @@ public final class RobotHistory {
         }
         try (FileOutputStream output = new FileOutputStream(target)) {
             output.write(contents);
+        }
+    }
+
+    /** When a version was saved, from its name (the file's own date may be 1970); 0 if unknown. */
+    public static long savedAt(String id) {
+        try {
+            return RobotClock.shown(new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss-SSS", Locale.US).parse(id).getTime());
+        } catch (java.text.ParseException error) {
+            return 0;
         }
     }
 

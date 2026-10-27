@@ -1,5 +1,5 @@
 // Robot tab: files on the robot (view, edit, download) and the hardware map editor.
-import { api, escapeHtml, getFile, putFile, toast } from './api.js';
+import { api, escapeHtml, formatTime, getFile, putFile, toast } from './api.js';
 import { HardwareEditor } from './hardware.js';
 import { HistoryPanel } from './history.js';
 
@@ -62,7 +62,7 @@ export class RobotTab {
       document.getElementById('files').innerHTML = files.map((f) => `<tr>
           <td>${escapeHtml(f.path)}</td>
           <td class="r">${size(f.size)}</td>
-          <td class="r">${new Date(f.modified).toLocaleString()}</td>
+          <td class="r">${formatTime(f.modified)}</td>
           <td class="r"><button class="btn small" data-edit="${escapeHtml(f.path)}">Open</button>
             <button class="btn small" data-history="${escapeHtml(f.path)}">History</button>
             <a class="btn small" href="/api/file?path=${encodeURIComponent(f.path)}" download="${escapeHtml(f.path.split('/').pop())}">Download</a>
@@ -104,12 +104,17 @@ export class RobotTab {
       const list = await api('/api/snapshots');
       const holder = document.getElementById('snapshots');
       holder.innerHTML = list.length ? list.map((s) => `<tr>
-          <td><b>${escapeHtml(s.name)}</b><div class="muted">${new Date(s.time).toLocaleString()} · ${s.files.length} files${s.hardwareMap ? ` · map ${escapeHtml(s.hardwareMap.replace(/\.xml$/, ''))}` : ''}</div></td>
-          <td class="r"><button class="btn small primary" data-snapshot="${escapeHtml(s.id)}">Restore</button></td>
+          <td><b>${escapeHtml(s.name)}</b><div class="muted">${formatTime(s.time)} · ${s.files.length} files${s.hardwareMap ? ` · map ${escapeHtml(s.hardwareMap.replace(/\.xml$/, ''))}` : ''}</div></td>
+          <td class="r"><button class="btn small primary" data-snapshot="${escapeHtml(s.id)}">Restore</button>
+            <button class="btn small" data-snapshot-delete="${escapeHtml(s.id)}" title="Delete this snapshot">Delete</button></td>
         </tr>`).join('') : '<tr><td class="muted">No snapshots yet. Save one when the robot works well.</td></tr>';
       holder.querySelectorAll('[data-snapshot]').forEach((button) => button.addEventListener('click', () => {
         const snapshot = list.find((s) => s.id === button.dataset.snapshot);
         this.restoreSnapshot(snapshot);
+      }));
+      holder.querySelectorAll('[data-snapshot-delete]').forEach((button) => button.addEventListener('click', () => {
+        const snapshot = list.find((s) => s.id === button.dataset.snapshotDelete);
+        this.deleteSnapshot(snapshot);
       }));
     } catch (error) {
       toast(`Could not list snapshots: ${error.message}`, true);
@@ -130,8 +135,20 @@ export class RobotTab {
     }
   }
 
+  async deleteSnapshot(snapshot) {
+    if (!confirm(`Delete the snapshot "${snapshot.name}" (${formatTime(snapshot.time)})?\n\n`
+        + 'Only the snapshot goes: the robot\'s files stay as they are now. This cannot be undone.')) return;
+    try {
+      await api(`/api/snapshots?id=${encodeURIComponent(snapshot.id)}`, { method: 'DELETE' });
+      toast(`Deleted snapshot "${snapshot.name}"`);
+      this.refreshSnapshots();
+    } catch (error) {
+      toast(error.message, true);
+    }
+  }
+
   async restoreSnapshot(snapshot) {
-    const when = new Date(snapshot.time).toLocaleString();
+    const when = formatTime(snapshot.time);
     if (!confirm(`Put these files back the way they were in "${snapshot.name}" (${when})?\n\n${snapshot.files.join('\n')}\n\n`
         + 'Every replaced file stays in its History, so this can be undone. Autons made after the snapshot are kept.')) return;
     try {

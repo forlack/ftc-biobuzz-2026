@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -69,7 +70,9 @@ class HttpRobot:
         self.url = url.rstrip('/')
 
     def _open(self, path, data=None, method='GET', headers=None):
-        request = urllib.request.Request(self.url + path, data=data, method=method, headers=headers or {})
+        # Our clock, for file dates on the robot while its own clock is unset (lib/RobotClock).
+        headers = {'X-Client-Time': str(int(time.time() * 1000)), **(headers or {})}
+        request = urllib.request.Request(self.url + path, data=data, method=method, headers=headers)
         return urllib.request.urlopen(request, timeout=10)
 
     def reachable(self):

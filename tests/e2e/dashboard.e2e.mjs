@@ -38,12 +38,13 @@ const api = async (path, options = {}) => {
 // ---- Start a fresh simulator ------------------------------------------------------
 console.log('Building and starting the simulator…');
 execFileSync(join(REPO, 'gradlew'), ['-q', '-p', 'sim', 'installDist'], { cwd: REPO, stdio: 'inherit' });
-// Its SD card starts with only the hardware map and the saturday auton from the repo: no
-// robot.json (code defaults) and none of the other autons robot-sync may have pulled.
+// Its SD card starts with only the test's own frozen hardware map and auton (tests/fixtures/,
+// so editing the team's real autons never breaks the test): no robot.json (code defaults).
+const FIXTURES = join(REPO, 'tests/fixtures');
 const storage = mkdtempSync(join(tmpdir(), 'biobuzz-sd-'));
-cpSync(join(REPO, 'robot-config/24621-Biobuzz.xml'), join(storage, '24621-Biobuzz.xml'));
+cpSync(join(FIXTURES, '24621-Biobuzz.xml'), join(storage, '24621-Biobuzz.xml'));
 mkdirSync(join(storage, 'autos'));
-cpSync(join(REPO, 'autos/saturday.json'), join(storage, 'autos/saturday.json'));
+cpSync(join(FIXTURES, 'autos/saturday.json'), join(storage, 'autos/saturday.json'));
 const sim = spawn(join(REPO, 'sim/build/install/biobuzz-sim/bin/biobuzz-sim'),
   ['--port', String(PORT), '--storage', storage, '--no-seed'], { cwd: join(REPO, 'sim'), stdio: 'ignore' });
 let browser;
@@ -398,7 +399,8 @@ try {
 
   const scratch = mkdtempSync(join(tmpdir(), 'biobuzz-repo-'));
   // A scratch repo with the same files the test robot started with.
-  for (const file of ['autos/saturday.json', 'robot-config/24621-Biobuzz.xml']) cpSync(join(REPO, file), join(scratch, file));
+  cpSync(join(FIXTURES, 'autos/saturday.json'), join(scratch, 'autos/saturday.json'));
+  cpSync(join(FIXTURES, '24621-Biobuzz.xml'), join(scratch, 'robot-config/24621-Biobuzz.xml'));
   const sync = (...args) => execFileSync(join(REPO, 'robot-sync'), [...args, '--url', URL],
     { env: { ...process.env, ROBOT_SYNC_ROOT: scratch }, encoding: 'utf8' });
   check(sync('status').includes('only on the robot'), 'robot-sync status sees the new robot.json');
@@ -414,7 +416,7 @@ try {
   await b.eval(`document.querySelector('[data-tab="robot"]').click()`);
   await b.waitFor(`document.querySelectorAll('table.devices tr[data-m]').length > 10`);
   const devices = await b.eval(`document.querySelectorAll('table.devices tr[data-m]').length`);
-  const inFile = (readFileSync(join(REPO, 'robot-config/24621-Biobuzz.xml'), 'utf8').match(/<(?!Lynx)\w+ name="[^"]+" port=/g) || []).length;
+  const inFile = (readFileSync(join(FIXTURES, '24621-Biobuzz.xml'), 'utf8').match(/<(?!Lynx)\w+ name="[^"]+" port=/g) || []).length;
   check(devices === inFile, `hardware map shows all ${devices} devices on both hubs`);
   check(await b.eval(`document.querySelector('#hw-problems').children.length === 0`), 'the real map has no problems');
   await b.waitFor(`document.querySelector('#load').innerText.includes('Viewers')`);
@@ -525,6 +527,16 @@ try {
   check(await b.eval(`document.querySelector('#toast').textContent.includes('pick ${mapAtSnapshot.replace(/\.xml$/, '')} on the Driver Station')`),
     'restoring while the robot uses another hardware map says which one to pick on the Driver Station');
   await api('/api/hardware/active', { method: 'POST', body: { path: mapAtSnapshot } });
+  // Delete a snapshot: only the snapshot goes.
+  await b.eval(`(() => { document.querySelector('#snapshot-name').value = 'Throwaway'; document.querySelector('#snapshot-save').click(); })()`);
+  await b.waitFor(`document.querySelector('#snapshots').innerText.includes('Throwaway')`);
+  const filesBeforeDelete = (await api('/api/files')).data.length;
+  await b.eval(`(() => { window.confirm = () => true;
+    [...document.querySelectorAll('#snapshots tr')].find((r) => r.innerText.includes('Throwaway')).querySelector('[data-snapshot-delete]').click(); })()`);
+  await b.waitFor(`document.querySelector('#toast').textContent.startsWith('Deleted snapshot')`);
+  check(await b.eval(`!document.querySelector('#snapshots').innerText.includes('Throwaway') && document.querySelector('#snapshots').innerText.includes('Before the kids')`)
+    && (await api('/api/files')).data.length === filesBeforeDelete,
+    'Delete removes just that snapshot (the robot\'s files stay)');
   const back = (await api('/api/file?path=autos/saturday.json')).data;
   const intake = (await api('/api/settings')).data.items.find((i) => i.name === 'INTAKE_RPM').value;
   check(back.steps.length === goodRoute.steps.length && intake === 700, 'Restore puts the auton and the settings back');

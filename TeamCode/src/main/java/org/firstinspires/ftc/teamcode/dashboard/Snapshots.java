@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.dashboard;
 
+import org.firstinspires.ftc.teamcode.lib.RobotClock;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -31,7 +32,7 @@ final class Snapshots {
     static JSONObject create(String name, List<String> files, String hardwareMap) throws IOException, JSONException {
         String clean = name.trim().replaceAll("[^A-Za-z0-9 _-]+", "").trim();
         if (clean.isEmpty()) throw new IllegalArgumentException("Give the snapshot a name");
-        long now = System.currentTimeMillis();
+        long now = RobotClock.now();
         String id = clean.replace(' ', '-') + "_" + new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(new Date(now));
         File folder = RobotFiles.file(FOLDER + "/" + id);
         if (folder.exists()) throw new IllegalArgumentException("A snapshot " + id + " already exists");
@@ -52,6 +53,24 @@ final class Snapshots {
         }
         write(new File(folder, "manifest.json"), manifest.toString(2).getBytes(StandardCharsets.UTF_8));
         return manifest;
+    }
+
+    /** Deletes a snapshot and every file in it (the robot's own files are not touched). */
+    static void delete(String id) throws IOException, JSONException {
+        manifest(id);   // checks the id and that it is a snapshot
+        File folder = RobotFiles.file(FOLDER + "/" + id);
+        deleteTree(folder);
+        if (folder.exists()) throw new IOException("could not delete snapshot " + id);
+    }
+
+    private static void deleteTree(File file) {
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                deleteTree(child);
+            }
+        }
+        file.delete();
     }
 
     /** Newest first. */

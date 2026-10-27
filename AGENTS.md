@@ -255,6 +255,20 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   assets/biobuzz/, sim classpath /web/; SimHost falls back to it). Teleop header controls
   table removed (user: too many places). Snapshots record `hardwareMap` in manifest.json;
   restore warns which map to pick on the DS when the robot uses another. e2e 147.
+- **Robot clock + snapshot delete (2026-10-26):** user saw 1969 history/snapshot names (Control
+  Hub clock at epoch until the DS connects; their files were 4-58 min after boot).
+  lib/RobotClock: every /api request may send X-Client-Time (api.js, getFile, robot-sync);
+  while the robot clock < 2020 that time is used for history/snapshot names (History's time
+  comes from the version name, RobotHistory.savedAt; snapshots from manifest time). Setting
+  file mtimes was tried and REMOVED: the user checked on the hub, `adb ls` still showed 1969
+  (Android shared storage refuses setLastModified). Files list sends 0 for a <2020 mtime; UI
+  shows "date unknown" (api.js formatTime). Sim `--unset-clock` starts the robot clock at 0.
+- **Test fixtures (2026-10-26, user's request):** e2e uses tests/fixtures/autos/saturday.json
+  and tests/fixtures/24621-Biobuzz.xml (frozen), never the team's real autos/ or robot-config/;
+  deploy unit tests patch ROOT / HARDWARE_MAP_DIR to a scratch dir. Park pose check back to the
+  fixture's (13.2, 96.07).
+  DELETE /api/snapshots?id= + Delete button (locked: refused, greyed). e2e park pose now read
+  from autos/saturday.json (the pulled one ends at 16, 96). e2e 148.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
   and a Pedro add-on); robot pose on the field in teleop once Pinpoint coordinates are trusted;
   a per-viewer Detail selector; min/max thinning; listing USB cameras from the robot.
@@ -307,7 +321,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. (History: the
   tab and its build were removed 2026-10-25.)
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (145
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (148
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

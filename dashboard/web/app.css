@@ -219,7 +219,7 @@ pre.diff ins { color: #7ee787; text-decoration: none; }
 /* While locked the robot refuses changes; grey out the controls that would try. */
 body.locked .setting-row .control, body.locked #settings-save, body.locked #settings-reload,
 body.locked #op-init, body.locked #op-start, body.locked #op-stop, body.locked #hw-save,
-body.locked #editor-save, body.locked [data-restore], body.locked [data-snapshot], body.locked #snapshot-save,
+body.locked #editor-save, body.locked [data-restore], body.locked [data-snapshot], body.locked [data-snapshot-delete], body.locked #snapshot-save,
 body.locked [data-remove], body.locked [data-add], body.locked [data-delete] { opacity: .4; pointer-events: none; }
 
 /* Charts: drag by the grip, close with ✕. */

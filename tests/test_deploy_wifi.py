@@ -24,9 +24,17 @@ class HardwareMapTests(unittest.TestCase):
         def run(command, **kwargs):
             commands.append(command)
             return SimpleNamespace(stdout='device\n' if command[-1] == 'get-state' else '', stderr='')
-        with patch.object(module, 'run', side_effect=run), patch.object(module, 'join'):
-            module.deploy(args, 'en0', 'Home', '10.0.0.1', '/sdk/adb', {},
-                          {'Robot Wi-Fi': 'r', 'Home': 'h'})
+        # A scratch repo with one auton the robot does not have, not the team's real autos/.
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'autos').mkdir()
+            (Path(root) / 'autos' / 'test-auton.json').write_text('{}')
+            (Path(root) / 'robot-config').mkdir()
+            (Path(root) / 'robot-config' / 'test-map.xml').write_text('<Robot/>')
+            with patch.object(module, 'run', side_effect=run), patch.object(module, 'join'), \
+                 patch.object(module, 'ROOT', Path(root)), \
+                 patch.object(module, 'HARDWARE_MAP_DIR', Path(root) / 'robot-config'):
+                module.deploy(args, 'en0', 'Home', '10.0.0.1', '/sdk/adb', {},
+                              {'Robot Wi-Fi': 'r', 'Home': 'h'})
         return commands
 
     def test_hardware_map_pushed_before_install(self):
@@ -44,8 +52,8 @@ class HardwareMapTests(unittest.TestCase):
 
     def test_new_autos_uploaded_before_install(self):
         commands = self.commands(False)
-        push = next(i for i, c in enumerate(commands) if 'push' in c and c[-1].endswith('/autos/saturday.json.tmp'))
-        rename = next(i for i, c in enumerate(commands) if 'mv' in c and c[-1].endswith('/autos/saturday.json'))
+        push = next(i for i, c in enumerate(commands) if 'push' in c and c[-1].endswith('/autos/test-auton.json.tmp'))
+        rename = next(i for i, c in enumerate(commands) if 'mv' in c and c[-1].endswith('/autos/test-auton.json'))
         install = next(i for i, c in enumerate(commands) if ':TeamCode:installDebug' in c)
         self.assertLess(push, rename)
         self.assertLess(rename, install)

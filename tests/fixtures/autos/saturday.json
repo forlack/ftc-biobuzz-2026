@@ -1,0 +1,40 @@
+{
+  "version": 3,
+  "name": "Saturday",
+  "start": { "x": 56, "y": 9, "heading": 270 },
+  "steps": [
+    {
+      "action": "wait",
+      "params": { "seconds": 1 }
+    },
+    {
+      "drive": {
+        "name": "path1",
+        "segments": [
+          {
+            "to": [60, 16]
+          }
+        ],
+        "heading": { "type": "keep" }
+      }
+    },
+    {
+      "action": "shoot",
+      "params": { "seconds": 3.5 }
+    },
+    {
+      "drive": {
+        "name": "path2",
+        "segments": [
+          {
+            "via": [
+              [15.6919, 29.3313]
+            ],
+            "to": [13.2008, 96.0738]
+          }
+        ],
+        "heading": { "type": "turn", "degrees": 90 }
+      }
+    }
+  ]
+}
