@@ -4,7 +4,7 @@ import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.dashboard.RobotHost;
 import org.firstinspires.ftc.teamcode.lib.Actions;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
-import org.firstinspires.ftc.teamcode.lib.StandardActions;
+import org.firstinspires.ftc.teamcode.lib.AutoStepFunctions;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -41,7 +41,7 @@ public class SimHost implements RobotHost {
     public SimHost(SimWorld world, File webRoot) {
         this.world = world;
         this.webRoot = webRoot;
-        this.catalog = StandardActions.create(SimOpModes.functions(new SimOpModes.SimMechanisms(world)));
+        this.catalog = AutoStepFunctions.create(SimOpModes.functions(new SimOpModes.SimMechanisms(world)));
         add("Field Centric (Java)", "teleop", SimOpModes.TeleOp::new);
         add("Pedro Pathing Autonomous", "autonomous", SimOpModes.Autonomous::new);
         settings.load();
@@ -212,7 +212,10 @@ public class SimHost implements RobotHost {
 
     @Override public InputStream openWebFile(String path) throws IOException {
         File file = new File(webRoot, path);
-        if (!file.getCanonicalPath().startsWith(webRoot.getCanonicalPath()) || !file.isFile()) return null;
+        if (!file.getCanonicalPath().startsWith(webRoot.getCanonicalPath()) || !file.isFile()) {
+            // Made by the build, not in dashboard/web: the Gamepad drawer's controls.json.
+            return path.equals("controls.json") ? SimHost.class.getResourceAsStream("/web/controls.json") : null;
+        }
         return new FileInputStream(file);
     }
 }

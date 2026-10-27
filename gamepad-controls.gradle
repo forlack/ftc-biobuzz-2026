@@ -1,0 +1,65 @@
+// The Gamepad drawer's list of controls, read from each teleop's own code at build time, so
+// it can never be out of date. Used by TeamCode/build.gradle (packed into the app) and
+// sim/build.gradle (packed into the simulator); the dashboard reads it as controls.json.
+//
+// In a @TeleOp class, a comment at the end of a line that reads the gamepad is that control's
+// label:
+//
+//   private final Button intakeToggleButton = buttons.add(() -> operate.x);   // intake on / off
+//   double turn = drive.right_stick_x;                                         // turn
+//
+// Which gamepad each variable is comes from "drive = DashboardGamepads.combine(gamepad1, 1)"
+// (or gamepad1 / gamepad2 used directly). A line with no comment is left out.
+ext.writeGamepadControls = { File sources, File out ->
+    def names = [a: 'A', b: 'B', x: 'X', y: 'Y', cross: 'A', circle: 'B', square: 'X', triangle: 'Y',
+                 left_bumper: 'LB', right_bumper: 'RB', left_trigger: 'LT', right_trigger: 'RT',
+                 dpad_up: 'D-pad ↑', dpad_down: 'D-pad ↓', dpad_left: 'D-pad ←', dpad_right: 'D-pad →',
+                 back: 'Back', share: 'Back', start: 'Start', options: 'Start', guide: 'Guide', ps: 'Guide',
+                 left_stick_button: 'Left stick press', right_stick_button: 'Right stick press']
+    def sticks = [left_stick_x: ['Left stick', '←→'], left_stick_y: ['Left stick', '↕'],
+                  right_stick_x: ['Right stick', '←→'], right_stick_y: ['Right stick', '↕']]
+    def quote = { String s -> '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"' }
+    def opModes = [:]
+    fileTree(sources).matching { include '**/*.java' }.sort { it.path }.each { source ->
+        def text = source.text
+        def name = text =~ /@TeleOp\s*\(\s*name\s*=\s*"([^"]+)"/
+        if (!name.find()) return
+        def pads = [gamepad1: 1, gamepad2: 2]
+        (text =~ /(\w+)\s*=\s*DashboardGamepads\.combine\(\s*gamepad([12])/).each { pads[it[1]] = it[2] as int }
+        def stickRows = [1: [:], 2: [:]]   // "Left stick" -> [direction: label], in order
+        def buttonRows = [1: [], 2: []]
+        source.readLines().each { line ->
+            def comment = line =~ /^(.*?)\s*\/\/\s*(.+?)\s*$/
+            if (!comment.find() || comment.group(1).trim().isEmpty()) return
+            def code = comment.group(1)
+            def label = comment.group(2)
+            def reads = []
+            (code =~ /\b(\w+)\.(\w+)\b/).each { if (pads.containsKey(it[1]) && (names[it[2]] || sticks[it[2]])) reads << [pads[it[1]], it[2]] }
+            if (reads.isEmpty()) return
+            def pad = reads[0][0]
+            if (sticks[reads[0][1]]) {
+                def (stick, direction) = sticks[reads[0][1]]
+                stickRows[pad].computeIfAbsent(stick) { [:] }[direction] = label
+            } else {
+                buttonRows[pad] << [reads.collect { names[it[1]] }.toUnique().join(' + '), label]
+            }
+        }
+        def rows = [:]
+        [1, 2].each { pad ->
+            def list = []
+            stickRows[pad].each { stick, directions ->
+                if (directions.values().toUnique().size() == 1 && directions.size() == 2) list << [stick, directions.values().first()]
+                else directions.each { direction, label -> list << ["${stick} ${direction}".toString(), label] }
+            }
+            rows[pad] = list + buttonRows[pad]
+        }
+        opModes[name.group(1)] = rows
+    }
+    def json = '{\n' + opModes.collect { opMode, rows ->
+        '  ' + quote(opMode) + ': {\n' + [1, 2].collect { pad ->
+            '    "' + pad + '": [' + rows[pad].collect { '[' + quote(it[0]) + ', ' + quote(it[1]) + ']' }.join(', ') + ']'
+        }.join(',\n') + '\n  }'
+    }.join(',\n') + '\n}\n'
+    out.parentFile.mkdirs()
+    out.setText(json, 'UTF-8')
+}

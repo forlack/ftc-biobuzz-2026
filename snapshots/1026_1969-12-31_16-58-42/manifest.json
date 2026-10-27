@@ -1,0 +1,13 @@
+{
+  "id": "1026_1969-12-31_16-58-42",
+  "name": "1026",
+  "time": 3522883,
+  "files": [
+    "settings\/robot.json",
+    "autos\/Double.json",
+    "autos\/TEst.json",
+    "autos\/saturday.json",
+    "24621-Biobuzz.xml"
+  ],
+  "hardwareMap": "24621-Biobuzz.xml"
+}

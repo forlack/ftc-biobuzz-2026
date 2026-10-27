@@ -1,7 +1,7 @@
 {
   "version": 3,
-  "name": "Saturday",
-  "start": { "x": 56, "y": 9, "heading": 270 },
+  "name": "saturday",
+  "start": { "x": 56, "y": 8, "heading": 270 },
   "steps": [
     {
       "action": "wait",
@@ -23,6 +23,10 @@
       "params": { "seconds": 3.5 }
     },
     {
+      "action": "flywheelsOff",
+      "params": {}
+    },
+    {
       "drive": {
         "name": "path2",
         "segments": [
@@ -30,10 +34,17 @@
             "via": [
               [15.6919, 29.3313]
             ],
-            "to": [13.2008, 96.0738]
+            "to": [16, 96]
           }
         ],
-        "heading": { "type": "turn", "degrees": 90 }
+        "heading": { "type": "turn", "degrees": 90 },
+        "events": [
+          {
+            "at": 0.53,
+            "action": "deployStinger",
+            "params": {}
+          }
+        ]
       }
     }
   ]

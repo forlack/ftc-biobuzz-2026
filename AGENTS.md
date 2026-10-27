@@ -139,7 +139,7 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   `PedroAutonomous.RobotMechanisms` are gone. **Auton functions** = `@AutoFunction` methods
   (`lib/AutoFunction`, registry `lib/AutoFunctions`: reflection over Robot's public final
   fields; void = action, boolean = condition, `listed=false` hidden (feedOn/feedOff), double
-  params with `@AutoFunction.Param`; listed ones sorted by label). `StandardActions.create(AutoFunctions)`
+  params with `@AutoFunction.Param`; listed ones sorted by label). `AutoStepFunctions.create(AutoFunctions)`
   adds wait + the listed functions + steps (waitForFlywheels, shoot, turnTo) that use function
   names. AndroidDashboard lists via `AutoFunctions.describe(Robot.class)` (no hardware). Sim:
   the mirror generator also copies each `@AutoFunction` signature with an empty body
@@ -239,6 +239,22 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   fallback are gone; a saved tab that no longer exists opens Live. The ~/ftc/Visualizer
   checkout and GitHub fork are left untouched (not used). e2e 145 (the Pedro UI checks went
   with it; saturday's test edits are now made through the API).
+- **Mechanisms cleanup (2026-10-26, uncommitted until the user's robot test):** `Mechanism`
+  interface (optional update()/telemetry()); Robot keeps a list (`x = add(new X(...))`), one
+  `robot.update()` per loop in teleop (`updateMechanisms()`) and auton (also at INIT); Flywheels
+  gets the battery via a DoubleSupplier. Bulk reads removed everywhere (user: no timing gain).
+  Feeder renamed Triggers (the team's name; telemetry `Triggers`, hidden functions
+  `triggersOn`/`triggersOff`). Buttons named `...Button`; Button.toggle()/active removed
+  (unused; toggles flip the Tune-tab switches so dashboard and button agree). StandardActions
+  renamed AutoStepFunctions (user's pick); `waitUntil(name, cond, limitSeconds)` replaces the
+  hand-made timeout in shoot / waitForFlywheels. Teleop timing charts: `Time mechanisms ms`
+  replaces intake+servos / shooter. User prefers no one-line methods (mechanisms/ expanded).
+  Gamepad drawer legend: option A (user's pick) — `gamepad-controls.gradle` (repo root,
+  applied by TeamCode and sim builds) reads each @TeleOp's end-of-line `// label` comments on
+  lines that read a gamepad (vars from DashboardGamepads.combine) into controls.json (APK
+  assets/biobuzz/, sim classpath /web/; SimHost falls back to it). Teleop header controls
+  table removed (user: too many places). Snapshots record `hardwareMap` in manifest.json;
+  restore warns which map to pick on the DS when the robot uses another. e2e 147.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
   and a Pedro add-on); robot pose on the field in teleop once Pinpoint coordinates are trusted;
   a per-viewer Detail selector; min/max thinning; listing USB cameras from the robot.
@@ -247,7 +263,7 @@ Key facts for agents:
 
 - **Shared plain-Java core** (compiled into the app AND the desktop sim):
   `dashboard/{DashboardServer,Dash,RobotHost,Base64Codec,VirtualGamepads}`, `lib/{RobotFiles,RobotSettings,
-  Actions,StandardActions,AutoFunction,AutoFunctions,AutoRoute,AutoSequence}`, `pedro/ForesightConstants`.
+  Actions,AutoStepFunctions,AutoFunction,AutoFunctions,AutoRoute,AutoSequence}`, `pedro/ForesightConstants`.
   No Android or FTC SDK imports in these, Java 8 syntax, Android 7 APIs only (no
   java.nio.file, no java.util.Base64, no String.join). `-Pdashboard` lint: no NewApi.
 - `RobotFiles.root()` is /sdcard/FIRST, or the sim's SD card (`biobuzz.storage` property).
@@ -305,7 +321,7 @@ Key facts for agents:
   `POST /api/hardware/active` → `RobotHost.useHardwareMap`: the sim switches (remembered in
   `<sdcard>/.sim-active-config`); Android returns Driver Station steps. `REQUIRED` in
   hardware.js lists the device names the Java code needs; keep it in step.
-- **Adding things** (settings, Dash values, auton functions via Mechanisms + StandardActions +
+- **Adding things** (settings, Dash values, auton functions via Mechanisms + AutoStepFunctions +
   SimMechanisms): see "Adding things" in dashboard/README.md.
 - **Robot cost: measured by the dashboard itself, in loop ms.** Dash times its own put/pose/
   frame calls and adds `Dashboard ms` to every frame (`Dash.COST_KEY`; direct in-loop cost).

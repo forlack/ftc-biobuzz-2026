@@ -18,7 +18,8 @@ The bar at the top picks an OpMode and runs **Init / Start / Stop**, and shows t
 gamepad 1 or 2 for practice. Drag the sticks and click the buttons (right-click holds a
 button down), or plug a controller into the laptop (the handle lights up when one is
 detected). Closed or not driving, it shows what the robot gets on that gamepad (the Driver
-Station's). **Take control** to drive; a green **Driving** pill in the top bar releases it.
+Station's). Next to it, what each control does in the running teleop: the label comments at
+the end of its button lines, read when the app is built. **Take control** to drive; a green **Driving** pill in the top bar releases it.
 The robot adds it to the Driver Station gamepad (stronger stick, either button), so the
 Driver Station keeps working. Safety: one browser per gamepad; inputs older than 0.25 s
 count as all zero; control ends when the OpMode stops, the tab is hidden, the browser leaves
@@ -139,11 +140,11 @@ Dashboard and Panels. The short version:
 
 What the teleop sends (the autonomous and the simulator use the same names): `Intake RPM`,
 `Intake target`, `Pollen RPM`, `Pollen target`, `Nectar RPM`, `Nectar target`,
-`Flywheels on`, `Flywheels ready`, `Feeding` (1/0), `Stinger` (servo position), `Battery V`,
+`Flywheels on`, `Flywheels ready`, `Triggers` (1/0), `Stinger` (servo position), `Battery V`,
 `Flywheel compensated F`, `Loop ms`, `Dashboard ms`, `Speed %`, `Heading`, `Drive forward` /
 `Drive strafe` / `Drive turn` (sticks, -1 to 1), where each loop's time goes (`Time drive ms`
-(includes the IMU read), `Time intake+servos ms`, `Time shooter ms`, `Time sensors+telemetry ms`
-(includes the bulk reads); the rest of `Loop ms` is the Driver Station telemetry and the SDK),
+(includes the IMU read), `Time mechanisms ms`, `Time sensors+telemetry ms`
+(includes reading the motor speeds); the rest of `Loop ms` is the Driver Station telemetry and the SDK),
 and text: `Intake` (ON/OFF/REVERSE/DISABLED), `Flywheels`, `Settings`.
 
 ### Other pieces

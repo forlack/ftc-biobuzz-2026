@@ -20,7 +20,7 @@ import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
-import org.firstinspires.ftc.teamcode.lib.StandardActions;
+import org.firstinspires.ftc.teamcode.lib.AutoStepFunctions;
 
 import java.io.File;
 
@@ -91,7 +91,7 @@ public final class SimOpModes {
 
         void intake(boolean on) { intakeOn = on; }
         void flywheels(boolean on) { flywheelsOn = on; }
-        void feed(boolean on) { world.setFeeding(on); }
+        void triggers(boolean on) { world.setFeeding(on); }
         void stinger(boolean down) { stingerDown = down; }
 
         // The real mechanisms' auton functions, simulated (names as in mechanisms/).
@@ -99,8 +99,8 @@ public final class SimOpModes {
         @AutoFunction(name = "intakeOff") public void intakeOff() { intake(false); }
         @AutoFunction(name = "flywheelsOn") public void flywheelsOn() { flywheels(true); }
         @AutoFunction(name = "flywheelsOff") public void flywheelsOff() { flywheels(false); }
-        @AutoFunction(name = "feedOn") public void feedOn() { feed(true); }
-        @AutoFunction(name = "feedOff") public void feedOff() { feed(false); }
+        @AutoFunction(name = "triggersOn") public void triggersOn() { triggers(true); }
+        @AutoFunction(name = "triggersOff") public void triggersOff() { triggers(false); }
         @AutoFunction(name = "deployStinger") public void deployStinger() { stinger(true); }
         @AutoFunction(name = "stowStinger") public void stowStinger() { stinger(false); }
 
@@ -141,7 +141,7 @@ public final class SimOpModes {
             Dash.put("Intake target", intakeTarget());
             Dash.put("Pollen power", world.pollen.output());
             Dash.put("Nectar power", world.nectar.output());
-            Dash.put("Feeding", world.feeding());
+            Dash.put("Triggers", world.feeding());
             Dash.put("Shots", world.shotsFired());
             Dash.put("Stinger", world.stinger());
             Dash.put("Flywheels on", flywheelsOn);
@@ -168,15 +168,15 @@ public final class SimOpModes {
 
         // Same map as Flywheels.
         private final Button.Group buttons = new Button.Group();
-        private final Button slowMode = buttons.add(() -> driveButtons[VirtualGamepads.LEFT_BUMPER]);
-        private final Button turboMode = buttons.add(() -> driveButtons[VirtualGamepads.RIGHT_BUMPER]);
-        private final Button resetFront = buttons.add(() -> driveButtons[VirtualGamepads.B]);
-        private final Button forceShoot = buttons.add(() -> driveButtons[VirtualGamepads.A] && driveButtons[VirtualGamepads.RIGHT_BUMPER]);
-        private final Button toggleIntake = buttons.add(() -> operateButtons[VirtualGamepads.X]);
-        private final Button reverseIntake = buttons.add(() -> operateButtons[VirtualGamepads.DPAD_DOWN]);
-        private final Button toggleFlywheels = buttons.add(() -> operateButtons[VirtualGamepads.A]);
-        private final Button gate = buttons.add(() -> operateButtons[VirtualGamepads.RIGHT_BUMPER]);
-        private final Button sting = buttons.add(() -> operateButtons[VirtualGamepads.LEFT_BUMPER]);
+        private final Button slowModeButton = buttons.add(() -> driveButtons[VirtualGamepads.LEFT_BUMPER]);
+        private final Button turboButton = buttons.add(() -> driveButtons[VirtualGamepads.RIGHT_BUMPER]);
+        private final Button resetFrontButton = buttons.add(() -> driveButtons[VirtualGamepads.B]);
+        private final Button forceShootButton = buttons.add(() -> driveButtons[VirtualGamepads.A] && driveButtons[VirtualGamepads.RIGHT_BUMPER]);
+        private final Button intakeToggleButton = buttons.add(() -> operateButtons[VirtualGamepads.X]);
+        private final Button intakeReverseButton = buttons.add(() -> operateButtons[VirtualGamepads.DPAD_DOWN]);
+        private final Button flywheelsToggleButton = buttons.add(() -> operateButtons[VirtualGamepads.A]);
+        private final Button triggersButton = buttons.add(() -> operateButtons[VirtualGamepads.RIGHT_BUMPER]);
+        private final Button stingerButton = buttons.add(() -> operateButtons[VirtualGamepads.LEFT_BUMPER]);
 
         @Override public void init() {
             settings.load();
@@ -206,15 +206,15 @@ public final class SimOpModes {
             }
             follower.update();
 
-            if (toggleIntake.pressed()) Intake.INTAKE_ON = !Intake.INTAKE_ON;
+            if (intakeToggleButton.pressed()) Intake.INTAKE_ON = !Intake.INTAKE_ON;
             robot.intake(Intake.INTAKE_ON);
-            robot.intakeReverse = reverseIntake.down();
-            if (toggleFlywheels.pressed()) Flywheels.FLYWHEELS_ON = !Flywheels.FLYWHEELS_ON;
+            robot.intakeReverse = intakeReverseButton.down();
+            if (flywheelsToggleButton.pressed()) Flywheels.FLYWHEELS_ON = !Flywheels.FLYWHEELS_ON;
             robot.flywheels(Flywheels.FLYWHEELS_ON);
-            robot.stinger(sting.down());
+            robot.stinger(stingerButton.down());
             boolean volley = !driving && !operating && Simulator.DEMO_SHOOTING
                     && Flywheels.FLYWHEELS_ON && (t % 6.0) > 4.5;
-            robot.feed(volley || Simulator.FEED || gate.down() || forceShoot.down());
+            robot.triggers(volley || Simulator.FEED || triggersButton.down() || forceShootButton.down());
 
             robot.apply();
             robot.telemetry();
@@ -239,14 +239,14 @@ public final class SimOpModes {
             double strafe = ignoreDrift(drive[VirtualGamepads.LEFT_STICK_X]);
             double forward = ignoreDrift(-drive[VirtualGamepads.LEFT_STICK_Y]);
             double turn = ignoreDrift(drive[VirtualGamepads.RIGHT_STICK_X]);
-            double speed = slowMode.down() ? MecanumDrive.SLOW_SPEED
-                    : turboMode.down() ? MecanumDrive.TURBO_SPEED : MecanumDrive.DRIVE_SPEED;
+            double speed = slowModeButton.down() ? MecanumDrive.SLOW_SPEED
+                    : turboButton.down() ? MecanumDrive.TURBO_SPEED : MecanumDrive.DRIVE_SPEED;
             double yaw = world.pose()[2] - headingZero;
             double right = strafe * Math.cos(yaw) + forward * Math.sin(yaw);
             double ahead = -strafe * Math.sin(yaw) + forward * Math.cos(yaw);
             // Pedro: strafe is to the left, turn counter-clockwise.
             follower.manual(ahead * speed, -right * speed, -turn * speed);
-            if (resetFront.down()) headingZero = world.pose()[2];
+            if (resetFrontButton.down()) headingZero = world.pose()[2];
         }
 
         private static double ignoreDrift(double value) {
@@ -256,7 +256,7 @@ public final class SimOpModes {
         @Override public void stop() {
             robot.flywheels(false);
             robot.intake(false);
-            robot.feed(false);
+            robot.triggers(false);
             robot.apply();
             follower.stop();
         }
@@ -278,7 +278,7 @@ public final class SimOpModes {
             follower = SimPedro.follower(world);
             follower.setPose(route.start);
             world.loadBalls(3);
-            Actions actions = StandardActions.create(functions(robot));
+            Actions actions = AutoStepFunctions.create(functions(robot));
             auto = route.build(follower, actions);
             Dash.put("Status", "Route \"" + route.name + "\" from " + file.getName() + ": "
                     + auto.stepCount() + " steps. " + settings.status());
@@ -317,7 +317,7 @@ public final class SimOpModes {
             follower.stop();
             robot.flywheels(false);
             robot.intake(false);
-            robot.feed(false);
+            robot.triggers(false);
             robot.apply();
         }
 

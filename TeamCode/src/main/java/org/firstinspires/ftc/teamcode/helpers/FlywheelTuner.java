@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode.helpers;
 
-import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -65,9 +64,6 @@ public class FlywheelTuner extends LinearOpMode {
         // Everything sent to telemetry also reaches the Total Chaos Dashboard.
         telemetry = new DashboardTelemetry(telemetry);
         RobotSettings settings = new RobotSettings().load();
-        for (LynxModule hub : hardwareMap.getAll(LynxModule.class)) {
-            hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
-        }
         // Same names and directions as mechanisms/Flywheels.
         Wheel pollen = new Wheel("Pollen", new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE));
         Wheel nectar = new Wheel("Nectar", new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD));

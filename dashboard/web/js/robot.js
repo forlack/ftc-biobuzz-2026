@@ -104,7 +104,7 @@ export class RobotTab {
       const list = await api('/api/snapshots');
       const holder = document.getElementById('snapshots');
       holder.innerHTML = list.length ? list.map((s) => `<tr>
-          <td><b>${escapeHtml(s.name)}</b><div class="muted">${new Date(s.time).toLocaleString()} · ${s.files.length} files</div></td>
+          <td><b>${escapeHtml(s.name)}</b><div class="muted">${new Date(s.time).toLocaleString()} · ${s.files.length} files${s.hardwareMap ? ` · map ${escapeHtml(s.hardwareMap.replace(/\.xml$/, ''))}` : ''}</div></td>
           <td class="r"><button class="btn small primary" data-snapshot="${escapeHtml(s.id)}">Restore</button></td>
         </tr>`).join('') : '<tr><td class="muted">No snapshots yet. Save one when the robot works well.</td></tr>';
       holder.querySelectorAll('[data-snapshot]').forEach((button) => button.addEventListener('click', () => {
@@ -137,7 +137,14 @@ export class RobotTab {
     try {
       const result = await api('/api/snapshots/restore', { method: 'POST', body: { id: snapshot.id } });
       const map = result.restored.some((p) => p.endsWith('.xml'));
-      toast(`Restored "${result.name}": ${result.restored.length} files${map ? '. Restart the robot app for the hardware map.' : ''}`);
+      const wanted = (result.hardwareMap || '').replace(/\.xml$/, '');
+      const active = (result.activeHardwareMap || '').replace(/\.xml$/, '');
+      if (wanted && wanted !== active) {
+        toast(`Restored "${result.name}": ${result.restored.length} files. This snapshot used the hardware map ${wanted}, `
+          + `but the robot uses ${active || 'none'}: pick ${wanted} on the Driver Station (Configure Robot), then restart the robot app.`, true);
+      } else {
+        toast(`Restored "${result.name}": ${result.restored.length} files${map ? '. Restart the robot app for the hardware map.' : ''}`);
+      }
       this.refresh();
       if (this.hardware.path) this.hardware.load(this.hardware.path);
     } catch (error) {

@@ -13,7 +13,7 @@ import org.firstinspires.ftc.teamcode.lib.AutoFunctions;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
-import org.firstinspires.ftc.teamcode.lib.StandardActions;
+import org.firstinspires.ftc.teamcode.lib.AutoStepFunctions;
 import org.firstinspires.ftc.teamcode.mechanisms.Robot;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
 
@@ -64,11 +64,11 @@ public class PedroAutonomous extends OpMode {
         follower = Constants.create(hardwareMap);
 
         robot = new Robot(hardwareMap);
-        // As before: stinger up and triggers stopped at INIT; nothing else moves until start.
+        // As before: stinger up and triggers stopped at INIT; nothing else moves until start
+        // (the intake and flywheels start off).
         robot.stinger.up();
-        robot.stinger.update();
-        robot.feeder.off();
-        robot.feeder.update();
+        robot.triggers.off();
+        robot.update();
 
         prepare();
     }
@@ -85,7 +85,7 @@ public class PedroAutonomous extends OpMode {
             }
             AutoRoute route = AutoRoute.read(file);
             start = route.start;
-            auto = route.build(follower, StandardActions.create(AutoFunctions.of(robot)));
+            auto = route.build(follower, AutoStepFunctions.create(AutoFunctions.of(robot)));
             source = file.getPath() + " (\"" + route.name + "\")";
             follower.setPose(start);
         } catch (Exception error) {
@@ -159,7 +159,7 @@ public class PedroAutonomous extends OpMode {
     public void stop() {
         if (follower != null) follower.stop();
         if (robot != null) {
-            robot.feeder.off();
+            robot.triggers.off();
             robot.intake.off();
             robot.flywheels.off();
             robot.update();

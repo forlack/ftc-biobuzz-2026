@@ -14,13 +14,13 @@ const SEND_MS = 50;
 const DEADZONE = 0.05;
 const STICK_TRAVEL = 22;   // svg units the knob moves at full stick
 
-// What each control does in Field Centric (Java), from its header comment.
-const LEGEND = {
-  1: [['Left stick', 'drive (field-centric)'], ['Right stick ←→', 'turn'], ['LB', 'hold: slow'],
-    ['RB', 'hold: turbo'], ['B', 'reset forward'], ['A + RB', 'hold: force shoot']],
-  2: [['X', 'intake on / off'], ['D-pad ↓', 'hold: reverse intake'], ['A', 'flywheels on / off'],
-    ['RB', 'hold: gates open'], ['LB', 'hold: stinger down']],
-};
+// What each control does, per teleop: made at build time from the label comments in its code
+// (gamepad-controls.gradle), served as controls.json. Loaded once.
+let controls = null;
+fetch('controls.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then((list) => {
+  controls = list;
+  window.dispatchEvent(new Event('biobuzz:controls'));
+});
 
 // PS5 / Logitech F310 layout: D-pad and A B X Y on top, the two sticks side by side below.
 const SVG = `
@@ -50,6 +50,7 @@ export class GamepadDrawer {
   constructor({ send, onOpenChange }) {
     this.send = send;
     this.onOpenChange = onOpenChange;
+    window.addEventListener('biobuzz:controls', () => this.show());
     this.open = false;
     this.pad = 1;
     this.id = 0;              // this browser's connection id, from the robot's hello
@@ -308,6 +309,17 @@ export class GamepadDrawer {
   }
 
   /** Everything that is not the controller picture: buttons, status, handle, pill. */
+  /** The running teleop's controls for this gamepad (or the first teleop's, when none runs). */
+  legend() {
+    if (!controls) return '';
+    const names = Object.keys(controls);
+    const opMode = controls[this.active] ? this.active : names[0];
+    const rows = opMode ? controls[opMode][this.pad] || [] : [];
+    if (!rows.length) return `<div class="muted">${escapeHtml(this.active || 'This OpMode')} lists no controls for gamepad ${this.pad}.</div>`;
+    return `<div class="muted">${escapeHtml(opMode)}, gamepad ${this.pad}</div>`
+      + rows.map(([k, v]) => `<div><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</div>`).join('');
+  }
+
   show() {
     const mine = this.controlling();
     const owner = this.owners[this.pad - 1];
@@ -334,8 +346,7 @@ export class GamepadDrawer {
       ? `<b>Controller plugged in:</b> ${escapeHtml(device.id.replace(/\s*\(.*$/, ''))}. It drives when you take control.`
       : 'No controller plugged in: use the picture (drag the sticks, click the buttons; right-click holds one). '
         + 'Plug one in and press a button on it to use it.';
-    document.getElementById('pad-legend').innerHTML = `<div class="muted">Field Centric (Java), gamepad ${this.pad}</div>`
-      + LEGEND[this.pad].map(([k, v]) => `<div><b>${k}</b> ${v}</div>`).join('');
+    document.getElementById('pad-legend').innerHTML = this.legend();
 
     this.handle.classList.toggle('detected', !!device);
     this.handle.classList.toggle('driving', mine);

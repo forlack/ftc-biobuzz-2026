@@ -11,7 +11,7 @@ import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 /** The stinger servo: up or down. */
 @Configurable
 @RobotSettings.MovedFrom("FieldCentricJava")
-public class Stinger {
+public class Stinger implements Mechanism {
     /** Servo positions, 0 to 1. */
     public static double STINGER_UP = 0;
     public static double STINGER_DOWN = 0.42;
@@ -24,18 +24,26 @@ public class Stinger {
     }
 
     @AutoFunction(name = "deployStinger", label = "stinger down", help = "Lower the stinger.")
-    public void down() { down = true; }
+    public void down() {
+        down = true;
+    }
 
     @AutoFunction(name = "stowStinger", label = "stinger up", help = "Raise the stinger.")
-    public void up() { down = false; }
+    public void up() {
+        down = false;
+    }
 
-    public void set(boolean down) { this.down = down; }
+    public void set(boolean down) {
+        this.down = down;
+    }
 
-    /** Once per loop (the servo moves here, not when up()/down() is called). */
+    /** The servo moves here, not when up()/down() is called. */
+    @Override
     public void update() {
         servo.setPosition(down ? STINGER_DOWN : STINGER_UP);
     }
 
+    @Override
     public void telemetry(Telemetry telemetry) {
         telemetry.addData("Stinger", servo.getPosition());
     }

@@ -27,7 +27,8 @@ final class Snapshots {
 
     static final String FOLDER = "snapshots";
 
-    static JSONObject create(String name, List<String> files) throws IOException, JSONException {
+    /** {@code hardwareMap}: the map the robot uses now ("" if none), remembered with the files. */
+    static JSONObject create(String name, List<String> files, String hardwareMap) throws IOException, JSONException {
         String clean = name.trim().replaceAll("[^A-Za-z0-9 _-]+", "").trim();
         if (clean.isEmpty()) throw new IllegalArgumentException("Give the snapshot a name");
         long now = System.currentTimeMillis();
@@ -46,6 +47,9 @@ final class Snapshots {
         manifest.put("name", clean);
         manifest.put("time", now);
         manifest.put("files", saved);
+        if (hardwareMap != null && !hardwareMap.isEmpty()) {
+            manifest.put("hardwareMap", hardwareMap);
+        }
         write(new File(folder, "manifest.json"), manifest.toString(2).getBytes(StandardCharsets.UTF_8));
         return manifest;
     }

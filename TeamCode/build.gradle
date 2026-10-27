@@ -41,7 +41,20 @@ def copyDashboard = tasks.register('copyTotalChaosDashboard', Sync) {
 }
 android.sourceSets.main.java.srcDirs += 'src/dashboard/java'
 android.sourceSets.main.assets.srcDirs += dashboardAssets
-tasks.named('preBuild') { dependsOn copyDashboard }
+
+// The Gamepad drawer's controls, from the label comments in each teleop (../gamepad-controls.gradle).
+apply from: '../gamepad-controls.gradle'
+def controlsAssets = "${buildDir}/generated/biobuzz-controls"
+def listControls = tasks.register('generateGamepadControls') {
+    def sources = file('src/main/java')
+    inputs.dir(sources)
+    outputs.dir(controlsAssets)
+    doLast {
+        writeGamepadControls(sources, file("${controlsAssets}/biobuzz/controls.json"))
+    }
+}
+android.sourceSets.main.assets.srcDirs += controlsAssets
+tasks.named('preBuild') { dependsOn copyDashboard, listControls }
 
 // Settings: every TeamCode class marked @Configurable, listed at build time (no scanning on
 // the robot). RobotSettings reads the generated ConfigurableClasses.ALL; the simulator's build

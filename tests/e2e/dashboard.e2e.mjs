@@ -143,8 +143,11 @@ try {
   await b.waitFor(`!document.querySelector('#pad-body').hidden && document.querySelector('#pad-svg')`);
   check(true, 'G opens the drawer with the controller picture');
   await b.waitFor(`document.querySelector('#pad-status').textContent.includes('as the robot sees it')`);
-  check(await b.eval(`document.querySelector('#pad-legend').textContent.includes('reset forward')`),
-    'it labels what gamepad 1 does in the teleop');
+  await b.waitFor(`document.querySelector('#pad-legend').textContent.includes('reset forward')`);
+  const controlsList = await (await fetch(`${URL}/controls.json`)).json();
+  check(JSON.stringify(controlsList['Field Centric (Java)']['2'][0]) === JSON.stringify(['X', 'intake on / off'])
+    && await b.eval(`document.querySelector('#pad-legend').textContent.includes('A + RB hold: force shoot')`),
+    'it labels what gamepad 1 does in the teleop, from the label comments in its code (controls.json, made at build time)');
   await b.waitFor(`[...document.querySelectorAll('#telemetry tr')].some((r) => r.textContent === 'DriverDemo (nobody driving)')`, 3000);
   check(true, 'nobody is driving yet: the simulator\'s demo driver is (text the OpMode did not change since the restart still shows)');
   await b.eval(`document.querySelector('#pad-take').click()`);
@@ -506,12 +509,22 @@ try {
   await b.eval(`(() => { document.querySelector('#snapshot-name').value = 'Before the kids'; document.querySelector('#snapshot-save').click(); })()`);
   await b.waitFor(`document.querySelector('#snapshots').innerText.includes('Before the kids')`);
   check(true, 'Save snapshot makes a known good copy');
+  const mapAtSnapshot = (await api('/api/state')).data.hardwareMap;
+  const snapshotMap = (await api('/api/snapshots')).data[0].hardwareMap;
+  check(!!mapAtSnapshot && snapshotMap === mapAtSnapshot
+    && await b.eval(`document.querySelector('#snapshots').innerText.includes('map ${mapAtSnapshot.replace(/\.xml$/, '')}')`),
+    `the snapshot remembers the hardware map in use (${mapAtSnapshot}) and the list shows it`);
+  const otherMap = mapAtSnapshot === 'CamBot.xml' ? '24621-Biobuzz.xml' : 'CamBot.xml';
   const goodRoute = (await api('/api/file?path=autos/saturday.json')).data;
   await api('/api/file?path=autos/saturday.json', { method: 'PUT', body: JSON.stringify({ ...goodRoute, steps: goodRoute.steps.slice(0, 1) }) });
   await api('/api/settings', { method: 'POST', body: { group: 'Intake', name: 'INTAKE_RPM', value: 1 } });
   await api('/api/settings/save', { method: 'POST' });
+  await api('/api/hardware/active', { method: 'POST', body: { path: otherMap } });
   await b.eval(`(() => { window.confirm = () => true; document.querySelector('#snapshots [data-snapshot]').click(); })()`);
   await b.waitFor(`document.querySelector('#toast').textContent.startsWith('Restored')`);
+  check(await b.eval(`document.querySelector('#toast').textContent.includes('pick ${mapAtSnapshot.replace(/\.xml$/, '')} on the Driver Station')`),
+    'restoring while the robot uses another hardware map says which one to pick on the Driver Station');
+  await api('/api/hardware/active', { method: 'POST', body: { path: mapAtSnapshot } });
   const back = (await api('/api/file?path=autos/saturday.json')).data;
   const intake = (await api('/api/settings')).data.items.find((i) => i.name === 'INTAKE_RPM').value;
   check(back.steps.length === goodRoute.steps.length && intake === 700, 'Restore puts the auton and the settings back');
@@ -596,7 +609,7 @@ try {
   while (Date.now() < deadline && !(seen.last && seen.last.n['Route done'] === 1)) await sleep(250);
   ws.close();
   check(seen.last && seen.last.n['Route done'] === 1, 'the autonomous finishes the whole route');
-  check(seen.steps.has('follow path1') && seen.steps.has('feed on') && seen.steps.has('stinger up'),
+  check(seen.steps.has('follow path1') && seen.steps.has('triggers on') && seen.steps.has('stinger up'),
     `it ran the steps from the file: ${[...seen.steps].join(' → ')}`);
   check(seen.stinger.has(saved.Stinger.STINGER_DOWN), 'the stinger went down part way along path2');
   const top40 = 68.47 * 0.4;   // ForesightConstants maxAchievableForwardVelocity
@@ -631,7 +644,7 @@ try {
     const t = decoder2.handle(JSON.parse(event.data));
     if (t) for (const f of t.frames) {
       if (f.s && f.s.Step) traceStep = f.s.Step;
-      if (f.n.X !== undefined) trace.push({ t: f.t, x: f.n.X, y: f.n.Y, stinger: f.n.Stinger, feed: f.n.Feeding, step: traceStep, done: f.n['Route done'] });
+      if (f.n.X !== undefined) trace.push({ t: f.t, x: f.n.X, y: f.n.Y, stinger: f.n.Stinger, feed: f.n.Triggers, step: traceStep, done: f.n['Route done'] });
     }
   };
   const deadline2 = Date.now() + 15000;

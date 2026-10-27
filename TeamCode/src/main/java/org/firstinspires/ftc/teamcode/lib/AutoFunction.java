@@ -24,8 +24,8 @@ import java.lang.annotation.Target;
  * it can also fire part way along a path.
  *
  * A method returning boolean is a condition instead (such as "flywheelsReady"): never in the
- * editor, but StandardActions can wait for it. {@code listed = false} hides an action from the
- * editor too (for pieces of StandardActions' own steps, such as "feedOn").
+ * editor, but AutoStepFunctions can wait for it. {@code listed = false} hides an action from the
+ * editor too (for pieces of AutoStepFunctions' own steps, such as "triggersOn").
  *
  * The name is permanent once an auton file uses it: the robot refuses a route naming a
  * function it does not have.
@@ -42,7 +42,7 @@ public @interface AutoFunction {
     /** One sentence for the editor. */
     String help() default "";
 
-    /** False: route files and StandardActions can use it, but the editor does not offer it. */
+    /** False: route files and AutoStepFunctions can use it, but the editor does not offer it. */
     boolean listed() default true;
 
     /** A number setting of a function, shown as a box in the editor. */

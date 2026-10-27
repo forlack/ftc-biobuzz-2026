@@ -91,8 +91,9 @@ the autonomous both use that same `Robot`. An arm:
 package org.firstinspires.ftc.teamcode.mechanisms;
 
 @Configurable                                   // UP / DOWN on the Tune tab, saved in robot.json
-public class Arm {
-    public static double UP = 0.8, DOWN = 0.2;
+public class Arm implements Mechanism {
+    public static double UP = 0.8;
+    public static double DOWN = 0.2;
 
     private final Servo servo;
     private boolean up;
@@ -102,23 +103,37 @@ public class Arm {
     }
 
     @AutoFunction(name = "armUp", label = "arm up", help = "Raise the arm.")
-    public void up() { up = true; }
+    public void up() {
+        up = true;
+    }
 
     @AutoFunction(name = "armDown", label = "arm down", help = "Lower the arm.")
-    public void down() { up = false; }
+    public void down() {
+        up = false;
+    }
 
-    public void update() { servo.setPosition(up ? UP : DOWN); }       // once per loop
+    /** Once per loop (Robot calls it): the servo moves here. */
+    @Override
+    public void update() {
+        servo.setPosition(up ? UP : DOWN);
+    }
 
-    public void telemetry(Telemetry telemetry) { telemetry.addData("Arm", up ? "UP" : "DOWN"); }
+    @Override
+    public void telemetry(Telemetry telemetry) {
+        telemetry.addData("Arm", up ? "UP" : "DOWN");
+    }
 }
 ```
 
 Then:
 
-1. `mechanisms/Robot.java`: `public final Arm arm;`, `arm = new Arm(hardwareMap);` in the
-   constructor, and `arm.update()` / `arm.telemetry(telemetry)` in `update()` / `telemetry()`.
-2. Teleop (`FieldCentricJava`): a button, `if (armButton.pressed()) robot.arm.up();`, and
-   `robot.arm.update()` in the loop.
+1. `mechanisms/Robot.java`: the field `public final Arm arm;` and, in the constructor,
+   `arm = add(new Arm(hardwareMap));`. That is all: `robot.update()` and `robot.telemetry()`
+   now include the arm.
+2. Teleop (`FieldCentricJava`): a button with its label comment,
+   `private final Button armButton = buttons.add(() -> operate.dpad_up);   // arm up`
+   (the Gamepad drawer shows the label), and in `updateMechanisms()`
+   `if (armButton.pressed()) robot.arm.up();` (it already ends with `robot.update()`).
 3. `REQUIRED` in `dashboard/web/js/hardware.js`: add `arm`, so the Robot tab warns when the
    configuration lacks it.
 
@@ -135,12 +150,54 @@ Rules for `@AutoFunction` (details in `lib/AutoFunction.java`):
 - Settings are `double` parameters marked `@AutoFunction.Param(name, label, unit, value, min, max)`;
   the editor shows a box for each.
 - A `boolean` method is a condition (like `flywheelsReady`): not offered in the editor, but
-  steps can wait for it. `listed = false` hides an action the same way (`feedOn`).
+  steps can wait for it. `listed = false` hides an action the same way (`triggersOn`).
 - The name is permanent once an auton uses it: the robot refuses an auton naming a function it
   does not have.
 
-Functions that take time and combine others (`shoot`: spin up, wait until ready, feed for N
-seconds) are written in `lib/StandardActions.java` with the function names.
+### A timed function (a small sub-sequence)
+
+A mechanism's functions are instant: they only say what should happen next. A function that
+takes time, or uses several mechanisms, is a short list of steps in
+`lib/AutoStepFunctions.java`; when the auton reaches it, those steps run in its place, one per
+loop. `shoot` is one:
+
+```java
+.step("shoot", "shoot",
+        "Spin up if needed, wait until ready (2 s limit), then run the triggers for a while.",
+        (sequence, p) -> {
+            sequence.run("flywheels on", flywheelsOn);
+            sequence.waitUntil("wait for flywheels", flywheelsReady, 2);   // 2 s limit
+            sequence.run("triggers on", triggersOn);
+            sequence.waitSeconds(p.getDouble("seconds"));
+            sequence.run("triggers off", triggersOff);
+        },
+        new Actions.Param("seconds", "Feed time", "s", 3.5, 0.1, 15))
+```
+
+A new one, "intake for N seconds": look the functions up by name at the top of `create()`,
+
+```java
+final Runnable intakeOn = robot.action("intakeOn");
+final Runnable intakeOff = robot.action("intakeOff");
+```
+
+then add a `.step(...)` next to `shoot`:
+
+```java
+.step("intakeFor", "intake for", "Run the intake for a while, then stop.",
+        (sequence, p) -> {
+            sequence.run("intake on", intakeOn);
+            sequence.waitSeconds(p.getDouble("seconds"));
+            sequence.run("intake off", intakeOff);
+        },
+        new Actions.Param("seconds", "Seconds", "s", 1, 0, 10))
+```
+
+It appears in the Auton tab's function list with its setting. The steps you can use:
+`run(name, action)`, `waitSeconds(s)`, `waitUntil(name, condition)` and
+`waitUntil(name, condition, limitSeconds)` (gives up after the limit, so a sensor that never
+says yes cannot stop the auton), and `turnTo(radians)`. Never wait any other way (no
+`sleep()`): the loop must keep going round.
 
 Settings saved before a class existed: when settings move from one class to another with the
 same names, `@RobotSettings.MovedFrom("OldClass")` keeps older robot.json files working (that is

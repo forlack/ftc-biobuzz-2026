@@ -424,7 +424,7 @@ public class DashboardServer {
                 case "GET /api/history/file": return historyFile(checkPath(request.param("path")), request.param("id"));
                 case "POST /api/history/restore": return restoreVersion(request.json());
                 case "GET /api/snapshots": return Response.json(200, Snapshots.list());
-                case "POST /api/snapshots": return Response.json(200, Snapshots.create(request.json().getString("name"), managedNames()));
+                case "POST /api/snapshots": return Response.json(200, Snapshots.create(request.json().getString("name"), managedNames(), host.activeHardwareMap()));
                 case "POST /api/snapshots/restore": return restoreSnapshot(request.json().getString("id"));
                 case "POST /api/lock": return lockAction(request.json());
                 case "POST /api/hardware/active": return useHardwareMap(request.json());
@@ -682,6 +682,9 @@ public class DashboardServer {
         json.put("ok", true);
         json.put("name", manifest.optString("name"));
         json.put("restored", restored);
+        // Restoring cannot switch the hardware map (that is the Driver Station's job): say so.
+        json.put("hardwareMap", manifest.optString("hardwareMap", ""));
+        json.put("activeHardwareMap", host.activeHardwareMap());
         return Response.json(200, json);
     }
 

@@ -1,11 +1,11 @@
 package org.firstinspires.ftc.teamcode.mechanisms;
 
-import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -17,60 +17,52 @@ import java.util.Locale;
  *   robot.flywheels.on();                  // say what you want, any time
  *   robot.update();                        // once per loop: the mechanisms do it
  *
- * Adding a mechanism: write its class (hardware names in its constructor, @Configurable
- * settings, @AutoFunction methods, update(), telemetry()), then add it here: a
- * {@code public final} field, made in the constructor, and its update()/telemetry() calls.
- * Its auton functions then appear in the dashboard's Auton Sequence by themselves.
+ * Adding a mechanism: write its class ({@code implements Mechanism}: hardware names in its
+ * constructor, @Configurable settings, @AutoFunction methods, update(), telemetry()), then
+ * add it here: a {@code public final} field and one {@code add(...)} line in the constructor.
+ * update() and telemetry() then run by themselves, and its auton functions appear in the
+ * dashboard's Auton tab.
  *
  * The drive is not here: teleop drives with MecanumDrive, the autonomous with Pedro.
  */
 public class Robot {
     public final Intake intake;
     public final Flywheels flywheels;
-    public final Feeder feeder;
+    public final Triggers triggers;
     public final Stinger stinger;
 
+    private final List<Mechanism> mechanisms = new ArrayList<>();
     private final HardwareMap hardwareMap;
-    private final List<LynxModule> hubs;
     private double batteryVolts = 12.5;
     private long nextBatteryRead;
 
     /** Finds every mechanism's hardware. Moves nothing. */
     public Robot(HardwareMap hardwareMap) {
         this.hardwareMap = hardwareMap;
-        hubs = hardwareMap.getAll(LynxModule.class);
-        intake = new Intake(hardwareMap);
-        flywheels = new Flywheels(hardwareMap);
-        feeder = new Feeder(hardwareMap);
-        stinger = new Stinger(hardwareMap);
+        intake = add(new Intake(hardwareMap));
+        flywheels = add(new Flywheels(hardwareMap, this::batteryVolts));
+        triggers = add(new Triggers(hardwareMap));
+        stinger = add(new Stinger(hardwareMap));
     }
 
-    /**
-     * Bulk reads: the first motor read in a loop fetches every encoder value of that hub in one
-     * call. Then {@link #clearBulkCache} must start every loop.
-     */
-    public void useManualBulkReads() {
-        for (LynxModule hub : hubs) hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL);
+    private <M extends Mechanism> M add(M mechanism) {
+        mechanisms.add(mechanism);
+        return mechanism;
     }
 
-    public void clearBulkCache() {
-        for (LynxModule hub : hubs) hub.clearBulkCache();
-    }
-
-    /** Every mechanism's update(), once per loop. */
+    /** Once per loop: reads the battery, then every mechanism moves to what was asked. */
     public void update() {
         readBattery();
-        intake.update();
-        flywheels.update(batteryVolts);
-        feeder.update();
-        stinger.update();
+        for (Mechanism mechanism : mechanisms) {
+            mechanism.update();
+        }
     }
 
     /**
      * Reads the battery, at most 4 times a second (a voltage read is a call to the hub that
      * takes a few ms). The flywheels' F and "Battery V" use it.
      */
-    public void readBattery() {
+    private void readBattery() {
         long now = System.nanoTime();
         if (now >= nextBatteryRead) {
             batteryVolts = batteryVoltage(hardwareMap, batteryVolts);
@@ -78,15 +70,15 @@ public class Robot {
         }
     }
 
-    public double batteryVolts() { return batteryVolts; }
+    public double batteryVolts() {
+        return batteryVolts;
+    }
 
     /** Every mechanism's Driver Station lines and chart values. */
     public void telemetry(Telemetry telemetry) {
-        intake.telemetry(telemetry);
-        telemetry.addLine("");
-        flywheels.telemetry(telemetry);
-        feeder.telemetry(telemetry);
-        stinger.telemetry(telemetry);
+        for (Mechanism mechanism : mechanisms) {
+            mechanism.telemetry(telemetry);
+        }
         telemetry.addData("Battery V", "%.2f", batteryVolts);
     }
 
@@ -95,7 +87,9 @@ public class Robot {
         double volts = Double.POSITIVE_INFINITY;
         for (VoltageSensor sensor : map.voltageSensor) {
             double reading = sensor.getVoltage();
-            if (Double.isFinite(reading) && reading > 0) volts = Math.min(volts, reading);
+            if (Double.isFinite(reading) && reading > 0) {
+                volts = Math.min(volts, reading);
+            }
         }
         return Double.isFinite(volts) ? volts : previous;
     }

@@ -24,7 +24,7 @@ import org.firstinspires.ftc.teamcode.dashboard.RobotHost;
 import org.firstinspires.ftc.teamcode.lib.Actions;
 import org.firstinspires.ftc.teamcode.lib.AutoFunctions;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
-import org.firstinspires.ftc.teamcode.lib.StandardActions;
+import org.firstinspires.ftc.teamcode.lib.AutoStepFunctions;
 import org.firstinspires.ftc.teamcode.mechanisms.Robot;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -51,7 +51,7 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
     private final RobotSettings settings = new RobotSettings();
     // Only the list (names, labels, settings) of mechanisms/Robot's auton functions; routes run
     // inside PedroAutonomous. Nothing here touches hardware.
-    private final Actions actions = StandardActions.create(AutoFunctions.describe(Robot.class));
+    private final Actions actions = AutoStepFunctions.create(AutoFunctions.describe(Robot.class));
     private volatile String state = "stopped";
     private DashboardServer server;
 

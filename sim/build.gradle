@@ -29,7 +29,7 @@ sourceSets {
             include 'org/firstinspires/ftc/teamcode/lib/RobotHistory.java'
             include 'org/firstinspires/ftc/teamcode/lib/RobotSettings.java'
             include 'org/firstinspires/ftc/teamcode/lib/Actions.java'
-            include 'org/firstinspires/ftc/teamcode/lib/StandardActions.java'
+            include 'org/firstinspires/ftc/teamcode/lib/AutoStepFunctions.java'
             include 'org/firstinspires/ftc/teamcode/lib/AutoFunction.java'
             include 'org/firstinspires/ftc/teamcode/lib/AutoFunctions.java'
             include 'org/firstinspires/ftc/teamcode/lib/AutoSequence.java'
@@ -151,3 +151,17 @@ public final class ConfigurableClasses {
 }
 sourceSets.main.java.srcDir(mirrorDir)
 tasks.named('compileJava') { dependsOn 'generateMirrors' }
+
+// The Gamepad drawer's controls, from the label comments in each teleop
+// (../gamepad-controls.gradle); SimHost serves the packed copy as /controls.json.
+apply from: '../gamepad-controls.gradle'
+def controlsDir = layout.buildDirectory.dir('generated/controls')
+tasks.register('generateGamepadControls') {
+    inputs.dir(teamCode)
+    outputs.dir(controlsDir)
+    doLast {
+        writeGamepadControls(teamCode, controlsDir.get().file('web/controls.json').asFile)
+    }
+}
+sourceSets.main.resources.srcDir(controlsDir)
+tasks.named('processResources') { dependsOn 'generateGamepadControls' }

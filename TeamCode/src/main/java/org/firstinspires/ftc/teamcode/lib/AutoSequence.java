@@ -104,7 +104,16 @@ public class AutoSequence {
 
     /** Same, with a name for telemetry. */
     public AutoSequence waitUntil(String name, BooleanSupplier done) {
-        steps.add(new UntilStep(name, done));
+        steps.add(new UntilStep(name, done, Double.POSITIVE_INFINITY));
+        return this;
+    }
+
+    /**
+     * Same, but gives up after {@code limitSeconds} and goes on anyway, so a sensor that never
+     * says yes cannot stop the autonomous.
+     */
+    public AutoSequence waitUntil(String name, BooleanSupplier done, double limitSeconds) {
+        steps.add(new UntilStep(name, done, limitSeconds));
         return this;
     }
 
@@ -384,16 +393,21 @@ public class AutoSequence {
     private static class UntilStep implements Step {
         private final String name;
         private final BooleanSupplier done;
+        private final double limitSeconds;
+        private long startNanos;
 
-        UntilStep(String name, BooleanSupplier done) {
+        UntilStep(String name, BooleanSupplier done, double limitSeconds) {
             this.name = name;
             this.done = done;
+            this.limitSeconds = limitSeconds;
         }
 
-        public void start() { }
+        public void start() {
+            startNanos = System.nanoTime();
+        }
 
         public boolean isDone() {
-            return done.getAsBoolean();
+            return done.getAsBoolean() || (System.nanoTime() - startNanos) / 1e9 >= limitSeconds;
         }
 
         public String name() {

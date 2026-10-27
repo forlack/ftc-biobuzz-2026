@@ -1,0 +1,84 @@
+{
+  "version": 3,
+  "name": "TEst",
+  "start": {
+    "x": 57,
+    "y": 9,
+    "heading": 270
+  },
+  "steps": [
+    {
+      "drive": {
+        "name": "path1",
+        "segments": [
+          {
+            "to": [
+              57,
+              22
+            ]
+          }
+        ],
+        "heading": {
+          "type": "keep"
+        }
+      }
+    },
+    {
+      "drive": {
+        "name": "path2",
+        "segments": [
+          {
+            "to": [
+              57,
+              38
+            ]
+          }
+        ],
+        "heading": {
+          "type": "face",
+          "x": 34.5,
+          "y": 27,
+          "away": true
+        },
+        "speedPercent": 4,
+        "events": [
+          {
+            "at": 0.22,
+            "action": "intakeOff",
+            "params": {}
+          }
+        ]
+      }
+    },
+    {
+      "action": "wait",
+      "params": {
+        "seconds": 3
+      }
+    },
+    {
+      "drive": {
+        "name": "path3",
+        "segments": [
+          {
+            "to": [
+              57,
+              9.5
+            ],
+            "via": [
+              [
+                93.5,
+                26.5
+              ]
+            ]
+          }
+        ],
+        "heading": {
+          "type": "turn",
+          "degrees": 270,
+          "by": 0.5
+        }
+      }
+    }
+  ]
+}

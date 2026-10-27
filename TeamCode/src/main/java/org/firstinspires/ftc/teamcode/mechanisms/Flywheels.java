@@ -12,13 +12,15 @@ import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 
+import java.util.function.DoubleSupplier;
+
 /**
  * Both flywheels (Pollen and Nectar) and the transports that feed them: the transports run
  * whenever the flywheels do. F follows the battery (see FlywheelCompensation).
  */
 @Configurable
 @RobotSettings.MovedFrom("FieldCentricJava")
-public class Flywheels {
+public class Flywheels implements Mechanism {
     /** Teleop's on/off switch (operator A flips it too). They start on. A switch, not saved. */
     @RobotSettings.NotSaved
     public static boolean FLYWHEELS_ON = true;
@@ -41,10 +43,13 @@ public class Flywheels {
 
     private final VelocityMotor pollen, nectar;
     private final CRServo transportPollen, transportNectar;
+    private final DoubleSupplier batteryVolts;
     private boolean on;
     private double appliedF = FLYWHEEL_F;
 
-    public Flywheels(HardwareMap hardwareMap) {
+    /** {@code batteryVolts}: the battery now (Robot reads it), for the voltage-compensated F. */
+    public Flywheels(HardwareMap hardwareMap, DoubleSupplier batteryVolts) {
+        this.batteryVolts = batteryVolts;
         pollen = new VelocityMotor(hardwareMap, "shooterPollen", DcMotorSimple.Direction.REVERSE);
         pollen.setPIDF(POLLEN_FLYWHEEL_P, POLLEN_FLYWHEEL_I, POLLEN_FLYWHEEL_D, FLYWHEEL_F);
         nectar = new VelocityMotor(hardwareMap, "shooterNectar", DcMotorSimple.Direction.FORWARD);
@@ -55,14 +60,22 @@ public class Flywheels {
     }
 
     @AutoFunction(name = "flywheelsOn", label = "flywheels on", help = "Spin both flywheels up to their target RPMs.")
-    public void on() { on = true; }
+    public void on() {
+        on = true;
+    }
 
     @AutoFunction(name = "flywheelsOff", label = "flywheels off", help = "Stop both flywheels.")
-    public void off() { on = false; }
+    public void off() {
+        on = false;
+    }
 
-    public void set(boolean on) { this.on = on; }
+    public void set(boolean on) {
+        this.on = on;
+    }
 
-    public boolean isOn() { return on; }
+    public boolean isOn() {
+        return on;
+    }
 
     /** Both wheels within VelocityMotor.RPM_TOLERANCE of their targets (reads both speeds). */
     @AutoFunction(name = "flywheelsReady")
@@ -75,9 +88,13 @@ public class Flywheels {
         return FlywheelCompensation.f(volts, FLYWHEEL_VOLTAGE_COMPENSATION, FLYWHEEL_F, FLYWHEEL_F_AT_10V);
     }
 
-    /** Once per loop: PIDF from the Tune tab with F for {@code batteryVolts}, targets, transports. */
-    public void update(double batteryVolts) {
-        appliedF = compensatedF(batteryVolts);
+    /**
+     * Once per loop: PIDF from the Tune tab with F for the battery now, the targets, and the
+     * transport servos (on whenever the flywheels are).
+     */
+    @Override
+    public void update() {
+        appliedF = compensatedF(batteryVolts.getAsDouble());
         if (POLLEN_FLYWHEEL_P != pollen.getP() || POLLEN_FLYWHEEL_I != pollen.getI()
                 || POLLEN_FLYWHEEL_D != pollen.getD() || appliedF != pollen.getF()) {
             pollen.setPIDF(POLLEN_FLYWHEEL_P, POLLEN_FLYWHEEL_I, POLLEN_FLYWHEEL_D, appliedF);
@@ -93,6 +110,7 @@ public class Flywheels {
     }
 
     /** Driver Station lines and chart values. Reads each wheel's speed once. */
+    @Override
     public void telemetry(Telemetry telemetry) {
         double pollenRpm = pollen.getRPM();
         double nectarRpm = nectar.getRPM();
