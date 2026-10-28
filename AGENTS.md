@@ -20,8 +20,8 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
 - Open: ~60 ms loop spikes every ~0.5 s (not the dashboard, no frequent GC in logcat; next
   suspect the SDK's own periodic hub traffic); browser does not reconnect by itself after a
   Wi-Fi drop (a refresh is needed; fix proposed: reconnect when no message for ~3 s); "Use
-  this map" on the robot still gives Driver Station steps (switching from the app is unbuilt);
-  ROBOT-TEST checks 2, 9 (./dashboard-load, optional), 11 not yet run.
+  this map" on the robot still gives Driver Station steps (switching from the app is unbuilt).
+  ROBOT-TEST checks all done (user, 2026-10-27). Planned work: ROADMAP.md "Next project ideas".
 - The Pedro visualizer tab and its build are removed (2026-10-25); the Auton tab is the editor.
 
 **Handoff / state (2026-10-23, history):**
@@ -269,6 +269,19 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   fixture's (13.2, 96.07).
   DELETE /api/snapshots?id= + Delete button (locked: refused, greyed). e2e park pose now read
   from autos/saturday.json (the pulled one ends at 16, 96). e2e 148.
+- **Flywheel voltage compensation simplified (2026-10-27, user's request):** F = FLYWHEEL_F x
+  12.5 / volts (volts limited 9..14, rounded 0.01); FLYWHEEL_F_AT_10V removed (code, repo
+  robot.json; the robot's copy warns "unknown" until the next Save/push). Gives 13.75 at 10 V
+  vs. the old calibrated 12: watch for overshoot on a low battery. The robot's robot.json had
+  compensation OFF and flywheel P 75 / I 0.5 (code defaults P 100/125, I 0).
+  Then (same day): driving dips the battery to ~10 V and the scaled F spiked the flywheels ~4%
+  (user, robot). F now uses the battery averaged over FLYWHEEL_VOLTS_AVERAGE_SECONDS (default
+  1, Tune tab; FlywheelCompensation.Average, exponential, every loop; 0 = raw). Chart
+  `Flywheel averaged V`. Robot, tuner and sim all use it. Unverified on the robot yet.
+- **Next project ideas (2026-10-27):** ROADMAP.md "Next project ideas" is the one list of
+  planned work: A dashboard-built timed functions, B teleop trigger gating on flywheel speed,
+  C Auton tab extras (alliance mirror, snapping, reorder, run in sim), D auto reconnect,
+  E hardware map switching from the dashboard.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
   and a Pedro add-on); robot pose on the field in teleop once Pinpoint coordinates are trusted;
   a per-viewer Detail selector; min/max thinning; listing USB cameras from the robot.

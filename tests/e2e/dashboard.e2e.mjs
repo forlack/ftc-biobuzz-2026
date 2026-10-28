@@ -125,8 +125,10 @@ try {
   check(runningState.active && runningState.battery > 10,
     `while an OpMode runs the battery comes from its Battery V, not from reading the hubs (${runningState.battery} V)`);
   const liveText = await b.eval(`document.getElementById('tab-live').innerText`);
-  check(/Flywheel compensated F\s+11\b/.test(liveText),
-    'the flywheel F follows the battery: 11 with the simulator\'s full battery');
+  const shownF = Number((liveText.match(/Flywheel compensated F\s+([\d.]+)/) || [])[1]);
+  const shownVolts = Number((liveText.match(/Battery V\s+([\d.]+)/) || [])[1]);
+  check(Math.abs(shownF - 11 * 12.5 / shownVolts) < 0.15,   // the table rounds the volts to 0.1
+    `the flywheel F follows the battery: 11 x 12.5 / ${shownVolts} V = ${shownF}`);
 
   // Stopping the OpMode clears its telemetry from the table (charts keep their history).
   await b.eval(`document.querySelector('#op-stop').click()`);

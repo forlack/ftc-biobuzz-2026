@@ -117,11 +117,14 @@ public final class SimOpModes {
             return intakeOn ? Intake.INTAKE_RPM : 0;
         }
 
+        private final FlywheelCompensation.Average averageVolts = new FlywheelCompensation.Average();
+
         /** Call every loop: applies targets and PIDF from the current settings. */
         void apply() {
-            // Same voltage-compensated F as the robot.
-            flywheelF = FlywheelCompensation.f(world.battery(), Flywheels.FLYWHEEL_VOLTAGE_COMPENSATION,
-                    Flywheels.FLYWHEEL_F, Flywheels.FLYWHEEL_F_AT_10V);
+            // Same voltage-compensated F as the robot, from the averaged battery.
+            double volts = averageVolts.update(world.battery(), Flywheels.FLYWHEEL_VOLTS_AVERAGE_SECONDS);
+            flywheelF = FlywheelCompensation.f(volts, Flywheels.FLYWHEEL_VOLTAGE_COMPENSATION,
+                    Flywheels.FLYWHEEL_F);
             world.pollen.setPIDF(Flywheels.POLLEN_FLYWHEEL_P, Flywheels.POLLEN_FLYWHEEL_I, Flywheels.POLLEN_FLYWHEEL_D, flywheelF);
             world.nectar.setPIDF(Flywheels.NECTAR_FLYWHEEL_P, Flywheels.NECTAR_FLYWHEEL_I, Flywheels.NECTAR_FLYWHEEL_D, flywheelF);
             world.intake.setPIDF(Intake.INTAKE_P, Intake.INTAKE_I, 0, Intake.INTAKE_F);

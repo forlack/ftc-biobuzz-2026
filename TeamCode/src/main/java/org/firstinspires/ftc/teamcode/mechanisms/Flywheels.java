@@ -24,10 +24,14 @@ public class Flywheels implements Mechanism {
     /** Teleop's on/off switch (operator A flips it too). They start on. A switch, not saved. */
     @RobotSettings.NotSaved
     public static boolean FLYWHEELS_ON = true;
-    /** F follows the battery voltage (see FlywheelCompensation). Off: FLYWHEEL_F at any voltage. */
+    /**
+     * F follows the battery: FLYWHEEL_F x 12.5 / battery volts (see FlywheelCompensation).
+     * Off: FLYWHEEL_F at any voltage.
+     */
     public static boolean FLYWHEEL_VOLTAGE_COMPENSATION = true;
     public static double FLYWHEEL_F = 11; // F at 12.5 V (and always, with compensation off)
-    public static double FLYWHEEL_F_AT_10V = 12;
+    /** Compensate from the battery averaged over this long, so a dip from driving is ignored. */
+    public static double FLYWHEEL_VOLTS_AVERAGE_SECONDS = 1;
 
     // Pollen flywheel.
     public static double POLLEN_FLYWHEEL_RPM = 3400;
@@ -44,6 +48,7 @@ public class Flywheels implements Mechanism {
     private final VelocityMotor pollen, nectar;
     private final CRServo transportPollen, transportNectar;
     private final DoubleSupplier batteryVolts;
+    private final FlywheelCompensation.Average averageVolts = new FlywheelCompensation.Average();
     private boolean on;
     private double appliedF = FLYWHEEL_F;
 
@@ -85,16 +90,17 @@ public class Flywheels implements Mechanism {
 
     /** Flywheel F for this battery voltage, from the settings above. */
     public static double compensatedF(double volts) {
-        return FlywheelCompensation.f(volts, FLYWHEEL_VOLTAGE_COMPENSATION, FLYWHEEL_F, FLYWHEEL_F_AT_10V);
+        return FlywheelCompensation.f(volts, FLYWHEEL_VOLTAGE_COMPENSATION, FLYWHEEL_F);
     }
 
     /**
-     * Once per loop: PIDF from the Tune tab with F for the battery now, the targets, and the
-     * transport servos (on whenever the flywheels are).
+     * Once per loop: PIDF from the Tune tab with F for the averaged battery, the targets, and
+     * the transport servos (on whenever the flywheels are).
      */
     @Override
     public void update() {
-        appliedF = compensatedF(batteryVolts.getAsDouble());
+        double volts = averageVolts.update(batteryVolts.getAsDouble(), FLYWHEEL_VOLTS_AVERAGE_SECONDS);
+        appliedF = compensatedF(volts);
         if (POLLEN_FLYWHEEL_P != pollen.getP() || POLLEN_FLYWHEEL_I != pollen.getI()
                 || POLLEN_FLYWHEEL_D != pollen.getD() || appliedF != pollen.getF()) {
             pollen.setPIDF(POLLEN_FLYWHEEL_P, POLLEN_FLYWHEEL_I, POLLEN_FLYWHEEL_D, appliedF);
@@ -122,6 +128,7 @@ public class Flywheels implements Mechanism {
         telemetry.addData("Pollen", Robot.rpmLine(pollenRpm, pollen.getTargetRPM()));
         telemetry.addData("Nectar", Robot.rpmLine(nectarRpm, nectar.getTargetRPM()));
         telemetry.addData("Flywheel compensated F", "%.2f", appliedF);
+        Dash.put("Flywheel averaged V", averageVolts.volts());
         telemetry.addLine("Pollen hub PIDF " + pollen.getAppliedPIDF());
         telemetry.addLine("Nectar hub PIDF " + nectar.getAppliedPIDF());
         Dash.put("Pollen RPM", pollenRpm);

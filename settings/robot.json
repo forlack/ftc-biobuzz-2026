@@ -7,7 +7,6 @@
   },
   "Flywheels": {
     "FLYWHEEL_F": 11,
-    "FLYWHEEL_F_AT_10V": 12,
     "FLYWHEEL_VOLTAGE_COMPENSATION": false,
     "NECTAR_FLYWHEEL_D": 0,
     "NECTAR_FLYWHEEL_I": 0.5,

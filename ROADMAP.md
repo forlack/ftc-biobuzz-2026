@@ -6,8 +6,9 @@ mechanism, a new autonomous action. Data files and a GUI handle the *tuning and 
 
 Agreed 2026-10-22. Step 4 changed to our own dashboard the same day.
 
-**Status 2026-10-25:** steps 2, 3 and 4 are built, tested on the robot, and merged into `main`
-(the dashboard replaced Panels). See [dashboard/README.md](dashboard/README.md) and the robot
+**Status 2026-10-27:** steps 1 to 4 are done, tested on the robot, and on `main` (the
+dashboard replaced Panels; its Auton tab replaced the Pedro visualizer). What is next is under
+"Next project ideas" below. See [dashboard/README.md](dashboard/README.md) and the robot
 test log in [dashboard/ROBOT-TEST.md](dashboard/ROBOT-TEST.md).
 
 ## Principles
@@ -24,47 +25,50 @@ test log in [dashboard/ROBOT-TEST.md](dashboard/ROBOT-TEST.md).
 `lib/RobotSettings` saves every `public static` setting of `FieldCentricJava` and
 `MecanumDrive` to `/sdcard/FIRST/settings/robot.json` and reads it back at INIT. Tune live in
 Panels, turn on `SAVE_TO_ROBOT`, then `./robot-sync pull` and commit.
-See [settings/README.md](settings/README.md).
+See [settings/README.md](settings/README.md). (Since step 4 it covers every `@Configurable`
+class, and saving is the dashboard Tune tab's **Save to robot**.)
 
 Also done: Pedro AutoTune's web server is out of competition builds (`--tuning` adds it).
 
-### 2. Autonomous as data: paths, steps and actions in one JSON
+### 2. Autonomous as data: drives, steps and functions in one JSON: done
 Before this, the paths came from a pasted Pedro export (`paths/auto.java.txt`) and the order
-of steps was Java. Now:
+of steps was Java. Now (file version 3, `lib/AutoRoute`):
 
-- **One route file:** poses, paths, and the steps between and along them:
+- **One auton file** (`autos/NAME.json`): where it starts, then the steps in order, drives and
+  functions alike. Each drive starts where the step before ended, so nothing needs lining up:
   ```json
-  { "version": 2,
-    "start": "start",
+  { "version": 3, "name": "Saturday",
+    "start": { "x": 56, "y": 9, "heading": 270 },
     "steps": [
-      { "follow": "path1", "events": [ { "at": 0.5, "do": "flywheelsOn" } ] },
-      { "do": "shoot", "seconds": 3.5 },
-      { "wait": 0.5 },
-      { "follow": "park" } ] }
+      { "action": "wait", "params": { "seconds": 1 } },
+      { "drive": { "name": "to shoot", "segments": [ { "to": [60, 16] } ],
+                   "heading": { "type": "keep" } } },
+      { "action": "shoot", "params": { "seconds": 3.5 } },
+      { "drive": { "name": "park",
+                   "segments": [ { "via": [[15.7, 29.3]], "to": [13.2, 96.1] } ],
+                   "heading": { "type": "turn", "degrees": 90 },
+                   "speedPercent": 60,
+                   "events": [ { "at": 0.45, "action": "deployStinger" } ] } } ] }
   ```
-- **Actions are Java, named once.** A small registry (`shoot`, `intakeOn`, `stingerDown`,
-  `aimAt`, ...) maps each name to robot code. `lib/AutoSequence` already runs
-  `follow` / `run` / `waitSeconds` / `at(fraction, ...)`, so the JSON just builds a sequence.
-  A new action is a short Java lesson whose payoff shows up in the editor straight away.
-- **Several autos** (left, right, two-cycle) become several files, picked at INIT.
+- **Functions are Java, named once:** `@AutoFunction` methods on the mechanisms (intake on,
+  stinger down, ...) and timed ones in `lib/AutoStepFunctions` (`shoot`, `wait`, ...). The
+  editor lists exactly what the robot has, so a typo cannot happen.
+- **Several autons** (left, right, two-cycle) are several files, picked at INIT.
 
-### 3. Our own Pedro visualizer: draw paths and put robot actions on them
-*Done differently (2026-10-25): the dashboard's Auton tab is our own editor; the Pedro visualizer fork is retired.*
+### 3. A path editor that puts robot functions on the paths: done (as the Auton tab)
+*Done differently (2026-10-25): instead of forking the Pedro Pathing visualizer for good, the
+dashboard's Auton tab is our own editor; the fork is retired.* What it was meant to do, and
+the Auton tab now does:
 
-Fork the Pedro Pathing visualizer and add what `AutoSequence` can do:
-
-- Draw paths as now, then **drop actions onto the field**: on a path at a point along it
-  (`at 0.5: flywheelsOn`), or between paths (`shoot 3.5 s`, `wait 0.5 s`).
-- **The action palette comes from the robot.** The robot code publishes its action list
-  (names, plus what settings each takes, such as seconds), so the editor only offers actions
-  that exist, and a typo cannot happen.
-- **Output the step 2 JSON directly,** not Java text.
-- **Preview:** animate the robot along the route with the waits included, to check timing
+- Draw drives on the field, then **put functions on them**: on a drive at a point along it
+  (stinger down at 45%), or between drives (`shoot 3.5 s`, `wait 0.5 s`).
+- **The function list comes from the robot**, with what settings each takes, so the editor
+  only offers functions that exist.
+- **Saves the step 2 JSON straight to the robot,** not Java text.
+- **Preview:** animates the robot through the auton with the waits included, to check timing
   against the 30 s autonomous before going to the field.
 
-Built into the dashboard's Paths tab; it saves straight to the robot.
-
-### 4. Our own dashboard, served by the robot (replaces Panels over time)
+### 4. Our own dashboard, served by the robot: done (replaced Panels)
 One web page that fits our robot, served from the Robot Controller app, so on robot Wi-Fi
 there is nothing to install and nothing to sync: open it, change things, Save, press INIT.
 
@@ -83,11 +87,154 @@ there is nothing to install and nothing to sync: open it, change things, Save, p
 - **Small HTTP + websocket server** started late through the SDK's own hooks, on its own port
   (not 8001/8002 Panels, 8080 RC, 10158 AutoTune). It catches every error, so it can never
   crash the Robot Controller (the AutoTune lesson).
-- **Run it alongside Panels** until it is better at everything we use, then drop Panels.
+- Ran alongside Panels until it did everything we used; Panels was then removed (2026-10-23).
 - Read FTC Dashboard (acmerobotics, open source) for how it hooks the SDK and controls
   OpModes; build our own smaller version.
 - Rough size: 2 evenings for server + telemetry + variables + Save; 2 more for charts,
   OpMode control, field view and hardware map; then load testing on the robot.
+
+## Next project ideas (2026-10-27)
+
+Discussed, not started. Each is a self-contained project.
+
+### A. Build timed functions in the Auton tab (like `shoot`, without Java)
+
+**The idea (from the team):** build your own timed function the way `shoot` is built, by
+dragging steps in: "triggers on, wait for a time, triggers off". The function can have its own
+settings (a time, an angle) that an auton fills in when it uses it.
+
+**What exists today** (so the plan builds on it):
+
+- A timed function is a small **sub-sequence**: when the auton reaches `shoot`, its steps run in
+  its place, one per loop. Today they are written in Java in `lib/AutoStepFunctions.java`
+  (how to add one: `dashboard/DEVELOPER.md`, "A timed function"):
+  ```java
+  sequence.run("flywheels on", flywheelsOn);
+  sequence.waitUntil("wait for flywheels", flywheelsReady, 2);   // 2 s limit
+  sequence.run("triggers on", triggersOn);
+  sequence.waitSeconds(p.getDouble("seconds"));
+  sequence.run("triggers off", triggersOff);
+  ```
+- Steps use functions **by name** (`robot.action("triggersOn")`), which is why the same
+  function runs on the robot and in the simulator. A dashboard-built function would do the same.
+- **Conditions** are what "wait until" waits for. A condition is an `@AutoFunction` method on a
+  mechanism that returns `boolean`; the robot finds it like any function but hides it from the
+  function list (it does nothing by itself). `AutoStepFunctions` looks it up by name
+  (`robot.condition("flywheelsReady")`) and gives it to `waitUntil`. Today there is one,
+  `flywheelsReady` (both wheels within `VelocityMotor.RPM_TOLERANCE`, 100 RPM, of their
+  targets). Writing one:
+  ```java
+  @AutoFunction(name = "armAtTarget", label = "arm at target", help = "The arm has reached where it was sent.")
+  public boolean atTarget() {
+      return Math.abs(motor.getCurrentPosition() - target) < 20;
+  }
+  ```
+  Rules: only answer, never move anything; it is called every loop while something waits on
+  it, so keep it quick; true means "done". Give it a `label` and `help` so it reads well in the
+  "wait until" list. The simulator answers `true` for any condition it does not simulate, so
+  the auton never gets stuck there (`flywheelsReady` is simulated for real).
+
+**The editor:** a **Functions** section in the Auton tab, next to the sequence:
+
+```
+Function: shoot                                   label: "shoot"
+  Settings:  Feed time [3.5] s (0.1 - 15)                       + setting
+  Steps:
+   1. flywheels on
+   2. wait until [flywheels ready v]   give up after [2] s
+   3. triggers on
+   4. wait [Feed time v] s           <- a step can use the function's own setting
+   5. triggers off                                              + step
+```
+
+- **Step kinds:**
+  - run a function: any instant one (intake on, stinger down, ...), with its own settings;
+  - wait N seconds;
+  - wait until a condition: a dropdown of the conditions, plus a **required** "give up after
+    N s" limit, so a sensor that never says yes cannot freeze the auton. New conditions in the
+    code appear in the dropdown by themselves;
+  - turn to N degrees.
+- **Settings:** declared once per function (name, label, unit, default, min, max). Any number
+  box in a step is either a fixed number or "use setting v". An auton using the function shows
+  those boxes, as it does for `shoot` now.
+- **On a drive or between drives:** like `shoot`, a function can also run part way along a
+  drive (the robot keeps driving while it runs), unless it contains "turn to", which only makes
+  sense between drives (as `turnTo` and `wait` are today).
+- **Used by:** editing a function changes every auton that uses it, so show "used by:
+  saturday, Double" next to it. *Open question:* that, or each auton keeps its own copy?
+  (Suggested: shared, with "used by".)
+
+**Robot side:**
+
+- **Stored** on the robot, one file per function (e.g. `functions/shoot.json`), shared by every
+  auton, with History, snapshots, the lock and `robot-sync` like the other robot files.
+- **Read at INIT** and added as step functions exactly like the Java ones, so an auton cannot
+  tell the difference. Checked before PLAY like autons are: refuse an unknown function or
+  condition, a name that clashes with a code function, and a function that uses itself (or a
+  loop of functions using each other).
+- **Simulator:** reads the same files, so they work there too.
+- **Preview:** waits count their seconds; a "wait until" counts a short guess (about 0.5 s),
+  capped by its give-up limit.
+
+**Decisions so far:**
+
+1. Keep the Java `shoot` at first; dashboard functions are extra. Once a dashboard version has
+   run on the robot, decide whether to rebuild `shoot` that way and delete the Java one (one way
+   to do it).
+2. "Used by" vs. copies: open (see above).
+3. Build in two steps: (1) robot side plus a basic editor (functions, settings, the four step
+   kinds); (2) drag to reorder and polish.
+
+**Implementation notes** (for whoever builds it):
+
+- The robot's file list only allows `settings/robot.json`, `autos/*.json` and `*.xml`
+  (`DashboardServer.MANAGED`); `functions/*.json` must be added there, to `robot-sync`'s
+  patterns, to snapshots (`managedNames`) and to the Robot tab's file list. Not under
+  `autos/`, or it would show up as an auton.
+- `/api/actions` (the catalog) does not list conditions today (they are hidden); the editor
+  needs them, with their labels, for the "wait until" dropdown.
+- Validation on save (PUT) should build the function against the action list, the same way
+  auton files are fully built before they are accepted.
+- Settings references inside steps need a JSON shape, e.g. `{"param": "seconds"}` in place of
+  a number.
+
+### B. Gate the triggers on flywheel speed in teleop
+
+Today the operator's RB runs the triggers whether or not the flywheels are at speed. Seen on the
+robot: Nectar dips about 20% after a shot and looked to recover before the next ball, but a gate
+would protect a shot when the wheels overshoot or have not quite recovered.
+
+- **Two thresholds (hysteresis)**, so a volley does not stutter: start feeding only within
+  `FLYWHEEL_READY_RPM` (e.g. 100) of the targets; keep feeding while within a looser
+  `FLYWHEEL_KEEP_RPM` (e.g. 250); a bigger dip pauses the triggers until back within the start
+  threshold. Both on the Tune tab, plus a switch to turn gating off live.
+- The driver's A + RB force shoot stays ungated (override). Optional: rumble the operator's
+  gamepad when the flywheels become ready. The auton's `shoot` could use the same pair.
+- **Measure first:** chart `Pollen/Nectar RPM` and their targets on the Live tab during a 3-ball
+  volley; read how deep each dip is and how long recovery takes, and compare where balls 2 and
+  3 land. Set the keep threshold just under the dip that hurts accuracy. Slow recovery is a
+  flywheel tuning question (P / F; the Flywheel Tuner's "time to ready").
+- `RPM_TOLERANCE` is a code constant today (not on the Tune tab); the start threshold would
+  replace it for the flywheels.
+
+### C. Auton tab extras
+
+- **Alliance mirror:** flip an auton to the other alliance's side instead of drawing it twice
+  (agreed).
+- **Snapping** points to the field tiles.
+- **Drag to reorder** steps in the sequence list.
+- **Run in simulator** straight from the Auton tab.
+
+### D. Dashboard reconnects by itself after a Wi-Fi drop
+
+Today the page needs a refresh after the laptop drops off the robot's Wi-Fi. Reconnect when
+no message has arrived for about 3 s. Small, and useful at events.
+
+### E. Switch hardware maps from the dashboard
+
+"Use this map" switches maps in the simulator, but on the robot it still shows the Driver
+Station steps (Configure Robot, pick it, Activate). Doing it from the dashboard would also let
+restoring a snapshot switch to its map.
 
 ## Risks
 

@@ -141,7 +141,7 @@ Dashboard and Panels. The short version:
 What the teleop sends (the autonomous and the simulator use the same names): `Intake RPM`,
 `Intake target`, `Pollen RPM`, `Pollen target`, `Nectar RPM`, `Nectar target`,
 `Flywheels on`, `Flywheels ready`, `Triggers` (1/0), `Stinger` (servo position), `Battery V`,
-`Flywheel compensated F`, `Loop ms`, `Dashboard ms`, `Speed %`, `Heading`, `Drive forward` /
+`Flywheel compensated F`, `Flywheel averaged V` (the battery the F is worked out from), `Loop ms`, `Dashboard ms`, `Speed %`, `Heading`, `Drive forward` /
 `Drive strafe` / `Drive turn` (sticks, -1 to 1), where each loop's time goes (`Time drive ms`
 (includes the IMU read), `Time mechanisms ms`, `Time sensors+telemetry ms`
 (includes reading the motor speeds); the rest of `Loop ms` is the Driver Station telemetry and the SDK),

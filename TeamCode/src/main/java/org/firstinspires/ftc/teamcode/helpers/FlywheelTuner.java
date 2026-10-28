@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
+import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 import org.firstinspires.ftc.teamcode.mechanisms.Flywheels;
@@ -78,6 +79,7 @@ public class FlywheelTuner extends LinearOpMode {
 
         double volts = Robot.batteryVoltage(hardwareMap, 12.5);
         long nextVolts = 0;
+        FlywheelCompensation.Average averageVolts = new FlywheelCompensation.Average();
         boolean high = false;
         long phaseStart = System.nanoTime();
         try {
@@ -87,7 +89,7 @@ public class FlywheelTuner extends LinearOpMode {
                     volts = Robot.batteryVoltage(hardwareMap, volts);
                     nextVolts = now + 250_000_000L;
                 }
-                double f = Flywheels.compensatedF(volts);
+                double f = Flywheels.compensatedF(averageVolts.update(volts, Flywheels.FLYWHEEL_VOLTS_AVERAGE_SECONDS));
                 apply(pollen, Flywheels.POLLEN_FLYWHEEL_P, Flywheels.POLLEN_FLYWHEEL_I,
                         Flywheels.POLLEN_FLYWHEEL_D, f, Flywheels.POLLEN_FLYWHEEL_RPM);
                 apply(nectar, Flywheels.NECTAR_FLYWHEEL_P, Flywheels.NECTAR_FLYWHEEL_I,
