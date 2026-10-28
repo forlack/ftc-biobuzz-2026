@@ -1,0 +1,107 @@
+{
+  "version": 3,
+  "name": "Double",
+  "start": {
+    "x": 57,
+    "y": 9,
+    "heading": 270
+  },
+  "robot": {
+    "width": 18,
+    "length": 18,
+    "safetyMargin": 1
+  },
+  "steps": [
+    {
+      "action": "wait",
+      "params": {
+        "seconds": 1
+      }
+    },
+    {
+      "drive": {
+        "name": "path1",
+        "segments": [
+          {
+            "to": [
+              60,
+              16
+            ]
+          }
+        ],
+        "heading": {
+          "type": "keep"
+        }
+      }
+    },
+    {
+      "action": "shoot",
+      "params": {
+        "seconds": 3.5
+      }
+    },
+    {
+      "drive": {
+        "name": "path2",
+        "segments": [
+          {
+            "via": [
+              [
+                5.7163,
+                27.5151
+              ]
+            ],
+            "to": [
+              9.38,
+              9.091
+            ]
+          }
+        ],
+        "heading": {
+          "type": "keep"
+        },
+        "speedPercent": 50
+      }
+    },
+    {
+      "action": "wait",
+      "params": {
+        "seconds": 1
+      }
+    },
+    {
+      "drive": {
+        "name": "path3",
+        "segments": [
+          {
+            "via": [
+              [
+                44.4632,
+                23.1291
+              ],
+              [
+                12.3911,
+                117.8756
+              ]
+            ],
+            "to": [
+              57.3913,
+              125.1184
+            ]
+          }
+        ],
+        "heading": {
+          "type": "turn",
+          "degrees": 90
+        },
+        "speedPercent": 50
+      }
+    },
+    {
+      "action": "shoot",
+      "params": {
+        "seconds": 3.5
+      }
+    }
+  ]
+}

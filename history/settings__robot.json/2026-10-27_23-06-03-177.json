@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "FlywheelTuner": {
+    "HIGH_SECONDS": 3,
+    "LOW_PERCENT": 80,
+    "LOW_SECONDS": 3
+  },
+  "Flywheels": {
+    "FLYWHEEL_F": 12,
+    "FLYWHEEL_VOLTAGE_COMPENSATION": true,
+    "FLYWHEEL_VOLTS_AVERAGE_SECONDS": 1,
+    "NECTAR_FLYWHEEL_D": 0,
+    "NECTAR_FLYWHEEL_I": 0.5,
+    "NECTAR_FLYWHEEL_P": 75,
+    "NECTAR_FLYWHEEL_RPM": 3650,
+    "POLLEN_FLYWHEEL_D": 0,
+    "POLLEN_FLYWHEEL_I": 0.5,
+    "POLLEN_FLYWHEEL_P": 75,
+    "POLLEN_FLYWHEEL_RPM": 3400
+  },
+  "Intake": {
+    "INTAKE_F": 12,
+    "INTAKE_I": 1,
+    "INTAKE_P": 15,
+    "INTAKE_RPM": 700
+  },
+  "MecanumDrive": {
+    "DRIVE_SPEED": 0.75,
+    "SLOW_SPEED": 0.25,
+    "START_IN_BRAKE_MODE": true,
+    "STICK_DEADZONE": 0.1,
+    "TURBO_SPEED": 1
+  },
+  "PedroAutonomous": {
+    "ROUTE": "saturday"
+  },
+  "Stinger": {
+    "STINGER_DOWN": 0.42,
+    "STINGER_UP": 0
+  },
+  "DashboardConfig": {
+    "MAX_SAMPLES_PER_SECOND": 0
+  }
+}

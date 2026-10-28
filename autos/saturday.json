@@ -1,30 +1,39 @@
 {
   "version": 3,
   "name": "saturday",
-  "start": { "x": 56, "y": 8, "heading": 270 },
+  "start": {
+    "x": 57,
+    "y": 9,
+    "heading": 270
+  },
   "steps": [
     {
       "action": "wait",
-      "params": { "seconds": 1 }
+      "params": {
+        "seconds": 1
+      }
     },
     {
       "drive": {
         "name": "path1",
         "segments": [
           {
-            "to": [60, 16]
+            "to": [
+              60,
+              16
+            ]
           }
         ],
-        "heading": { "type": "keep" }
+        "heading": {
+          "type": "keep"
+        }
       }
     },
     {
       "action": "shoot",
-      "params": { "seconds": 3.5 }
-    },
-    {
-      "action": "flywheelsOff",
-      "params": {}
+      "params": {
+        "seconds": 3.5
+      }
     },
     {
       "drive": {
@@ -32,19 +41,21 @@
         "segments": [
           {
             "via": [
-              [15.6919, 29.3313]
+              [
+                15.6919,
+                29.3313
+              ]
             ],
-            "to": [16, 96]
+            "to": [
+              16,
+              96
+            ]
           }
         ],
-        "heading": { "type": "turn", "degrees": 90 },
-        "events": [
-          {
-            "at": 0.53,
-            "action": "deployStinger",
-            "params": {}
-          }
-        ]
+        "heading": {
+          "type": "turn",
+          "degrees": 0
+        }
       }
     }
   ]

@@ -1,27 +1,44 @@
 {
   "version": 3,
   "name": "Double",
-  "start": { "x": 56, "y": 9, "heading": 270 },
-  "robot": { "width": 18, "length": 18, "safetyMargin": 1 },
+  "start": {
+    "x": 57,
+    "y": 9,
+    "heading": 270
+  },
+  "robot": {
+    "width": 18,
+    "length": 18,
+    "safetyMargin": 1
+  },
   "steps": [
     {
       "action": "wait",
-      "params": { "seconds": 1 }
+      "params": {
+        "seconds": 1
+      }
     },
     {
       "drive": {
         "name": "path1",
         "segments": [
           {
-            "to": [60, 16]
+            "to": [
+              60,
+              16
+            ]
           }
         ],
-        "heading": { "type": "keep" }
+        "heading": {
+          "type": "keep"
+        }
       }
     },
     {
       "action": "shoot",
-      "params": { "seconds": 3.5 }
+      "params": {
+        "seconds": 3.5
+      }
     },
     {
       "drive": {
@@ -29,18 +46,28 @@
         "segments": [
           {
             "via": [
-              [5.7163, 27.5151]
+              [
+                5.7163,
+                27.5151
+              ]
             ],
-            "to": [9.38, 9.091]
+            "to": [
+              10,
+              10
+            ]
           }
         ],
-        "heading": { "type": "keep" },
+        "heading": {
+          "type": "keep"
+        },
         "speedPercent": 50
       }
     },
     {
       "action": "wait",
-      "params": { "seconds": 1 }
+      "params": {
+        "seconds": 1
+      }
     },
     {
       "drive": {
@@ -48,19 +75,68 @@
         "segments": [
           {
             "via": [
-              [44.4632, 23.1291],
-              [12.3911, 117.8756]
+              [
+                44.4632,
+                23.1291
+              ],
+              [
+                12.3911,
+                117.8756
+              ]
             ],
-            "to": [57.3913, 125.1184]
+            "to": [
+              56,
+              126
+            ]
           }
         ],
-        "heading": { "type": "turn", "degrees": 90 },
+        "heading": {
+          "type": "turn",
+          "degrees": 90
+        },
         "speedPercent": 50
       }
     },
     {
       "action": "shoot",
-      "params": { "seconds": 3.5 }
+      "params": {
+        "seconds": 3.5
+      }
+    },
+    {
+      "drive": {
+        "name": "path4",
+        "segments": [
+          {
+            "via": [
+              [
+                36,
+                125
+              ],
+              [
+                41,
+                91.5
+              ]
+            ],
+            "to": [
+              15,
+              93.5
+            ]
+          }
+        ],
+        "heading": {
+          "type": "turn",
+          "degrees": 0
+        }
+      }
+    },
+    {
+      "action": "intakeOff",
+      "params": {}
+    },
+    {
+      "action": "flywheelsOff",
+      "params": {}
     }
   ]
 }
