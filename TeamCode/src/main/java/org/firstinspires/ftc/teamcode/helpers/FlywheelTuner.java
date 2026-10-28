@@ -17,7 +17,7 @@ import java.util.Locale;
 
 /**
  * Hand tuning for the flywheels: cycles both between a low speed (like the drop after a shot)
- * and their target RPM, over and over until STOP. Change FLYWHEEL_F and each wheel's P, I, D
+ * and their target RPM, over and over until STOP. Change each wheel's F, P, I, D
  * on the dashboard's Tune tab while it runs; they apply on the next loop, with the same
  * voltage compensation as the teleop. Watch the Flywheels chart on the Live tab.
  *
@@ -89,11 +89,11 @@ public class FlywheelTuner extends LinearOpMode {
                     volts = Robot.batteryVoltage(hardwareMap, volts);
                     nextVolts = now + 250_000_000L;
                 }
-                double f = Flywheels.compensatedF(averageVolts.update(volts, Flywheels.FLYWHEEL_VOLTS_AVERAGE_SECONDS));
-                apply(pollen, Flywheels.POLLEN_FLYWHEEL_P, Flywheels.POLLEN_FLYWHEEL_I,
-                        Flywheels.POLLEN_FLYWHEEL_D, f, Flywheels.POLLEN_FLYWHEEL_RPM);
-                apply(nectar, Flywheels.NECTAR_FLYWHEEL_P, Flywheels.NECTAR_FLYWHEEL_I,
-                        Flywheels.NECTAR_FLYWHEEL_D, f, Flywheels.NECTAR_FLYWHEEL_RPM);
+                double averaged = averageVolts.update(volts, Flywheels.FLYWHEEL_VOLTS_AVERAGE_SECONDS);
+                apply(pollen, Flywheels.POLLEN_FLYWHEEL_P, Flywheels.POLLEN_FLYWHEEL_I, Flywheels.POLLEN_FLYWHEEL_D,
+                        Flywheels.compensatedF(Flywheels.POLLEN_FLYWHEEL_F, averaged), Flywheels.POLLEN_FLYWHEEL_RPM);
+                apply(nectar, Flywheels.NECTAR_FLYWHEEL_P, Flywheels.NECTAR_FLYWHEEL_I, Flywheels.NECTAR_FLYWHEEL_D,
+                        Flywheels.compensatedF(Flywheels.NECTAR_FLYWHEEL_F, averaged), Flywheels.NECTAR_FLYWHEEL_RPM);
 
                 // Switch between the low and high parts of the cycle.
                 double inPhase = (now - phaseStart) / 1e9;

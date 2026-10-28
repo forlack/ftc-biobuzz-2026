@@ -277,7 +277,15 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   Then (same day): driving dips the battery to ~10 V and the scaled F spiked the flywheels ~4%
   (user, robot). F now uses the battery averaged over FLYWHEEL_VOLTS_AVERAGE_SECONDS (default
   1, Tune tab; FlywheelCompensation.Average, exponential, every loop; 0 = raw). Chart
-  `Flywheel averaged V`. Robot, tuner and sim all use it. Unverified on the robot yet.
+  `Flywheel averaged V`. Robot, tuner and sim all use it. User (2026-10-28): holding tight
+  12-13.5 V with the 1 s average; I turned off works, one wheel slightly low.
+- **F per flywheel + favorite OpModes (2026-10-28):** FLYWHEEL_F split into POLLEN_FLYWHEEL_F
+  and NECTAR_FLYWHEEL_F (both default 11, both compensated; telemetry `Pollen/Nectar
+  compensated F`). RobotSettings.Renamed is one-to-one, so the robot's old FLYWHEEL_F warns
+  "unknown" until the next Save; both new ones start at 11 (= the old value). The hub runs the
+  flywheel PIDF, so I cannot be capped from our code (option kept: our own capped trim).
+  OpMode dropdown: ☆ button, Favorites optgroup first (localStorage biobuzz.favoriteOpModes,
+  default Field Centric (Java) + Pedro Pathing Autonomous). e2e 151.
 - **Next project ideas (2026-10-27):** ROADMAP.md "Next project ideas" is the one list of
   planned work: A dashboard-built timed functions, B teleop trigger gating on flywheel speed,
   C Auton tab extras (alliance mirror, snapping, reorder, run in sim), D auto reconnect,

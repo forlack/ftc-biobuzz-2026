@@ -372,3 +372,5 @@ body.locked #auton-save, body.locked #auton-save-as { opacity: .4; pointer-event
 /* Locked: the Auton tab and the hardware map editor are view only (Preview, picking a file and History still work). */
 body.locked #auton-panel :is(button, input, select):not(#auton-file, #auton-preview, #auton-preview-close, #auton-scrub, #auton-history),
 body.locked #hardware :is(button, input, select):not(#hw-map) { opacity: .4; pointer-events: none; }
+.btn.star { padding: 4px 8px; font-size: 15px; line-height: 1; color: var(--muted); }
+.btn.star.on { color: var(--honey); }

@@ -32,6 +32,49 @@ document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('cli
 // ---- OpMode bar ---------------------------------------------------------------
 const select = document.getElementById('op-select');
 
+// Favorite OpModes: listed first in the dropdown, starred with the ☆ button next to it. Kept in
+// this browser; until someone picks their own, the teleop and the autonomous.
+const FAVORITES = 'biobuzz.favoriteOpModes';
+let favorites = ['Field Centric (Java)', 'Pedro Pathing Autonomous'];
+try {
+  const saved = localStorage.getItem(FAVORITES);
+  if (saved) favorites = JSON.parse(saved);
+} catch { /* private window: the defaults */ }
+let listedOpModes = '';
+
+function renderOpModes(opModes) {
+  const names = opModes.map((o) => o.name);
+  const key = JSON.stringify([names, favorites]);
+  if (key === listedOpModes) return;
+  listedOpModes = key;
+  const keep = select.value;
+  const option = (name) => `<option value="${escapeHtml(name)}">${favorites.includes(name) ? '★ ' : ''}${escapeHtml(name)}</option>`;
+  const starred = names.filter((n) => favorites.includes(n));
+  const others = names.filter((n) => !favorites.includes(n));
+  select.innerHTML = starred.length
+    ? `<optgroup label="Favorites">${starred.map(option).join('')}</optgroup><optgroup label="All the others">${others.map(option).join('')}</optgroup>`
+    : names.map(option).join('');
+  if (names.includes(keep)) select.value = keep;
+  showFavorite();
+}
+
+function showFavorite() {
+  const button = document.getElementById('op-favorite');
+  const on = favorites.includes(select.value);
+  button.textContent = on ? '★' : '☆';
+  button.classList.toggle('on', on);
+  button.title = on ? 'Favorite: listed first. Click to remove it.' : 'Add to favorites (listed first in this list)';
+}
+
+document.getElementById('op-favorite').addEventListener('click', () => {
+  const name = select.value;
+  if (!name) return;
+  favorites = favorites.includes(name) ? favorites.filter((n) => n !== name) : [...favorites, name];
+  try { localStorage.setItem(FAVORITES, JSON.stringify(favorites)); } catch { /* private window */ }
+  if (state) renderOpModes(state.opModes);
+});
+select.addEventListener('change', showFavorite);
+
 function showState(next) {
   const first = !state;
   // The OpMode stopped or another one started: its telemetry no longer applies (the charts
@@ -42,11 +85,11 @@ function showState(next) {
   state = next;
   document.getElementById('robot-name').textContent = next.robot;
   document.getElementById('sim-badge').hidden = !next.simulated;
-  const names = next.opModes.map((o) => o.name);
-  if ([...select.options].map((o) => o.value).join('|') !== names.join('|')) {
-    select.innerHTML = next.opModes.map((o) => `<option value="${escapeHtml(o.name)}">${escapeHtml(o.name)}</option>`).join('');
+  renderOpModes(next.opModes);
+  if (next.active && select.value !== next.active && document.activeElement !== select) {
+    select.value = next.active;
+    showFavorite();
   }
-  if (next.active && select.value !== next.active && document.activeElement !== select) select.value = next.active;
   const pill = document.getElementById('op-state');
   // The OpMode's name is in the dropdown next to it; the pill only repeats it when they differ.
   pill.textContent = !next.active ? 'stopped' : select.value === next.active ? next.state : `${next.state}: ${next.active}`;

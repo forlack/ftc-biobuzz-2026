@@ -71,6 +71,22 @@ try {
   // ---- 1. OpMode control and live charts -----------------------------------------------
   console.log('Live tab');
   await b.eval(`document.querySelector('[data-tab="live"]').click()`);
+  // Favorites: the teleop and the autonomous first; the star adds or removes one (this browser).
+  const groups = () => b.eval(`[...document.querySelectorAll('#op-select optgroup')].map((g) => [g.label, [...g.children].map((o) => o.value)])`);
+  const firstGroups = await groups();
+  check(firstGroups[0][0] === 'Favorites' && JSON.stringify(firstGroups[0][1]) === JSON.stringify(['Field Centric (Java)', 'Pedro Pathing Autonomous']),
+    'the OpMode list starts with the favorites: Field Centric (Java) and Pedro Pathing Autonomous');
+  const pick = (name) => b.eval(`(() => { const s = document.querySelector('#op-select'); s.value = ${JSON.stringify(name)}; s.dispatchEvent(new Event('change')); })()`);
+  await pick('Pedro Pathing Autonomous');
+  await b.eval(`document.querySelector('#op-favorite').click()`);
+  const unstarred = await groups();
+  check(!unstarred[0][1].includes('Pedro Pathing Autonomous') && unstarred[1][1].includes('Pedro Pathing Autonomous')
+    && await b.eval(`document.querySelector('#op-favorite').textContent === '☆'`),
+    '★ takes the selected OpMode out of the favorites (it moves to the others)');
+  await pick('Pedro Pathing Autonomous');
+  await b.eval(`document.querySelector('#op-favorite').click()`);
+  check((await groups())[0][1].includes('Pedro Pathing Autonomous') && await b.eval(`document.querySelector('#op-favorite').textContent === '★'`),
+    'and ☆ adds it back');
   await b.eval(`(() => { const s = document.querySelector('#op-select'); s.value = 'Field Centric (Java)'; })()`);
   await b.eval(`document.querySelector('#op-init').click()`);
   await b.waitFor(`document.querySelector('#op-state').textContent.startsWith('init')`);
@@ -125,18 +141,18 @@ try {
   check(runningState.active && runningState.battery > 10,
     `while an OpMode runs the battery comes from its Battery V, not from reading the hubs (${runningState.battery} V)`);
   const liveText = await b.eval(`document.getElementById('tab-live').innerText`);
-  const shownF = Number((liveText.match(/Flywheel compensated F\s+([\d.]+)/) || [])[1]);
+  const shownF = Number((liveText.match(/Pollen compensated F\s+([\d.]+)/) || [])[1]);
   const shownVolts = Number((liveText.match(/Battery V\s+([\d.]+)/) || [])[1]);
   check(Math.abs(shownF - 11 * 12.5 / shownVolts) < 0.15,   // the table rounds the volts to 0.1
-    `the flywheel F follows the battery: 11 x 12.5 / ${shownVolts} V = ${shownF}`);
+    `each flywheel's F follows the battery: Pollen 11 x 12.5 / ${shownVolts} V = ${shownF}`);
 
   // Stopping the OpMode clears its telemetry from the table (charts keep their history).
   await b.eval(`document.querySelector('#op-stop').click()`);
-  await b.waitFor(`!document.getElementById('tab-live').innerText.includes('Flywheel compensated F')`, 5000);
+  await b.waitFor(`!document.getElementById('tab-live').innerText.includes('Pollen compensated F')`, 5000);
   check(true, 'after Stop the telemetry table no longer shows the stopped OpMode\'s values');
   await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Field Centric (Java)' } });
   await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
-  await b.waitFor(`document.getElementById('tab-live').innerText.includes('Flywheel compensated F')`, 5000);
+  await b.waitFor(`document.getElementById('tab-live').innerText.includes('Pollen compensated F')`, 5000);
 
   // ---- Gamepad drawer: drive the simulated robot from the dashboard ---------------------
   console.log('Gamepad drawer');
@@ -249,7 +265,7 @@ try {
   const switches = (await api('/api/settings')).data.items.filter((i) => ['FLYWHEELS_ON', 'INTAKE_ON'].includes(i.name));
   check(switches.length === 2 && switches.every((i) => i.value === true), 'live switches (FLYWHEELS_ON, INTAKE_ON) turned off go back on at the next INIT');
   await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
-  await b.waitFor(`document.getElementById('tab-live').innerText.includes('Flywheel compensated F')`, 5000);
+  await b.waitFor(`document.getElementById('tab-live').innerText.includes('Pollen compensated F')`, 5000);
 
   // Full size: a chart fills the Live area under the toolbar, and Esc puts it back.
   await b.eval(`document.querySelector('.chart .expand').click()`);

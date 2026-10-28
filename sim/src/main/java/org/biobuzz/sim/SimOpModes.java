@@ -85,7 +85,7 @@ public final class SimOpModes {
     static final class SimMechanisms {
         final SimWorld world;
         boolean intakeOn, intakeReverse, flywheelsOn, stingerDown;
-        double flywheelF;
+        double pollenF, nectarF;
 
         SimMechanisms(SimWorld world) { this.world = world; }
 
@@ -123,10 +123,10 @@ public final class SimOpModes {
         void apply() {
             // Same voltage-compensated F as the robot, from the averaged battery.
             double volts = averageVolts.update(world.battery(), Flywheels.FLYWHEEL_VOLTS_AVERAGE_SECONDS);
-            flywheelF = FlywheelCompensation.f(volts, Flywheels.FLYWHEEL_VOLTAGE_COMPENSATION,
-                    Flywheels.FLYWHEEL_F);
-            world.pollen.setPIDF(Flywheels.POLLEN_FLYWHEEL_P, Flywheels.POLLEN_FLYWHEEL_I, Flywheels.POLLEN_FLYWHEEL_D, flywheelF);
-            world.nectar.setPIDF(Flywheels.NECTAR_FLYWHEEL_P, Flywheels.NECTAR_FLYWHEEL_I, Flywheels.NECTAR_FLYWHEEL_D, flywheelF);
+            pollenF = FlywheelCompensation.f(volts, Flywheels.FLYWHEEL_VOLTAGE_COMPENSATION, Flywheels.POLLEN_FLYWHEEL_F);
+            nectarF = FlywheelCompensation.f(volts, Flywheels.FLYWHEEL_VOLTAGE_COMPENSATION, Flywheels.NECTAR_FLYWHEEL_F);
+            world.pollen.setPIDF(Flywheels.POLLEN_FLYWHEEL_P, Flywheels.POLLEN_FLYWHEEL_I, Flywheels.POLLEN_FLYWHEEL_D, pollenF);
+            world.nectar.setPIDF(Flywheels.NECTAR_FLYWHEEL_P, Flywheels.NECTAR_FLYWHEEL_I, Flywheels.NECTAR_FLYWHEEL_D, nectarF);
             world.intake.setPIDF(Intake.INTAKE_P, Intake.INTAKE_I, 0, Intake.INTAKE_F);
             world.pollen.setTargetRPM(flywheelsOn ? Flywheels.POLLEN_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
             world.nectar.setTargetRPM(flywheelsOn ? Flywheels.NECTAR_FLYWHEEL_RPM : 0, SimWorld.FLYWHEEL_TICKS_PER_REV);
@@ -149,7 +149,8 @@ public final class SimOpModes {
             Dash.put("Stinger", world.stinger());
             Dash.put("Flywheels on", flywheelsOn);
             Dash.put("Flywheels ready", flywheelsReady());
-            Dash.put("Flywheel compensated F", flywheelF);
+            Dash.put("Pollen compensated F", pollenF);
+            Dash.put("Nectar compensated F", nectarF);
         }
     }
 
