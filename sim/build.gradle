@@ -27,7 +27,6 @@ sourceSets {
             include 'org/firstinspires/ftc/teamcode/dashboard/**'
             include 'org/firstinspires/ftc/teamcode/lib/RobotClock.java'
             include 'org/firstinspires/ftc/teamcode/lib/HiveFinder.java'
-            include 'org/firstinspires/ftc/teamcode/lib/AimController.java'
             include 'org/firstinspires/ftc/teamcode/lib/Readouts.java'
             include 'org/firstinspires/ftc/teamcode/lib/BiobuzzField.java'
             include 'org/firstinspires/ftc/teamcode/lib/RobotFiles.java'

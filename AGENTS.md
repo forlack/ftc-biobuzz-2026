@@ -308,15 +308,15 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   ~45.6 in, down ~30.2 in -> HIVE_UP_MIN_HEIGHT_IN 38. Unverified on the robot: the SDK's
   cluster pose is the cluster ORIGIN (offset from the tags), so the real height may differ by
   a few inches; check `Hive height in`. Simulator settings RED_HIVE_UP / BLUE_HIVE_UP (match start: red AUDIENCE (south) up, blue SCORING (north) up, per the user). SimCamera.picture() draws the camera's view (cells, projected tags, readable = green) for the Camera card.
-- **Aim, telemetry cleanup, Live layout (2026-10-30, uncommitted with the camera work):**
-  lib/AimController (PI on the hive's signed angle, + = left/CCW; output turn stick + =
-  clockwise; I only within AIM_I_ZONE_DEG, clamped so I alone <= AIM_MAX_TURN; resets on
-  release/lost hive); Vision.AIM_P 0.02, AIM_I 0.01, AIM_I_ZONE_DEG 5, AIM_MAX_TURN 0.6,
-  AIM_TOLERANCE_DEG 1. Robot teleop: operator Y holds aim (MecanumDrive.drive(..., exactTurn)
-  skips the stick deadzone for it). Sim: operator Y or driver X; sim run: 40 deg off -> on
-  target in ~0.5 s, ~1 deg overshoot. **Driver Station telemetry (user's layout):** teleop =
-  Alliance, Flywheels (READY/spinning up/OFF), Intake, Hive (short: cluster · in · angle),
-  Aim (while held), Battery V; auton INIT = Alliance, Route picker (+ problem), Steps, Start;
+- **Auto aim is a student project (2026-10-30):** the team's student writes the teleop auto
+  aim himself. Do not write it for him or describe a finished design: help him reason, explain
+  ideas and debug his code, but let him make the choices. See ROADMAP.md "Auto aim (student
+  project)".
+- **Simulator demo off by default (2026-10-30):** Simulator.DEMO_DRIVING / DEMO_SHOOTING start
+  false (user's choice); `./simulate --demo` turns both on, and the e2e test starts with it.
+- **Telemetry cleanup, Live layout (2026-10-30):** **Driver Station telemetry (user's
+  layout):** teleop = Alliance, Flywheels (READY/spinning up/OFF), Intake, Hive (short:
+  cluster · in · angle), Battery V; auton INIT = Alliance, Route picker (+ problem), Steps, Start;
   auton run = Alliance, Step, Flywheels, Intake, Hive, Battery V. Everything else is Dash.put
   (dashboard only): RPMs/targets/`… error %` numbers, F, hub PIDF, Triggers, Stinger, drive
   Speed %/Heading, Settings status/warnings, X/Y/Heading, Hive ignored/problem.
@@ -326,7 +326,7 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   lifted with z-index while zoomed — a body overlay drew over it). Camera feed: long-poll
   `GET /api/camera?after=N` (X-Picture), Vision.CAMERA_FEED_FPS (10); sim pictures drawn on
   their own thread. Gamepad drawer sorts controls: sticks, A B X Y, LB RB, LT RT, D-pad,
-  rest, combos last; in the sim it adds driver X "aim (simulator only)". Tune tab groups flow
+  rest, combos last. Tune tab groups flow
   in CSS columns with honey titles. e2e 165.
 - **Lock without a PIN; Tune cards drag (2026-10-30):** user asked for no PIN: the top-bar
   padlock is one click to lock / unlock (POST /api/lock {action}); the robot still holds it

@@ -89,19 +89,9 @@ public class MecanumDrive {
      *                clamps it to the default, so turbo really can go faster.
      */
     public void drive(double strafe, double forward, double turn, double speed) {
-        drive(strafe, forward, turn, speed, false);
-    }
-
-    /**
-     * Same, but with {@code exactTurn} true the turn is used as it is, without the stick
-     * deadzone: aiming sends small, deliberate turns that the deadzone would swallow.
-     */
-    public void drive(double strafe, double forward, double turn, double speed, boolean exactTurn) {
         strafe = ignoreDrift(strafe);
         forward = ignoreDrift(forward);
-        if (!exactTurn) {
-            turn = ignoreDrift(turn);
-        }
+        turn = ignoreDrift(turn);
 
         // One IMU read per loop -- it is a real sensor read, so don't ask for it twice.
         YawPitchRollAngles angles = imu.getRobotYawPitchRollAngles();

@@ -19,7 +19,6 @@ import org.firstinspires.ftc.teamcode.lib.AutoFunctions;
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
 import org.firstinspires.ftc.teamcode.lib.Button;
-import org.firstinspires.ftc.teamcode.lib.AimController;
 import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
 import org.firstinspires.ftc.teamcode.lib.HiveFinder;
 import org.firstinspires.ftc.teamcode.lib.Readouts;
@@ -229,8 +228,9 @@ public final class SimOpModes {
 
     /**
      * "Field Centric (Java)": the real teleop's controls, driven from the dashboard's Gamepad
-     * drawer (VirtualGamepads; the same buttons as FieldCentricJava). With nobody driving, a
-     * pretend driver loops around the field and shoots (Simulator.DEMO_DRIVING / DEMO_SHOOTING).
+     * drawer (VirtualGamepads; the same buttons as FieldCentricJava). With nobody driving and
+     * Simulator.DEMO_DRIVING / DEMO_SHOOTING on (off by default; --demo turns them on), a pretend
+     * driver loops around the field and shoots.
      */
     public static final class TeleOp extends SimOpMode {
         private SimMechanisms robot;
@@ -256,9 +256,6 @@ public final class SimOpModes {
         private final Button stingerButton = buttons.add(() -> operateButtons[VirtualGamepads.LEFT_BUMPER]);
         private final Button blueAllianceButton = buttons.add(() -> operateButtons[VirtualGamepads.DPAD_LEFT]);
         private final Button redAllianceButton = buttons.add(() -> operateButtons[VirtualGamepads.DPAD_RIGHT]);
-        // Aim at the hive: operator Y (as on the robot), and driver X (for testing here).
-        private final Button aimButton = buttons.add(() -> operateButtons[VirtualGamepads.Y] || driveButtons[VirtualGamepads.X]);
-        private final AimController aim = new AimController();
 
         @Override public void init() {
             settings.load();
@@ -278,7 +275,7 @@ public final class SimOpModes {
             buttons.update();
             double t = world.time() - started;
 
-            if (driving || aimButton.down()) {
+            if (driving) {
                 driveFieldCentric();
             } else if (Simulator.DEMO_DRIVING && !operating) {
                 // Pretend driver: a gentle loop around the field.
@@ -303,14 +300,6 @@ public final class SimOpModes {
             robot.apply();
             robot.telemetry();
             Dash.put("Alliance", "BLUE".equalsIgnoreCase(Alliance.ALLIANCE.trim()) ? "BLUE" : "RED");
-            if (aimButton.down()) {
-                Dash.put("Aim", robot.hive() != null
-                        ? String.format(java.util.Locale.US, "%s · angle %+.1f° · turn %+.2f",
-                                aim.onTarget() ? "ON TARGET" : "turning", aim.error(), aim.turn())
-                        : "no hive in view");
-            }
-            Dash.put("Aim error deg", aim.error());
-            Dash.put("Aim turn", aim.turn());
             Dash.put("Intake", robot.intakeReverse ? "REVERSE" : robot.intakeOn ? "ON" : "OFF");
             Dash.put("Driver", driving || operating
                     ? "Dashboard gamepad " + (driving && operating ? "1 + 2" : driving ? "1" : "2")
@@ -332,14 +321,6 @@ public final class SimOpModes {
             double strafe = ignoreDrift(drive[VirtualGamepads.LEFT_STICK_X]);
             double forward = ignoreDrift(-drive[VirtualGamepads.LEFT_STICK_Y]);
             double turn = ignoreDrift(drive[VirtualGamepads.RIGHT_STICK_X]);
-            // Aiming: the robot's own PI controller turns to face the hive (Vision.AIM_* settings).
-            if (aimButton.down()) {
-                turn = aim.update(robot.hive(), org.biobuzz.sim.mirror.Vision.AIM_P, org.biobuzz.sim.mirror.Vision.AIM_I,
-                        org.biobuzz.sim.mirror.Vision.AIM_I_ZONE_DEG, org.biobuzz.sim.mirror.Vision.AIM_MAX_TURN,
-                        org.biobuzz.sim.mirror.Vision.AIM_TOLERANCE_DEG);
-            } else {
-                aim.reset();
-            }
             double speed = slowModeButton.down() ? MecanumDrive.SLOW_SPEED
                     : turboButton.down() ? MecanumDrive.TURBO_SPEED : MecanumDrive.DRIVE_SPEED;
             double yaw = world.pose()[2] - headingZero;
@@ -430,9 +411,9 @@ public final class SimOpModes {
     /** Live switches for the simulator's pretend driver. Not saved to robot.json. */
     public static final class Simulator {
         @RobotSettings.NotSaved
-        public static boolean DEMO_DRIVING = true;
+        public static boolean DEMO_DRIVING = false;
         @RobotSettings.NotSaved
-        public static boolean DEMO_SHOOTING = true;
+        public static boolean DEMO_SHOOTING = false;
         @RobotSettings.NotSaved
         public static boolean FEED = false;
         /**

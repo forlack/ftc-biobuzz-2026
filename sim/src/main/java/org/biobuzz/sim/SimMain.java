@@ -20,7 +20,8 @@ import java.nio.file.StandardCopyOption;
  * straight away. Options: --port N, --storage DIR, --web DIR, --fresh (empty the SD card
  * first), --init "OpMode name" [--start], --idle (start with no OpMode running), --no-seed (do
  * not copy the repo's files: the tests fill the SD card themselves), --unset-clock (the robot's
- * clock starts at 1970, like a Control Hub before the Driver Station sets it).
+ * clock starts at 1970, like a Control Hub before the Driver Station sets it), --demo (the
+ * pretend driver drives and shoots from the start; the tests use it).
  */
 public final class SimMain {
     public static void main(String[] args) throws Exception {
@@ -40,6 +41,10 @@ public final class SimMain {
                 case "--idle": idle = true; break;
                 case "--no-seed": noSeed = true; break;
                 case "--unset-clock": System.setProperty("biobuzz.unsetClock", "true"); break;
+                case "--demo":
+                    SimOpModes.Simulator.DEMO_DRIVING = true;
+                    SimOpModes.Simulator.DEMO_SHOOTING = true;
+                    break;
                 default: throw new IllegalArgumentException("Unknown option " + args[i]);
             }
         }

@@ -331,8 +331,6 @@ export class GamepadDrawer {
     const names = Object.keys(controls);
     const opMode = controls[this.active] ? this.active : names[0];
     const rows = [...(opMode ? controls[opMode][this.pad] || [] : [])];
-    // The simulator's teleop also aims with driver X, for testing (the robot uses operator Y).
-    if (this.simulated && opMode === 'Field Centric (Java)' && this.pad === 1) rows.push(['X', 'hold: aim at the hive (simulator only)']);
     rows.sort((a, b) => controlRank(a[0]) - controlRank(b[0]));
     if (!rows.length) return `<div class="muted">${escapeHtml(this.active || 'This OpMode')} lists no controls for gamepad ${this.pad}.</div>`;
     return `<div class="muted">${escapeHtml(opMode)}, gamepad ${this.pad}</div>`

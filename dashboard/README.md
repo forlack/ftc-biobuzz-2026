@@ -43,7 +43,7 @@ battery sag, balls that slow the wheels when shot, and a mecanum chassis on the 
 Its SD card is `sim/sdcard/`, filled from the repo on first start.
 
 `Simulator` settings in the Tune tab switch its pretend driver on or off (`DEMO_DRIVING`,
-`DEMO_SHOOTING`, `FEED`). Drive it yourself with the **Gamepad drawer**: gamepad 1 and 2
+`DEMO_SHOOTING`, `FEED`; off when it starts, or `./simulate --demo` to start with them on). Drive it yourself with the **Gamepad drawer**: gamepad 1 and 2
 work like on the robot (same buttons as Field Centric), and the pretend driver stops while you
 drive.
 

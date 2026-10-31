@@ -5,7 +5,6 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
-import org.firstinspires.ftc.teamcode.lib.AimController;
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.DashboardGamepads;
 import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
@@ -15,7 +14,6 @@ import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.mechanisms.Flywheels;
 import org.firstinspires.ftc.teamcode.mechanisms.Intake;
 import org.firstinspires.ftc.teamcode.mechanisms.Robot;
-import org.firstinspires.ftc.teamcode.mechanisms.Vision;
 
 /**
  * Field-centric teleop. Java version of the Blocks OpMode "Field Centric (Best)".
@@ -57,9 +55,7 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button stingerButton         = buttons.add(() -> operate.left_bumper);             // hold: stinger down
     private final Button blueAllianceButton    = buttons.add(() -> operate.dpad_left);               // alliance: BLUE
     private final Button redAllianceButton     = buttons.add(() -> operate.dpad_right);              // alliance: RED
-    private final Button aimButton             = buttons.add(() -> operate.y);                       // hold: aim at the hive
 
-    private final AimController aim = new AimController();
     private RobotSettings settings;
     private long lastLoop;
 
@@ -118,13 +114,6 @@ public class FieldCentricJava extends LinearOpMode {
         double strafe = drive.left_stick_x;     // drive (field-centric)
         double forward = -drive.left_stick_y;   // drive (field-centric)
         double turn = drive.right_stick_x;      // turn
-        // Operator Y held: turn to face the hive instead (PI on its angle; the Vision settings).
-        if (aimButton.down()) {
-            turn = aim.update(robot.vision.hive(), Vision.AIM_P, Vision.AIM_I, Vision.AIM_I_ZONE_DEG,
-                    Vision.AIM_MAX_TURN, Vision.AIM_TOLERANCE_DEG);
-        } else {
-            aim.reset();
-        }
 
         // Start from the driver's default speed, then let any mode override it. Adding
         // turbo or a precision mode is one more line here -- MecanumDrive never changes.
@@ -135,7 +124,7 @@ public class FieldCentricJava extends LinearOpMode {
             speed = MecanumDrive.TURBO_SPEED;
         }
 
-        chassis.drive(strafe, forward, turn, speed, aimButton.down());
+        chassis.drive(strafe, forward, turn, speed);
 
         // After the driving on purpose, so this loop still uses the old heading.
         if (resetFrontButton.down()) {
@@ -177,7 +166,7 @@ public class FieldCentricJava extends LinearOpMode {
 
     /**
      * Everything the drivers and the dashboard see, in one place. The Driver Station gets only
-     * what the drivers act on (Alliance, Flywheels, Intake, Hive, Aim while held, Battery V);
+     * what the drivers act on (Alliance, Flywheels, Intake, Hive, Battery V);
      * every other value is Dash.put (dashboard tables and charts only). The names match the
      * autonomous and the simulator, so the same charts work everywhere.
      */
@@ -186,13 +175,7 @@ public class FieldCentricJava extends LinearOpMode {
         // The Driver Station: only what the drivers act on. Everything else is Dash.put (dashboard only).
         telemetry.addData("Alliance", allianceLine());
         robot.telemetry(telemetry);   // Flywheels, Intake, Hive
-        if (aimButton.down()) {
-            telemetry.addData("Aim", !robot.vision.seen() ? "no hive in view"
-                    : aim.onTarget() ? "ON TARGET" : String.format(java.util.Locale.US, "turning · angle %+.1f°", aim.error()));
-        }
         robot.batteryTelemetry(telemetry);
-        Dash.put("Aim error deg", aim.error());
-        Dash.put("Aim turn", aim.turn());
         settings.update((caption, value) -> Dash.put(caption, String.valueOf(value)));
         if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
         lastLoop = now;

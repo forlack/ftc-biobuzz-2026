@@ -46,7 +46,7 @@ cpSync(join(FIXTURES, '24621-Biobuzz.xml'), join(storage, '24621-Biobuzz.xml'));
 mkdirSync(join(storage, 'autos'));
 cpSync(join(FIXTURES, 'autos/saturday.json'), join(storage, 'autos/saturday.json'));
 const sim = spawn(join(REPO, 'sim/build/install/biobuzz-sim/bin/biobuzz-sim'),
-  ['--port', String(PORT), '--storage', storage, '--no-seed'], { cwd: join(REPO, 'sim'), stdio: 'ignore' });
+  ['--port', String(PORT), '--storage', storage, '--no-seed', '--demo'], { cwd: join(REPO, 'sim'), stdio: 'ignore' });
 let browser;
 const cleanup = () => {
   try { sim.kill('SIGKILL'); } catch { /* gone */ }
@@ -196,7 +196,7 @@ try {
   await b.eval(`document.querySelector('#pad-seg [data-pad="2"]')?.click()`);
   await sleep(200);
   const order2 = await b.eval(`[...document.querySelectorAll('#pad-legend div b')].map((x) => x.textContent)`);
-  check(JSON.stringify(order2) === JSON.stringify(['A', 'X', 'Y', 'LB', 'RB', 'D-pad ↓', 'D-pad ←', 'D-pad →']),
+  check(JSON.stringify(order2) === JSON.stringify(['A', 'X', 'LB', 'RB', 'D-pad ↓', 'D-pad ←', 'D-pad →']),
     `the controls are listed A B X Y, bumpers, triggers, D-pad (${order2.join(', ')})`);
   await b.eval(`document.querySelector('#pad-seg [data-pad="1"]')?.click()`);
   await b.waitFor(`document.querySelector('#pad-status').textContent.includes('as the robot sees it')`);
@@ -206,9 +206,8 @@ try {
     && await b.eval(`document.querySelector('#pad-legend').textContent.includes('A + RB hold: force shoot')`),
     'it labels what gamepad 1 does in the teleop, from the label comments in its code (controls.json, made at build time)');
   const operatorControls = JSON.stringify(controlsList['Field Centric (Java)']['2']);
-  check(operatorControls.includes(JSON.stringify(['D-pad ←', 'alliance: BLUE'])) && operatorControls.includes(JSON.stringify(['D-pad →', 'alliance: RED']))
-    && operatorControls.includes(JSON.stringify(['Y', 'hold: aim at the hive'])),
-    'the operator\'s D-pad left / right set the alliance and Y holds aim, and the drawer says so');
+  check(operatorControls.includes(JSON.stringify(['D-pad ←', 'alliance: BLUE'])) && operatorControls.includes(JSON.stringify(['D-pad →', 'alliance: RED'])),
+    'the operator\'s D-pad left / right set the alliance, and the drawer says so');
   await b.waitFor(`[...document.querySelectorAll('#telemetry tr')].some((r) => r.textContent === 'DriverDemo (nobody driving)')`, 3000);
   check(true, 'nobody is driving yet: the simulator\'s demo driver is (text the OpMode did not change since the restart still shows)');
   await b.eval(`document.querySelector('#pad-take').click()`);

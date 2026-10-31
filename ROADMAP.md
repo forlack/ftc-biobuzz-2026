@@ -110,7 +110,25 @@ condition), and the Live tab's Camera card (`GET /api/camera`). Without "Webcam 
 everything else runs and the telemetry says so. The simulator has a pretend camera built from
 the manual's HIVE geometry (lib/BiobuzzField), running the same hive choice (lib/HiveFinder):
 drive with the Gamepad drawer and watch the `Hive` line; Simulator RED_HIVE_UP / BLUE_HIVE_UP
-pick which CELL is up. Next: steps 6-8 (aiming, distance -> RPM), tunable in the simulator.
+pick which CELL is up. Next: step 6 (auto aim, a student project, below), then 7-8.
+
+**Auto aim (student project).** Goal: while the operator holds a button (Y is free), the
+robot turns to face our hive by itself; the driver can still drive. What you have to work with:
+
+- `robot.vision.hive()`: the hive to aim at, or `null` when none is in view. Its `bearing` is
+  the angle to the hive in degrees (+ = the hive is to the left), `range` the distance in
+  inches across the floor, `height` how high its tags are.
+- `robot.vision.seen()`: true when a hive is in view.
+- In `FieldCentricJava.updateDriving`, `turn` is the right stick (+ = turn clockwise). Whatever
+  you put in `turn` is what the robot does.
+- Settings: a `public static` field in a `@Configurable` class shows on the Tune tab and can be
+  changed while the robot runs. Telemetry: `Dash.put("name", number)` makes a Live chart.
+- Test it in the simulator first (`./simulate`, Field Centric (Java), take gamepad 2 in the
+  Gamepad drawer): the simulated camera sees the hive from wherever you drive. Then the robot.
+
+Things to think about: how hard to turn when the hive is far off vs. nearly straight ahead;
+what happens when the hive is lost; how you know you are "on target"; and why small turns
+might not move the robot at all (look at what `MecanumDrive.drive` does to the stick).
 
 Like last season: turn to face the hive, and pick the flywheel speed from the distance. A USB
 webcam with the FTC SDK's AprilTag processor (a HuskyLens was considered and dropped: it only
@@ -142,8 +160,7 @@ clusters (`instanceof AprilTagSingleDetection` / `AprilTagClusterDetection`).
    tags are hidden when it is down, "not seen" is enough.
 5. **Camera view on the Live tab:** a small picture (about 5 frames a second) with the
    detected tags outlined, for mounting and tuning.
-6. **Auto-aim in teleop:** hold a button to turn toward the hive center while still driving;
-   turn strength and max turn speed on the Tune tab; normal control when no tag is seen.
+6. **Auto-aim in teleop:** the student project above.
 7. **Auto-aim in the auton:** an `aimAtHive` timed step (turn until within a few degrees, with
    a time limit) and an `onTarget` condition; they appear in the Auton tab by themselves.
 8. **Distance -> flywheel speed:** a short table on the Tune tab (range in, Pollen RPM, Nectar
