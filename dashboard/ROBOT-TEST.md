@@ -49,7 +49,7 @@ Tick each one; write down anything that fails.
 | 2 | No Panels | <http://192.168.43.1:8001> does **not** load (Panels was removed); the Driver Station telemetry looks as before |
 | 3 | Dashboard | <http://192.168.43.1:8686> loads, says **Total Chaos 24621**, no SIMULATOR badge, top right **live** |
 | 4 | Tune tab | Groups Flywheels, Intake, MecanumDrive, PedroAutonomous, Stinger, DashboardConfig with green dots (no FieldCentricJava group: its settings moved to the mechanisms, and values saved under it before still load: check FLYWHEEL_F, STINGER_DOWN and the RPMs are your tuned ones, then **Save to robot** once); **FlywheelTuner under Hidden** at the bottom (Show / Hide work); **no Simulator group**; no "No settings found" warning on the Driver Station |
-| 5 | Robot tab | Map **24621-Biobuzz (in use)**, no red problems |
+| 5 | Robot tab | Map **24621-Biobuzz-Main (in use)**, no red problems |
 | 6 | OpMode bar | Init then Start **Field Centric (Java)** from the dashboard; Stop stops it |
 | 7 | Live tab | Flywheel, intake, battery and loop charts move; telemetry table fills. **+ Add chart** offers `Flywheels ready`, `Triggers`, `Drive forward`…; toggling flywheels / holding feed shows on them. Driver Station lines read cleanly (one line per RPM with % off). (The field stays empty in teleop: teleop does not send its position yet.) |
 | 7b | Flywheel F | Telemetry shows **Pollen / Nectar compensated F** = each wheel's F (`POLLEN_FLYWHEEL_F`, `NECTAR_FLYWHEEL_F`) x 12.5 / battery volts averaged over `FLYWHEEL_VOLTS_AVERAGE_SECONDS` (chart `Flywheel averaged V`; about 10.4 on a fresh 13.2 V battery, 11 at 12.5 V, rising as it drops). Tune tab: `POLLEN_FLYWHEEL_F` and `NECTAR_FLYWHEEL_F` are **11** (a settings warning about the old shared `FLYWHEEL_F` shows until the next Save to robot) and `STINGER_DOWN` **0.42** (if the robot's saved robot.json still says 12 / 0.45, those win: set them, Save. A settings warning about `FLYWHEEL_FIXED_F` is expected once: that setting is gone, Save clears it) |
@@ -111,7 +111,7 @@ Do sections 1 to 3 first (build on real internet, back up, deploy). Then:
 
 | # | Check | Pass when |
 |---|---|---|
-| W1 | Webcam in the map | Driver Station: Configure Robot → 24621-Biobuzz → **Scan** with the webcam plugged into the Control Hub → name it exactly **`Webcam 1`** → Save, activate. Then `./robot-sync pull` and commit the map. Field Centric's telemetry no longer says `Hive: no camera` |
+| W1 | Webcam in the map | Driver Station: Configure Robot → 24621-Biobuzz-Main → **Scan** with the webcam plugged into the Control Hub → name it exactly **`Webcam 1`** → Save, activate. Then `./robot-sync pull` and commit the map. Field Centric's telemetry no longer says `Hive: no camera` |
 | W2 | Camera card | Live tab, Camera **Show** on, Field Centric running: a picture about 10 times a second, tags outlined. Hiding it: `Loop ms` back to normal |
 | W3 | Tags give numbers | With our hive in view: `Hive` shows a cluster name, inches and an angle; `Hive range in` about right with a tape measure. If tags are outlined but `Hive` stays "not seen", the webcam has no SDK calibration: note the model (see AGENTS.md "Next session") |
 | W4 | Camera mount | Measure and set (Tune → Vision) `CAMERA_HEIGHT_IN` (lens above the tiles), `CAMERA_PITCH_UP_DEG` (tilt up), `CAMERA_FORWARD_IN` / `CAMERA_LEFT_IN`; Save to robot |

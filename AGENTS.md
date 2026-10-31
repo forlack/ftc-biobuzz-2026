@@ -2,19 +2,25 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 
 ---
 
-## Next session (2026-10-31): first webcam + auto aim run on the robot. Read this first.
+## Current state (2026-10-31). Read this first.
 
-Everything is committed and pushed on `main`; the simulator, unit tests and e2e (167) pass.
-Built but **never run on the robot**: the webcam hive finder (`mechanisms/Vision`,
-`lib/HiveFinder`), the Live tab Camera card, and the auto aim (`lib/AimController`, **driver Y**
-held, robot and simulator). Checklist and what to write down:
-`dashboard/ROBOT-TEST.md` "Webcam and auto aim".
+The webcam and auto aim ran on the robot on 2026-10-31 and work (user). What changed that day
+(operator Y aim, B combos, logs, deploy ADB recovery, camera preview off by default, the
+crash notes): "Webcam and hardware map — 2026-10-31" at the end of this file.
 
-How to help the user tomorrow:
+- **Hardware map: `robot-config/24621-Biobuzz-Main.xml`** (on the hub `24621-Biobuzz-Main.xml`)
+  is the only map. The Driver Station still lists a blank `24621-Biobuzz` that it will not let
+  go of, even after the file was deleted; ignore it and keep `24621-Biobuzz-Main` active.
+  The simulator's default map and the test fixture (`tests/fixtures/24621-Biobuzz-Main.xml`)
+  use the same name. Older notes below that say `24621-Biobuzz.xml` are history.
+- Settings tuned at the end of the 2026-10-31 practice are still only on the robot: the user
+  will `./robot-sync pull` them.
+
+How to help the user:
 - **The user deploys, not the agent.** Joining the robot's Wi-Fi drops this laptop's internet
   (and the agent's session). Give the commands (`./deploy --stay` / `./deploy-linux --stay`),
   or use USB (keeps internet). Wi-Fi credentials never go in Git.
@@ -31,19 +37,12 @@ How to help the user tomorrow:
   request): the simulated angle wobbles about ±0.5° with the robot still, and P chasing it
   flipped the turn 14 times in 1.5 s (a visible twitch; D was already off inside 1°). With the
   hold: turn 0, no flips. If it hunts at the 1° edge on the robot, the next step is a little
-  hysteresis or averaging the angle; if 1° is too loose for shooting, lower the tolerance. They tune live on the Tune tab (Vision card); **Save to robot**, then
+  hysteresis or averaging the angle; if 1° is too loose for shooting, lower the tolerance.
+  Aim is on **operator Y** (and RB / force shoot) since 2026-10-31, with `AIM_LEFT_TRIM_DEG`.
+  The values the team tuned on the robot win over these defaults. They tune live on the Tune tab (Vision card); **Save to robot**, then
   `./robot-sync pull` + commit to keep them.
-- Likely snags, in order: (1) webcam not in the hardware map as exactly `Webcam 1` (Driver
-  Station Scan, then `./robot-sync pull`); (2) **no pose from the tags**: the SDK only gives
-  range / bearing for webcams it has a calibration for (Logitech C920 / C270 etc.); an unknown
-  camera shows tags but `ftcPose` is null, so `Hive` stays "not seen". Find the model, then add
-  a calibration (`setLensIntrinsics` on the AprilTagProcessor builder in `Vision`, or a
-  `teamwebcamcalibrations.xml`); (3) `CAMERA_HEIGHT_IN` / `CAMERA_PITCH_UP_DEG` not measured
-  (heights wrong, so up/down filtering wrong: compare `Hive height in` up vs down against
-  `HIVE_UP_MIN_HEIGHT_IN` 38); (4) aim turning the wrong way (camera mounted another way than
-  facing forward, upright): check the sign of `Hive bearing deg` (+ = hive to the left) first.
-- After the robot test: the next projects are ROADMAP.md webcam steps 7 (aim step in the
-  auton) and 8 (distance -> flywheel RPM table), then B (trigger gating).
+- Next projects: ROADMAP.md webcam steps 7 (aim step in the auton) and 8 (distance ->
+  flywheel RPM table), then B (trigger gating).
 
 ---
 
@@ -56,7 +55,8 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
 - Everything below is on `main`. Robot-verified: dashboard tabs, Tune (save, undo, live
   switches reset at INIT, INTAKE_ON/FLYWHEELS_ON follow operator X/A), auton files incl. path
   speed %, gamepad drawer (Linux Firefox with a Logitech in X mode; Mac Chrome in D mode),
-  Restart adb, Delete files, the mechanisms refactor (autons), hardware map 24621-Biobuzz.
+  Restart adb, Delete files, the mechanisms refactor (autons), hardware map 24621-Biobuzz
+  (now 24621-Biobuzz-Main, 2026-10-31).
   Log: `dashboard/ROBOT-TEST.md`.
 - Open: ~60 ms loop spikes every ~0.5 s (not the dashboard, no frequent GC in logcat; next
   suspect the SDK's own periodic hub traffic); auto-reconnect after a Wi-Fi drop is built
@@ -306,7 +306,7 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   (Android shared storage refuses setLastModified). Files list sends 0 for a <2020 mtime; UI
   shows "date unknown" (api.js formatTime). Sim `--unset-clock` starts the robot clock at 0.
 - **Test fixtures (2026-10-26, user's request):** e2e uses tests/fixtures/autos/saturday.json
-  and tests/fixtures/24621-Biobuzz.xml (frozen), never the team's real autos/ or robot-config/;
+  and tests/fixtures/24621-Biobuzz-Main.xml (frozen; renamed from 24621-Biobuzz.xml 2026-10-31), never the team's real autos/ or robot-config/;
   deploy unit tests patch ROOT / HARDWARE_MAP_DIR to a scratch dir. Park pose check back to the
   fixture's (13.2, 96.07).
   DELETE /api/snapshots?id= + Delete button (locked: refused, greyed). e2e park pose now read

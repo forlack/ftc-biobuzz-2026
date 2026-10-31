@@ -128,7 +128,7 @@ clusters (`instanceof AprilTagSingleDetection` / `AprilTagClusterDetection`).
 
 1. **Hardware:** a calibrated USB webcam (Logitech C920 / C270 have built-in SDK calibrations;
    a global-shutter camera blurs less while turning) on a Control Hub USB port, facing the way
-   the robot shoots. Driver Station: Configure Robot -> 24621-Biobuzz -> Scan -> name it
+   the robot shoots. Driver Station: Configure Robot -> 24621-Biobuzz-Main -> Scan -> name it
    `Webcam 1` -> save; then `./robot-sync pull`. (A webcam is identified by its serial number,
    so it must be plugged in for the scan.)
 2. **`Vision` mechanism** (`mechanisms/Vision`, like the others): VisionPortal + AprilTag

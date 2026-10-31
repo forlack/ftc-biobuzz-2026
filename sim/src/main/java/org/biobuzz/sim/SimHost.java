@@ -160,7 +160,7 @@ public class SimHost implements RobotHost {
         } catch (IOException ignored) {
             // never switched: the default below
         }
-        return org.firstinspires.ftc.teamcode.lib.RobotFiles.file("24621-Biobuzz.xml").isFile() ? "24621-Biobuzz.xml" : "";
+        return org.firstinspires.ftc.teamcode.lib.RobotFiles.file("24621-Biobuzz-Main.xml").isFile() ? "24621-Biobuzz-Main.xml" : "";
     }
 
     @Override public String useHardwareMap(String file) {

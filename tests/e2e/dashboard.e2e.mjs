@@ -42,7 +42,7 @@ execFileSync(join(REPO, 'gradlew'), ['-q', '-p', 'sim', 'installDist'], { cwd: R
 // so editing the team's real autons never breaks the test): no robot.json (code defaults).
 const FIXTURES = join(REPO, 'tests/fixtures');
 const storage = mkdtempSync(join(tmpdir(), 'biobuzz-sd-'));
-cpSync(join(FIXTURES, '24621-Biobuzz.xml'), join(storage, '24621-Biobuzz.xml'));
+cpSync(join(FIXTURES, '24621-Biobuzz-Main.xml'), join(storage, '24621-Biobuzz-Main.xml'));
 mkdirSync(join(storage, 'autos'));
 cpSync(join(FIXTURES, 'autos/saturday.json'), join(storage, 'autos/saturday.json'));
 const sim = spawn(join(REPO, 'sim/build/install/biobuzz-sim/bin/biobuzz-sim'),
@@ -62,6 +62,12 @@ try {
   }
   browser = await Browser.launch({ width: 1600, height: 1000 });
   const b = browser;
+  // The telemetry table starts short (the values drivers need); later checks read other rows.
+  const showAllTelemetry = () => b.eval(`(() => {
+    const box = document.getElementById('telemetry-details');
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+  })()`);
   await b.goto(URL);
   await b.waitFor('document.querySelector("#conn").classList.contains("up")');
   check(true, 'dashboard loads and its websocket connects');
@@ -100,7 +106,11 @@ try {
   const rate = await b.eval(`parseInt(document.querySelector('#rate').textContent) || 0`);
   check(rate >= 50, `charts receive every loop: ${rate} samples/s`);
   const table = await b.eval(`document.querySelector('#telemetry').innerText`);
-  check(table.includes('Battery V') && table.includes('Shots'), 'telemetry table lists the robot values');
+  check(table.includes('Battery V') && table.includes('Pollen RPM') && !table.includes('Shots'),
+    'the telemetry table starts with the short list (Battery V, RPMs; not Shots)');
+  await showAllTelemetry();
+  await b.waitFor(`document.querySelector('#telemetry').innerText.includes('Shots')`, 3000);
+  check(true, 'Show all lists every robot value');
   // Add a chart of our own from the telemetry the robot is sending.
   await b.eval(`document.querySelector('#add-chart').click()`);
   await b.waitFor(`document.querySelector('#chart-dialog').open && document.querySelectorAll('#chart-keys input').length > 5`);
@@ -117,6 +127,7 @@ try {
   const custom = await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent.includes('Motor power')).querySelector('.legend').innerText`);
   check(/Pollen power\s+0\.\d+/.test(custom) && /Nectar power\s+0\.\d+/.test(custom), `the new chart plots live values (${custom.replace(/\s+/g, ' ')})`);
   await b.goto(URL);
+  await showAllTelemetry();
   await b.waitFor(`[...document.querySelectorAll('.chart h3')].some((h) => h.textContent.includes('Motor power'))`);
   check(true, 'the added chart is still there after reloading the page');
   const scrolls = await b.eval(`(() => { const t = document.querySelector('.side .grow'); const side = document.querySelector('.side');
@@ -154,6 +165,9 @@ try {
   await b.waitFor(`/Alliance\\s+BLUE\\b/.test(document.getElementById('tab-live').innerText)`, 5000);
   check(true, 'setting Alliance.ALLIANCE to BLUE (the Tune tab) changes it on the robot');
   await api('/api/settings', { method: 'POST', body: { group: 'Alliance', name: 'ALLIANCE', value: 'RED' } });
+  // The camera preview is off until Vision.CAMERA_FEED_ON is switched on (the hive is still found).
+  check((await fetch(`${URL}/api/camera`)).status !== 200, 'with Vision.CAMERA_FEED_ON off (the default) no camera pictures are made');
+  await api('/api/settings', { method: 'POST', body: { group: 'Vision', name: 'CAMERA_FEED_ON', value: true } });
   await b.waitFor(`!document.getElementById('camera-image').hidden && document.getElementById('camera-image').naturalWidth === 320`, 5000);
   const picture = await fetch(`${URL}/api/camera`);
   check(picture.status === 200 && picture.headers.get('content-type') === 'image/jpeg',
@@ -176,6 +190,7 @@ try {
   check(await b.eval(`document.getElementById('camera-card').classList.contains('closed') && !document.getElementById('camera-toggle').checked`),
     'the Camera checkbox hides the picture (the robot stops drawing pictures 2 s after nobody asks)');
   await b.eval(`document.getElementById('camera-toggle').click()`);
+  await api('/api/settings', { method: 'POST', body: { group: 'Vision', name: 'CAMERA_FEED_ON', value: false } });
 
   // Stopping the OpMode clears its telemetry from the table (charts keep their history).
   await b.eval(`document.querySelector('#op-stop').click()`);
@@ -196,18 +211,19 @@ try {
   await b.eval(`document.querySelector('#pad-seg [data-pad="2"]')?.click()`);
   await sleep(200);
   const order2 = await b.eval(`[...document.querySelectorAll('#pad-legend div b')].map((x) => x.textContent)`);
-  check(JSON.stringify(order2) === JSON.stringify(['A', 'X', 'LB', 'RB', 'D-pad ↓', 'D-pad ←', 'D-pad →']),
-    `the controls are listed A B X Y, bumpers, triggers, D-pad (${order2.join(', ')})`);
+  check(JSON.stringify(order2) === JSON.stringify(['Y', 'LB', 'RB', 'D-pad ↓', 'B + X', 'B + A', 'B + D-pad ←', 'B + D-pad →']),
+    `the controls are listed A B X Y, bumpers, triggers, D-pad, then the B combos (${order2.join(', ')})`);
   await b.eval(`document.querySelector('#pad-seg [data-pad="1"]')?.click()`);
   await b.waitFor(`document.querySelector('#pad-status').textContent.includes('as the robot sees it')`);
   await b.waitFor(`document.querySelector('#pad-legend').textContent.includes('reset forward')`);
   const controlsList = await (await fetch(`${URL}/controls.json`)).json();
-  check(JSON.stringify(controlsList['Field Centric (Java)']['2'][0]) === JSON.stringify(['X', 'intake on / off'])
+  check(JSON.stringify(controlsList['Field Centric (Java)']['2'][0]) === JSON.stringify(['Y', 'hold: aim at the hive'])
     && await b.eval(`document.querySelector('#pad-legend').textContent.includes('A + RB hold: force shoot')`),
     'it labels what gamepad 1 does in the teleop, from the label comments in its code (controls.json, made at build time)');
   const operatorControls = JSON.stringify(controlsList['Field Centric (Java)']['2']);
-  check(operatorControls.includes(JSON.stringify(['D-pad ←', 'alliance: BLUE'])) && operatorControls.includes(JSON.stringify(['D-pad →', 'alliance: RED'])),
-    'the operator\'s D-pad left / right set the alliance, and the drawer says so');
+  check(operatorControls.includes(JSON.stringify(['B + D-pad ←', 'B + D-pad left: alliance BLUE']))
+    && operatorControls.includes(JSON.stringify(['B + D-pad →', 'B + D-pad right: alliance RED'])),
+    'the operator\'s B + D-pad left / right set the alliance, and the drawer says so');
   await b.waitFor(`[...document.querySelectorAll('#telemetry tr')].some((r) => r.textContent === 'DriverDemo (nobody driving)')`, 3000);
   check(true, 'nobody is driving yet: the simulator\'s demo driver is (text the OpMode did not change since the restart still shows)');
   await b.eval(`document.querySelector('#pad-take').click()`);
@@ -358,6 +374,7 @@ try {
   check(JSON.stringify(arranged) === JSON.stringify(['Intake', 'Flywheels', 'Flywheel error']),
     `closing and dragging standard charts works: ${arranged.join(', ')}`);
   await b.goto(URL);
+  await showAllTelemetry();
   await b.waitFor(`document.querySelectorAll('#charts .chart').length === 3`);
   check(JSON.stringify(await titles()) === JSON.stringify(arranged), 'and this browser remembers the layout');
   await b.eval(`(() => { window.confirm = () => true; document.querySelector('#reset-charts').click(); })()`);
@@ -410,6 +427,7 @@ try {
   check(dragged[0] === before[2] && dragged[1] === before[0] && dragged.length === before.length,
     `a Tune card drags to a new place: ${dragged.slice(0, 3).join(', ')}`);
   await b.goto(URL);
+  await showAllTelemetry();
   await b.eval(`document.querySelector('[data-tab="tune"]').click()`);
   await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]')`);
   check(JSON.stringify(await cardOrder()) === JSON.stringify(dragged), 'and this browser remembers the order');
@@ -485,7 +503,7 @@ try {
   const scratch = mkdtempSync(join(tmpdir(), 'biobuzz-repo-'));
   // A scratch repo with the same files the test robot started with.
   cpSync(join(FIXTURES, 'autos/saturday.json'), join(scratch, 'autos/saturday.json'));
-  cpSync(join(FIXTURES, '24621-Biobuzz.xml'), join(scratch, 'robot-config/24621-Biobuzz.xml'));
+  cpSync(join(FIXTURES, '24621-Biobuzz-Main.xml'), join(scratch, 'robot-config/24621-Biobuzz-Main.xml'));
   const sync = (...args) => execFileSync(join(REPO, 'robot-sync'), [...args, '--url', URL],
     { env: { ...process.env, ROBOT_SYNC_ROOT: scratch }, encoding: 'utf8' });
   check(sync('status').includes('only on the robot'), 'robot-sync status sees the new robot.json');
@@ -501,7 +519,7 @@ try {
   await b.eval(`document.querySelector('[data-tab="robot"]').click()`);
   await b.waitFor(`document.querySelectorAll('table.devices tr[data-m]').length > 10`);
   const devices = await b.eval(`document.querySelectorAll('table.devices tr[data-m]').length`);
-  const inFile = (readFileSync(join(FIXTURES, '24621-Biobuzz.xml'), 'utf8').match(/<(?!Lynx)\w+ name="[^"]+" port=/g) || []).length;
+  const inFile = (readFileSync(join(FIXTURES, '24621-Biobuzz-Main.xml'), 'utf8').match(/<(?!Lynx)\w+ name="[^"]+" port=/g) || []).length;
   check(devices === inFile, `hardware map shows all ${devices} devices on both hubs`);
   check(await b.eval(`document.querySelector('#hw-problems').children.length === 0`), 'the real map has no problems');
   await b.waitFor(`document.querySelector('#load').innerText.includes('Viewers')`);
@@ -525,7 +543,7 @@ try {
   // Several hardware maps: Control Hub first, new map with an Expansion Hub, webcams, Use this map.
   check((await b.eval(`document.querySelector('.hub-title').innerText`)).startsWith('Control Hub'),
     'the Control Hub is listed first, though the file has the Expansion Hub first');
-  check((await b.eval(`document.querySelector('#hw-map').selectedOptions[0].textContent`)) === '24621-Biobuzz (in use)',
+  check((await b.eval(`document.querySelector('#hw-map').selectedOptions[0].textContent`)) === '24621-Biobuzz-Main (in use)',
     'the map picker opens the map the robot uses, marked (in use)');
   await b.eval(`document.querySelector('#hw-new').click()`);
   await b.eval(`(() => { document.querySelector('#hw-new-name').value = 'TestBot'; document.querySelector('#hw-new-create').click(); })()`);
@@ -541,11 +559,11 @@ try {
     '+ Expansion Hub adds one at the address you give');
   await b.screenshot(join(OUT, '3b-new-map.png'));
   // Delete: autons and maps not in use (robot.json and the map in use cannot be deleted).
-  check((await api('/api/file?path=24621-Biobuzz.xml', { method: 'DELETE' })).status === 400, 'the hardware map in use cannot be deleted');
+  check((await api('/api/file?path=24621-Biobuzz-Main.xml', { method: 'DELETE' })).status === 400, 'the hardware map in use cannot be deleted');
   check((await api('/api/file?path=settings/robot.json', { method: 'DELETE' })).status === 400, 'nor can robot.json');
   await b.eval(`document.querySelector('#files-refresh').click()`);
   await b.waitFor(`document.querySelector('[data-delete="TestBot.xml"]')`);
-  check(await b.eval(`!document.querySelector('[data-delete="24621-Biobuzz.xml"]') && !document.querySelector('[data-delete="settings/robot.json"]')`),
+  check(await b.eval(`!document.querySelector('[data-delete="24621-Biobuzz-Main.xml"]') && !document.querySelector('[data-delete="settings/robot.json"]')`),
     'the Files list offers Delete only where it is allowed');
   await b.eval(`(() => { window.confirm = () => true; document.querySelector('[data-delete="TestBot.xml"]').click(); })()`);
   await b.waitFor(`!document.querySelector('[data-delete="TestBot.xml"]') && document.querySelector('#toast').textContent.includes('Deleted')`);
@@ -562,7 +580,7 @@ try {
   check((await api('/api/state')).data.hardwareMap === 'CamBot.xml', 'Use this map switches the map the (simulated) robot uses');
   await b.waitFor(`document.getElementById('adb-status').textContent.includes('simulator has no adb')`);
   check(await b.eval(`document.getElementById('adb-restart').disabled`), 'the adb card says the simulator has no adb, and Restart adb is off');
-  await api('/api/hardware/active', { method: 'POST', body: { path: '24621-Biobuzz.xml' } });
+  await api('/api/hardware/active', { method: 'POST', body: { path: '24621-Biobuzz-Main.xml' } });
 
   // ---- 4. Path editor: robot actions on the route --------------------------------------------------
   console.log('Functions');
@@ -601,7 +619,7 @@ try {
   check(!!mapAtSnapshot && snapshotMap === mapAtSnapshot
     && await b.eval(`document.querySelector('#snapshots').innerText.includes('map ${mapAtSnapshot.replace(/\.xml$/, '')}')`),
     `the snapshot remembers the hardware map in use (${mapAtSnapshot}) and the list shows it`);
-  const otherMap = mapAtSnapshot === 'CamBot.xml' ? '24621-Biobuzz.xml' : 'CamBot.xml';
+  const otherMap = mapAtSnapshot === 'CamBot.xml' ? '24621-Biobuzz-Main.xml' : 'CamBot.xml';
   const goodRoute = (await api('/api/file?path=autos/saturday.json')).data;
   await api('/api/file?path=autos/saturday.json', { method: 'PUT', body: JSON.stringify({ ...goodRoute, steps: goodRoute.steps.slice(0, 1) }) });
   await api('/api/settings', { method: 'POST', body: { group: 'Intake', name: 'INTAKE_RPM', value: 1 } });
@@ -880,6 +898,7 @@ try {
   // Unsaved changes survive a reload (kept in this browser).
   const stepsBefore = await b.eval(`document.querySelectorAll('.auton-step:not(.start)').length`);
   await b.goto(URL);
+  await showAllTelemetry();
   await b.eval(`document.querySelector('[data-tab="auton"]').click()`);
   await b.waitFor(`document.getElementById('auton-discard')`);
   check(await b.eval(`document.querySelectorAll('.auton-step:not(.start)').length`) === stepsBefore, 'unsaved changes are still there after reloading the page, with a Discard button');
