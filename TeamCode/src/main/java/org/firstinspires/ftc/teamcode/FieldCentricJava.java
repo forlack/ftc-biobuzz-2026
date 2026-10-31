@@ -118,9 +118,9 @@ public class FieldCentricJava extends LinearOpMode {
         double strafe = drive.left_stick_x;     // drive (field-centric)
         double forward = -drive.left_stick_y;   // drive (field-centric)
         double turn = drive.right_stick_x;      // turn
-        // Driver Y held: turn to face the hive instead (PI on its angle; the Vision settings).
+        // Driver Y held: turn to face the hive instead (PD on its angle; the Vision settings).
         if (aimButton.down()) {
-            turn = aim.update(robot.vision.hive(), Vision.AIM_P, Vision.AIM_I, Vision.AIM_I_ZONE_DEG,
+            turn = aim.update(robot.vision.hive(), Vision.AIM_P, Vision.AIM_D, Vision.AIM_D_MIN_DEG,
                     Vision.AIM_MAX_TURN, Vision.AIM_TOLERANCE_DEG);
         } else {
             aim.reset();

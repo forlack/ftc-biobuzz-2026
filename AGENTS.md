@@ -20,9 +20,19 @@ How to help the user tomorrow:
   or use USB (keeps internet). Wi-Fi credentials never go in Git.
 - **No code changes without asking**; Java bodies on their own lines (no one-line methods);
   don't invent hardware. Commit / push only when asked.
-- Aim defaults now (user's choice from the simulator, 2026-10-30): `AIM_P` 0.02, **`AIM_I` 0**,
-  `AIM_I_ZONE_DEG` 5, **`AIM_MAX_TURN` 0.75**, `AIM_TOLERANCE_DEG` 1. They tune live on the
-  Tune tab (Vision card); **Save to robot**, then `./robot-sync pull` + commit to keep them.
+- Aim is a **PD** controller (user removed I, 2026-10-30). Defaults: `AIM_P` 0.02, `AIM_D` 0
+  (new, to test), `AIM_D_MIN_DEG` 1 (D is off within 1° of the target, so camera noise there
+  cannot twitch it), **`AIM_MAX_TURN` 0.75**, `AIM_TOLERANCE_DEG` 1. D (turn per
+  degree-per-second) brakes as the angle closes; it uses the rate between two *different*
+  camera readings (frames come slower than loops) and drops to 0 after 0.2 s of the same
+  reading. Simulator, start ~43° off: P 0.02 D 0 overshoots 2.4°; P 0.02 D 0.002 0.8°; P 0.04
+  D 0.004 0.6° and settles fastest (±1° in 0.8 s). Real camera noise makes D jumpier: start
+  small. **On target (within `AIM_TOLERANCE_DEG`, 1°) it sends no turn at all** (user's
+  request): the simulated angle wobbles about ±0.5° with the robot still, and P chasing it
+  flipped the turn 14 times in 1.5 s (a visible twitch; D was already off inside 1°). With the
+  hold: turn 0, no flips. If it hunts at the 1° edge on the robot, the next step is a little
+  hysteresis or averaging the angle; if 1° is too loose for shooting, lower the tolerance. They tune live on the Tune tab (Vision card); **Save to robot**, then
+  `./robot-sync pull` + commit to keep them.
 - Likely snags, in order: (1) webcam not in the hardware map as exactly `Webcam 1` (Driver
   Station Scan, then `./robot-sync pull`); (2) **no pose from the tags**: the SDK only gives
   range / bearing for webcams it has a calibration for (Logitech C920 / C270 etc.); an unknown
@@ -345,9 +355,9 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
 - **Simulator demo off by default (2026-10-30):** Simulator.DEMO_DRIVING / DEMO_SHOOTING start
   false (user's choice); `./simulate --demo` turns both on, and the e2e test starts with it.
 - **Aim, telemetry cleanup, Live layout (2026-10-30):** lib/AimController (PI on the hive's
-  signed angle, + = left/CCW; output turn stick + = clockwise; I only within AIM_I_ZONE_DEG,
-  clamped so I alone <= AIM_MAX_TURN; resets on release/lost hive); Vision.AIM_P 0.02, AIM_I
-  0 (was 0.01), AIM_I_ZONE_DEG 5, AIM_MAX_TURN 0.75 (was 0.6), AIM_TOLERANCE_DEG 1. **Driver Y** holds aim, robot
+  signed angle, + = left/CCW; PI at first, PD since 2026-10-30 (AIM_D added, I removed by the
+  user); output turn stick + = clockwise; resets on release/lost hive); Vision.AIM_P 0.02,
+  AIM_D 0, AIM_D_MIN_DEG 1, AIM_MAX_TURN 0.75 (was 0.6), AIM_TOLERANCE_DEG 1. **Driver Y** holds aim, robot
   and sim (taken out for a student project in 1203a9e, put back from da92596 at the user's
   request, moved from operator Y to driver Y); while held it replaces the turn stick, and
   MecanumDrive.drive(..., exactTurn) skips the stick deadzone for it. Sim run: 40 deg off -> on

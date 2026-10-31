@@ -333,10 +333,10 @@ public final class SimOpModes {
             double strafe = ignoreDrift(drive[VirtualGamepads.LEFT_STICK_X]);
             double forward = ignoreDrift(-drive[VirtualGamepads.LEFT_STICK_Y]);
             double turn = ignoreDrift(drive[VirtualGamepads.RIGHT_STICK_X]);
-            // Aiming: the robot's own PI controller turns to face the hive (Vision.AIM_* settings).
+            // Aiming: the robot's own PD controller turns to face the hive (Vision.AIM_* settings).
             if (aimButton.down()) {
-                turn = aim.update(robot.hive(), org.biobuzz.sim.mirror.Vision.AIM_P, org.biobuzz.sim.mirror.Vision.AIM_I,
-                        org.biobuzz.sim.mirror.Vision.AIM_I_ZONE_DEG, org.biobuzz.sim.mirror.Vision.AIM_MAX_TURN,
+                turn = aim.update(robot.hive(), org.biobuzz.sim.mirror.Vision.AIM_P, org.biobuzz.sim.mirror.Vision.AIM_D,
+                        org.biobuzz.sim.mirror.Vision.AIM_D_MIN_DEG, org.biobuzz.sim.mirror.Vision.AIM_MAX_TURN,
                         org.biobuzz.sim.mirror.Vision.AIM_TOLERANCE_DEG);
             } else {
                 aim.reset();

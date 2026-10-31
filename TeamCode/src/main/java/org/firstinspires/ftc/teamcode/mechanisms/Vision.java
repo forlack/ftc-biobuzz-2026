@@ -71,16 +71,16 @@ public class Vision implements Mechanism {
     /** How far the camera is tilted up, degrees (the tags face down from about 45 in up). */
     public static double CAMERA_PITCH_UP_DEG = 30;
 
-    // Aiming (lib/AimController): a PI controller on the hive's angle (+ = hive to the left).
+    // Aiming (lib/AimController): a PD controller on the hive's angle (+ = hive to the left).
     /** Turn stick per degree of angle. */
     public static double AIM_P = 0.02;
-    /** Turn stick per degree-second, to finish the last few degrees. */
-    public static double AIM_I = 0;
-    /** I only builds up within this many degrees of the target. */
-    public static double AIM_I_ZONE_DEG = 5;
+    /** Turn stick per degree-per-second the angle is closing: brakes the turn so it does not overshoot. */
+    public static double AIM_D = 0;
+    /** D is off within this many degrees of the target (camera noise there would twitch it). */
+    public static double AIM_D_MIN_DEG = 1;
     /** The most turn stick aiming may use (0 to 1). */
     public static double AIM_MAX_TURN = 0.75;
-    /** Within this many degrees counts as on target. */
+    /** Within this many degrees counts as on target: aiming sends no turn there. */
     public static double AIM_TOLERANCE_DEG = 1;
 
     public static final String CAMERA = "Webcam 1";
