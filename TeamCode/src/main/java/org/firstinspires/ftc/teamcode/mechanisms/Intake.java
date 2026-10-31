@@ -68,14 +68,13 @@ public class Intake implements Mechanism {
         motor.setTargetRPM(rpm);
     }
 
-    /** Driver Station lines and chart values. Reads the motor speed once. */
+    /** Driver Station: on / off / reverse. Dashboard: the speed numbers. Reads the motor speed once. */
     @Override
     public void telemetry(Telemetry telemetry) {
         double rpm = motor.getRPM();
-        telemetry.addLine("--- INTAKE ---");
         telemetry.addData("Intake", reverse ? "REVERSE" : (on ? "ON" : "OFF"));
-        telemetry.addData("Intake speed", Robot.rpmLine(rpm, motor.getTargetRPM()));
         Dash.put("Intake RPM", rpm);
         Dash.put("Intake target", motor.getTargetRPM());
+        Dash.put("Intake error %", Robot.percentOff(rpm, motor.getTargetRPM()));
     }
 }

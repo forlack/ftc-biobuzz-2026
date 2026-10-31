@@ -18,8 +18,9 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   Restart adb, Delete files, the mechanisms refactor (autons), hardware map 24621-Biobuzz.
   Log: `dashboard/ROBOT-TEST.md`.
 - Open: ~60 ms loop spikes every ~0.5 s (not the dashboard, no frequent GC in logcat; next
-  suspect the SDK's own periodic hub traffic); browser does not reconnect by itself after a
-  Wi-Fi drop (a refresh is needed; fix proposed: reconnect when no message for ~3 s); "Use
+  suspect the SDK's own periodic hub traffic); auto-reconnect after a Wi-Fi drop is built
+  (2026-10-30: api.js connectLive drops a socket silent for 3 s, or stuck connecting 5 s,
+  and on the browser's `online` event; e2e pauses the sim with SIGSTOP to test it); "Use
   this map" on the robot still gives Driver Station steps (switching from the app is unbuilt).
   ROBOT-TEST checks all done (user, 2026-10-27). Planned work: ROADMAP.md "Next project ideas".
 - The Pedro visualizer tab and its build are removed (2026-10-25); the Auton tab is the editor.
@@ -286,9 +287,56 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   flywheel PIDF, so I cannot be capped from our code (option kept: our own capped trim).
   OpMode dropdown: ☆ button, Favorites optgroup first (localStorage biobuzz.favoriteOpModes,
   default Field Centric (Java) + Pedro Pathing Autonomous). e2e 151.
+- **Alliance + Vision + camera feed (2026-10-30, uncommitted until the webcam is tested):**
+  teamcode/Alliance (String ALLIANCE RED/BLUE, saved; Tune dropdown via tune.js CHOICES; teleop
+  operator dpad left/right; "Alliance" first telemetry line in teleop and auton INIT).
+  mechanisms/Vision (Robot.vision): tryGet WebcamName "Webcam 1" (none: telemetry says so),
+  AprilTagProcessor with getBioBuzzTagLibrary, 640x480, inches/degrees; picks a cluster of our
+  color, HIVE_TARGET ANY/SCORING/AUDIENCE, height above the tiles >= HIVE_UP_MIN_HEIGHT_IN (38);
+  best = most of its tags, then nearest. Camera feed: dashboard/CameraFeed (plain Java; only
+  while asked in the last 2 s) <- VisionPortal.getFrameBitmap (annotated) scaled 320x240 JPEG
+  60, max 5/s, on a single-thread executor; GET /api/camera; js/camera.js card. Uses
+  TextUtils.join (String.join needs API 26; the hub is API 25). Sim: alliance buttons and
+  "Hive: no camera in the simulator". e2e 158.
+- **Simulated camera (2026-10-30):** geometry from the Competition Manual Section 9 (TU06,
+  downloaded to check): HIVE pivots x 59.25 / 84.75, y 72, 43.95 in up; CELLS 18.84 in apart,
+  12.04 deep; tips 30 deg; tag clusters on each CELL's underside facing down; SCORING = CELL away
+  from the audience (high y), AUDIENCE = audience side. lib/BiobuzzField (positions), lib/
+  HiveFinder (shared choice; Sighting.fromCamera turns the SDK's camera x/y/z into ground range,
+  bearing (+ = turn left) and height above tiles using Vision.CAMERA_HEIGHT_IN / PITCH_UP_DEG),
+  sim/SimCamera (FOV 60x46, 130 in, tags read up to 70 deg side-on, small noise). Up CELL tags
+  ~45.6 in, down ~30.2 in -> HIVE_UP_MIN_HEIGHT_IN 38. Unverified on the robot: the SDK's
+  cluster pose is the cluster ORIGIN (offset from the tags), so the real height may differ by
+  a few inches; check `Hive height in`. Simulator settings RED_HIVE_UP / BLUE_HIVE_UP (match start: red AUDIENCE (south) up, blue SCORING (north) up, per the user). SimCamera.picture() draws the camera's view (cells, projected tags, readable = green) for the Camera card.
+- **Aim, telemetry cleanup, Live layout (2026-10-30, uncommitted with the camera work):**
+  lib/AimController (PI on the hive's signed angle, + = left/CCW; output turn stick + =
+  clockwise; I only within AIM_I_ZONE_DEG, clamped so I alone <= AIM_MAX_TURN; resets on
+  release/lost hive); Vision.AIM_P 0.02, AIM_I 0.01, AIM_I_ZONE_DEG 5, AIM_MAX_TURN 0.6,
+  AIM_TOLERANCE_DEG 1. Robot teleop: operator Y holds aim (MecanumDrive.drive(..., exactTurn)
+  skips the stick deadzone for it). Sim: operator Y or driver X; sim run: 40 deg off -> on
+  target in ~0.5 s, ~1 deg overshoot. **Driver Station telemetry (user's layout):** teleop =
+  Alliance, Flywheels (READY/spinning up/OFF), Intake, Hive (short: cluster · in · angle),
+  Aim (while held), Battery V; auton INIT = Alliance, Route picker (+ problem), Steps, Start;
+  auton run = Alliance, Step, Flywheels, Intake, Hive, Battery V. Everything else is Dash.put
+  (dashboard only): RPMs/targets/`… error %` numbers, F, hub PIDF, Triggers, Stinger, drive
+  Speed %/Heading, Settings status/warnings, X/Y/Heading, Hive ignored/problem.
+  lib/Readouts (percentOff, rpmLine) shared with the sim. Live tab: Field card (Path checkbox,
+  zoom) then Camera card below (Show checkbox, zoom), right column scrolls when full; zoom =
+  fixed centered view dimming the rest with a 100vmax shadow (`.side` is sticky, so it is
+  lifted with z-index while zoomed — a body overlay drew over it). Camera feed: long-poll
+  `GET /api/camera?after=N` (X-Picture), Vision.CAMERA_FEED_FPS (10); sim pictures drawn on
+  their own thread. Gamepad drawer sorts controls: sticks, A B X Y, LB RB, LT RT, D-pad,
+  rest, combos last; in the sim it adds driver X "aim (simulator only)". Tune tab groups flow
+  in CSS columns with honey titles. e2e 165.
+- **Lock without a PIN; Tune cards drag (2026-10-30):** user asked for no PIN: the top-bar
+  padlock is one click to lock / unlock (POST /api/lock {action}); the robot still holds it
+  (settings/dashboard-lock.json, `locked` in /api/state), so every browser is view only until
+  someone clicks again. It stops accidents, not people. Tune cards move by their ⠿ grip
+  (localStorage `biobuzz.groupOrder`; new groups go after the saved ones; a redraw waits until
+  the drag ends). e2e 167.
 - **Next project ideas (2026-10-27):** ROADMAP.md "Next project ideas" is the one list of
   planned work: A dashboard-built timed functions, B teleop trigger gating on flywheel speed,
-  C Auton tab extras (alliance mirror, snapping, reorder, run in sim), D auto reconnect,
+  C Auton tab extras (alliance mirror, snapping, reorder, run in sim), D auto reconnect (done),
   E hardware map switching from the dashboard.
 - Ideas discussed, not built: packaging as its own repo/library (two artifacts: core dashboard,
   and a Pedro add-on); robot pose on the field in teleop once Pinpoint coordinates are trusted;
@@ -342,7 +390,7 @@ Key facts for agents:
   (RobotPanel); both stay mounted, the choice is remembered in localStorage. (History: the
   tab and its build were removed 2026-10-25.)
 - `./robot-sync` (HTTP to the dashboard, adb fallback; state in `.robot-sync.json`, ignored).
-- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (148
+- Tests: `python3 -m unittest discover -s tests`; `node tests/e2e/dashboard.e2e.mjs` (165
   browser checks vs a fresh sim on 8687; headless Chromium from ~/.cache/ms-playwright).
   Kill a stray test sim with `pkill -f "[-]-port 8687"` (a bare `pkill -f biobuzz-sim` matches
   the agent's own shell). The user's `./simulate` runs from a private copy of the build, so

@@ -135,7 +135,10 @@ table.kv td:last-child { text-align: right; font-family: var(--mono); font-varia
 .uplot .u-select { background: #f5b30122; }
 
 /* ---- Tune ------------------------------------------------------------------- */
-.settings { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 14px; align-items: start; }
+/* Tune tab: groups flow in columns like a masonry wall (no gaps under short groups). */
+.settings { columns: 460px; column-gap: 14px; }
+.settings > .card { break-inside: avoid; margin: 0 0 14px; width: 100%; }
+.settings > .card .card-head h3 { color: var(--honey); font-size: 14px; font-weight: 700; letter-spacing: .06em; text-shadow: 0 0 10px #f5b30140; }
 .settings-hidden { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 14px; }
 .settings-hidden .hidden-group { display: inline-flex; align-items: center; gap: 6px; }
 .hide-group { margin-left: 8px; }
@@ -223,11 +226,10 @@ body.locked #editor-save, body.locked [data-restore], body.locked [data-snapshot
 body.locked [data-remove], body.locked [data-add], body.locked [data-delete] { opacity: .4; pointer-events: none; }
 
 /* Charts: drag by the grip, close with ✕. */
-.chart .grip { cursor: grab; color: var(--muted); margin-right: 8px; user-select: none; font-size: 14px; }
-.chart .grip:hover { color: var(--honey); }
-.chart.dragging { opacity: .45; outline: 2px dashed var(--honey); }
+.chart .grip, .settings .grip { cursor: grab; color: var(--muted); margin-right: 8px; user-select: none; font-size: 14px; }
+.chart .grip:hover, .settings .grip:hover { color: var(--honey); }
+.chart.dragging, .settings > .card.dragging { opacity: .45; outline: 2px dashed var(--honey); }
 .route-select { width: 100%; font-family: var(--mono); font-size: 13px; }
-#lock-pin { font-family: var(--mono); font-size: 22px; letter-spacing: 6px; text-align: center; }
 
 /* Chart full size: fills the Live area under its toolbar. */
 .chart .expand { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 2px; vertical-align: middle; }
@@ -374,3 +376,28 @@ body.locked #auton-panel :is(button, input, select):not(#auton-file, #auton-prev
 body.locked #hardware :is(button, input, select):not(#hw-map) { opacity: .4; pointer-events: none; }
 .btn.star { padding: 4px 8px; font-size: 15px; line-height: 1; color: var(--muted); }
 .btn.star.on { color: var(--honey); }
+/* Live: the Field card, then the Camera card below it (same width), each with a zoom button. */
+.view-tools { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; }
+.view .zoom { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 2px; line-height: 0; }
+.view .zoom svg { width: 15px; height: 15px; }
+.view .zoom:hover { color: var(--honey); }
+.view .zoom span { margin-left: 6px; vertical-align: middle; line-height: 1; font-size: 13px; color: var(--text); }
+#camera-image { width: 100%; height: auto; aspect-ratio: 4 / 3; border-radius: 8px; background: #20262e; display: block; }
+#camera-image[hidden] { display: none; }
+.camera-note { font-size: 12.5px; color: var(--muted); }
+.camera-note:empty { display: none; }
+.camera-view.closed #camera-image, .camera-view.closed .camera-note, .camera-view.closed .zoom { display: none; }
+/* The right column scrolls when the field, camera and telemetry do not all fit. */
+.side { overflow-y: auto; }
+.side .grow { flex: 0 0 auto; height: 420px; }
+/* Zoomed: big in the middle of the screen; everything else dimmed by its shadow. The column
+   is "sticky", which keeps its children in its own layer, so it is lifted above the rest. */
+.view.zoomed { position: fixed; z-index: 20; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 100vmax #000a, 0 6px 18px #0009; }
+.field-view.zoomed { width: min(88vw, calc(88vh - 40px)); }
+.camera-view.zoomed { width: min(88vw, calc((88vh - 40px) * 4 / 3)); }
+.view.zoomed .zoom { border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; color: var(--text); font: inherit; font-size: 13px; }
+body.view-zoomed .side { z-index: 30; overflow: visible; }
+.check { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.check input { accent-color: var(--honey); }
+.side > .card { flex-shrink: 0; }

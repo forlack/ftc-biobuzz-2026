@@ -76,17 +76,16 @@ try {
   const firstGroups = await groups();
   check(firstGroups[0][0] === 'Favorites' && JSON.stringify(firstGroups[0][1]) === JSON.stringify(['Field Centric (Java)', 'Pedro Pathing Autonomous']),
     'the OpMode list starts with the favorites: Field Centric (Java) and Pedro Pathing Autonomous');
-  const pick = (name) => b.eval(`(() => { const s = document.querySelector('#op-select'); s.value = ${JSON.stringify(name)}; s.dispatchEvent(new Event('change')); })()`);
-  await pick('Pedro Pathing Autonomous');
-  await b.eval(`document.querySelector('#op-favorite').click()`);
+  // Pick and star in one step: twice a second the page shows the running OpMode in the list again.
+  const pickAndStar = (name) => b.eval(`(() => { const s = document.querySelector('#op-select'); s.value = ${JSON.stringify(name)};
+    s.dispatchEvent(new Event('change')); document.querySelector('#op-favorite').click(); })()`);
+  await pickAndStar('Pedro Pathing Autonomous');
   const unstarred = await groups();
   check(!unstarred[0][1].includes('Pedro Pathing Autonomous') && unstarred[1][1].includes('Pedro Pathing Autonomous')
-    && await b.eval(`document.querySelector('#op-favorite').textContent === '☆'`),
+    && await b.eval(`[...document.querySelectorAll('#op-select option')].find((o) => o.value === 'Pedro Pathing Autonomous').textContent === 'Pedro Pathing Autonomous'`),
     '★ takes the selected OpMode out of the favorites (it moves to the others)');
-  await pick('Pedro Pathing Autonomous');
-  await b.eval(`document.querySelector('#op-favorite').click()`);
-  check((await groups())[0][1].includes('Pedro Pathing Autonomous') && await b.eval(`document.querySelector('#op-favorite').textContent === '★'`),
-    'and ☆ adds it back');
+  await pickAndStar('Pedro Pathing Autonomous');
+  check((await groups())[0][1].includes('Pedro Pathing Autonomous'), 'and ☆ adds it back');
   await b.eval(`(() => { const s = document.querySelector('#op-select'); s.value = 'Field Centric (Java)'; })()`);
   await b.eval(`document.querySelector('#op-init').click()`);
   await b.waitFor(`document.querySelector('#op-state').textContent.startsWith('init')`);
@@ -120,8 +119,9 @@ try {
   await b.goto(URL);
   await b.waitFor(`[...document.querySelectorAll('.chart h3')].some((h) => h.textContent.includes('Motor power'))`);
   check(true, 'the added chart is still there after reloading the page');
-  const scrolls = await b.eval(`(() => { const t = document.querySelector('.side .grow'); return getComputedStyle(t).overflowY === 'auto' && t.scrollHeight > t.clientHeight && t.getBoundingClientRect().bottom <= innerHeight + 1; })()`);
-  check(scrolls, 'the telemetry list scrolls inside the page instead of running off the bottom');
+  const scrolls = await b.eval(`(() => { const t = document.querySelector('.side .grow'); const side = document.querySelector('.side');
+    return getComputedStyle(t).overflowY === 'auto' && t.scrollHeight > t.clientHeight && side.getBoundingClientRect().bottom <= innerHeight + 1; })()`);
+  check(scrolls, 'the telemetry list scrolls inside its card, and the right column stays on the page (it scrolls itself when full)');
   await b.screenshot(join(OUT, '1-live.png'));
   await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent.includes('Motor power')).querySelector('.remove').click()`);
   check(await b.eval(`![...document.querySelectorAll('.chart h3')].some((h) => h.textContent.includes('Motor power'))`), 'and ✕ removes it');
@@ -145,6 +145,37 @@ try {
   const shownVolts = Number((liveText.match(/Battery V\s+([\d.]+)/) || [])[1]);
   check(Math.abs(shownF - 11 * 12.5 / shownVolts) < 0.15,   // the table rounds the volts to 0.1
     `each flywheel's F follows the battery: Pollen 11 x 12.5 / ${shownVolts} V = ${shownF}`);
+  check(/Nectar error %\s+-?\d/.test(liveText) && /Flywheels\s+(READY|spinning up)/.test(liveText) && /Intake error %\s+-?\d/.test(liveText),
+    'the simulator sends the robot\'s values: Flywheels READY / spinning up, and each wheel\'s % off as a number');
+  // Alliance (set before the match; the operator can switch it) and the camera.
+  check(/Alliance\s+RED\b/.test(liveText) && /Hive\s+(not seen|RED (SCORING|AUDIENCE) · [\d.]+ in · angle [+-][\d.]+°)/.test(liveText),
+    'the teleop shows the alliance (RED by default) and the simulated camera\'s hive (the robot\'s own choice)');
+  await api('/api/settings', { method: 'POST', body: { group: 'Alliance', name: 'ALLIANCE', value: 'BLUE' } });
+  await b.waitFor(`/Alliance\\s+BLUE\\b/.test(document.getElementById('tab-live').innerText)`, 5000);
+  check(true, 'setting Alliance.ALLIANCE to BLUE (the Tune tab) changes it on the robot');
+  await api('/api/settings', { method: 'POST', body: { group: 'Alliance', name: 'ALLIANCE', value: 'RED' } });
+  await b.waitFor(`!document.getElementById('camera-image').hidden && document.getElementById('camera-image').naturalWidth === 320`, 5000);
+  const picture = await fetch(`${URL}/api/camera`);
+  check(picture.status === 200 && picture.headers.get('content-type') === 'image/jpeg',
+    'the Field card shows the simulated camera\'s picture next to the field (tags drawn as the camera would see them)');
+  await b.eval(`document.querySelector('#camera-card .zoom').click()`);
+  check(await b.eval(`document.getElementById('camera-card').classList.contains('zoomed') && document.body.classList.contains('view-zoomed')`),
+    'the camera\'s zoom button shows it full size');
+  await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+  await b.eval(`document.querySelector('#field-view .zoom').click()`);
+  await b.waitFor(`document.getElementById('field').width > 500`, 3000);
+  check(await b.eval(`document.getElementById('field-view').classList.contains('zoomed') && !document.getElementById('camera-card').classList.contains('zoomed')`),
+    'Esc puts it back; the field\'s zoom button shows the field full size (drawn sharp at that size)');
+  await b.eval(`document.querySelector('#field-view .zoom').click()`);
+  await b.waitFor(`!document.body.classList.contains('view-zoomed')`, 2000);
+  const cameraBelow = await b.eval(`(() => { const f = document.getElementById('field-view').getBoundingClientRect(), c = document.getElementById('camera-card').getBoundingClientRect();
+    return c.top >= f.bottom && Math.abs(c.width - f.width) < 2; })()`);
+  check(cameraBelow, 'the Camera card is below the Field card, the same width');
+  await b.eval(`document.getElementById('camera-toggle').click()`);
+  await sleep(2500);
+  check(await b.eval(`document.getElementById('camera-card').classList.contains('closed') && !document.getElementById('camera-toggle').checked`),
+    'the Camera checkbox hides the picture (the robot stops drawing pictures 2 s after nobody asks)');
+  await b.eval(`document.getElementById('camera-toggle').click()`);
 
   // Stopping the OpMode clears its telemetry from the table (charts keep their history).
   await b.eval(`document.querySelector('#op-stop').click()`);
@@ -161,12 +192,23 @@ try {
   await b.eval(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }))`);
   await b.waitFor(`!document.querySelector('#pad-body').hidden && document.querySelector('#pad-svg')`);
   check(true, 'G opens the drawer with the controller picture');
+  // Gamepad 2's list is in the drawer's order: A B X Y, bumpers, triggers, D-pad.
+  await b.eval(`document.querySelector('#pad-seg [data-pad="2"]')?.click()`);
+  await sleep(200);
+  const order2 = await b.eval(`[...document.querySelectorAll('#pad-legend div b')].map((x) => x.textContent)`);
+  check(JSON.stringify(order2) === JSON.stringify(['A', 'X', 'Y', 'LB', 'RB', 'D-pad ↓', 'D-pad ←', 'D-pad →']),
+    `the controls are listed A B X Y, bumpers, triggers, D-pad (${order2.join(', ')})`);
+  await b.eval(`document.querySelector('#pad-seg [data-pad="1"]')?.click()`);
   await b.waitFor(`document.querySelector('#pad-status').textContent.includes('as the robot sees it')`);
   await b.waitFor(`document.querySelector('#pad-legend').textContent.includes('reset forward')`);
   const controlsList = await (await fetch(`${URL}/controls.json`)).json();
   check(JSON.stringify(controlsList['Field Centric (Java)']['2'][0]) === JSON.stringify(['X', 'intake on / off'])
     && await b.eval(`document.querySelector('#pad-legend').textContent.includes('A + RB hold: force shoot')`),
     'it labels what gamepad 1 does in the teleop, from the label comments in its code (controls.json, made at build time)');
+  const operatorControls = JSON.stringify(controlsList['Field Centric (Java)']['2']);
+  check(operatorControls.includes(JSON.stringify(['D-pad ←', 'alliance: BLUE'])) && operatorControls.includes(JSON.stringify(['D-pad →', 'alliance: RED']))
+    && operatorControls.includes(JSON.stringify(['Y', 'hold: aim at the hive'])),
+    'the operator\'s D-pad left / right set the alliance and Y holds aim, and the drawer says so');
   await b.waitFor(`[...document.querySelectorAll('#telemetry tr')].some((r) => r.textContent === 'DriverDemo (nobody driving)')`, 3000);
   check(true, 'nobody is driving yet: the simulator\'s demo driver is (text the OpMode did not change since the restart still shows)');
   await b.eval(`document.querySelector('#pad-take').click()`);
@@ -183,15 +225,16 @@ try {
   for (let i = 1; i <= 5; i++) await mouse('mouseMoved', knob.x, knob.y - knob.h * 0.3 * i);
   await sleep(300);
   const readout = await b.eval(`document.querySelector('#pad-readout').textContent`);
-  check(/left 0\.00, -1\.00/.test(readout), `dragging the left stick up gives y = -1, like an FTC gamepad (${readout.trim()})`);
+  const stick = (readout.match(/left (-?[\d.]+), (-?[\d.]+)/) || []).slice(1).map(Number);
+  check(Math.abs(stick[0]) < 0.15 && stick[1] <= -0.95, `dragging the left stick up gives y = -1, like an FTC gamepad (${readout.trim()})`);
   await sleep(1200);
   const poseMoving = await b.eval(`document.getElementById('pose-text').textContent`);
   await mouse('mouseReleased', knob.x, knob.y - knob.h * 1.5);
   const parsePose = (text) => (text.match(/-?\d+(\.\d+)?/g) || []).map(Number);
   const [x0, y0] = parsePose(poseBefore), [x1, y1] = parsePose(poseMoving);
   check(Math.hypot(x1 - x0, y1 - y0) > 10, `the robot drives forward on the field: (${poseBefore}) → (${poseMoving})`);
-  await sleep(200);
-  check(await b.eval(`/left 0\\.00, 0\\.00/.test(document.querySelector('#pad-readout').textContent)`), 'letting go springs the stick back to the middle');
+  await b.waitFor(`/left 0\\.00, 0\\.00/.test(document.querySelector('#pad-readout').textContent)`, 2000);
+  check(true, 'letting go springs the stick back to the middle');
   await sleep(800);
   const stopped1 = parsePose(await b.eval(`document.getElementById('pose-text').textContent`));
   await sleep(700);
@@ -336,6 +379,10 @@ try {
   check((await api('/api/settings')).data.items.some((i) => i.group === 'Intake' && i.name === 'INTAKE_I'), 'the intake has an I to tune (INTAKE_I)');
   await b.eval(`document.querySelector('[data-tab="tune"]').click()`);
   await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]')`);
+  check(await b.eval(`(() => { const s = document.querySelector('select[data-key="Alliance.ALLIANCE"]');
+      return !!s && [...s.options].map((o) => o.value).join(',') === 'RED,BLUE'; })()`)
+    && await b.eval(`!!document.querySelector('select[data-key="Vision.HIVE_TARGET"]')`),
+    'the Tune tab picks the alliance (RED / BLUE) and which hive to aim at from dropdowns');
   check(await b.eval(`document.querySelectorAll('#settings .dot.unsaved').length === 0 && document.querySelectorAll('#settings .dot.synced').length > 20`),
     `freshly loaded settings all show a green (in sync) dot ${await b.eval(`[...document.querySelectorAll('#settings .dot.unsaved')].map((d) => d.closest('.setting-row').querySelector('.setting-name').innerText.split('\\n')[0]).join(', ')`)}`);
   const routeOptions = await b.eval(`[...document.querySelectorAll('[data-key="PedroAutonomous.ROUTE"] option')].map((o) => o.value)`);
@@ -347,6 +394,27 @@ try {
   check(await tunerShown(), 'Show puts it back on the Tune tab');
   await b.eval(`document.querySelector('#settings [data-group="FlywheelTuner"] .hide-group').click()`);
   check(!(await tunerShown()), 'and Hide hides it again (remembered in this browser)');
+  // The cards can be dragged by their grip into any order; this browser remembers it.
+  const cardOrder = () => b.eval(`[...document.querySelectorAll('#settings > .card')].map((c) => c.dataset.group)`);
+  const before = await cardOrder();
+  await b.eval(`(() => {
+    const cards = [...document.querySelectorAll('#settings > .card')];
+    const moving = cards[2];
+    const target = cards[0];
+    const data = new DataTransfer();
+    moving.querySelector('.grip').dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: data }));
+    const box = target.getBoundingClientRect();
+    target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: data, clientX: box.left + 5, clientY: box.top + 5 }));
+    target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
+  })()`);
+  const dragged = await cardOrder();
+  check(dragged[0] === before[2] && dragged[1] === before[0] && dragged.length === before.length,
+    `a Tune card drags to a new place: ${dragged.slice(0, 3).join(', ')}`);
+  await b.goto(URL);
+  await b.eval(`document.querySelector('[data-tab="tune"]').click()`);
+  await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]')`);
+  check(JSON.stringify(await cardOrder()) === JSON.stringify(dragged), 'and this browser remembers the order');
+  await b.eval(`localStorage.removeItem('biobuzz.groupOrder')`);
   await b.eval(`(() => {
     const input = document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]');
     input.value = '3000';
@@ -559,19 +627,16 @@ try {
   const intake = (await api('/api/settings')).data.items.find((i) => i.name === 'INTAKE_RPM').value;
   check(back.steps.length === goodRoute.steps.length && intake === 700, 'Restore puts the auton and the settings back');
 
-  // Simple lock: watch, but no changes, until the PIN.
-  check(await b.eval(`document.querySelector('#lock').innerText.trim() === 'Unlocked' && !!document.querySelector('#lock svg')`),
-    'the lock button shows an open lock and says Unlocked');
-  const enterPin = (pin) => b.eval(`(() => {
-    document.querySelector('#lock').click();
-    document.querySelector('#lock-pin').value = '${pin}';
-    document.querySelector('#lock-ok').click();
-  })()`);
-  await enterPin('2462');
+  // Simple lock: one click, watch but no changes (every browser), until clicked again. No PIN.
+  check(await b.eval(`document.querySelector('#lock').innerText.trim() === '' && document.querySelector('#lock').getAttribute('aria-label') === 'Unlocked' && !!document.querySelector('#lock svg')`),
+    'the lock button is just an open padlock (Unlocked in its tooltip)');
+  await b.eval(`document.querySelector('#lock').click()`);
   await b.waitFor(`document.body.classList.contains('locked') && !document.querySelector('#locked-banner').hidden`);
-  check(await b.eval(`document.querySelector('#lock').innerText.trim() === 'Locked'`), 'Lock asks for the PIN once (shown as typed), then says Locked and is view only');
+  check(await b.eval(`document.querySelector('#lock').getAttribute('aria-label') === 'Locked' && !document.querySelector('dialog[open]')`),
+    'one click locks (no PIN to type), then shows a closed padlock and is view only');
   const refused = await api('/api/settings/save', { method: 'POST' });
   check(refused.status === 423, 'while locked the robot refuses changes, even straight to the API');
+  check((await api('/api/state')).data.locked === true, 'the robot holds the lock, so every other browser sees it locked too');
   check((await api('/api/opmode', { method: 'POST', body: { action: 'stop' } })).status === 423, 'and OpMode control');
   check((await api('/api/settings')).status === 200, 'but watching still works');
   const lockedTries = [
@@ -597,19 +662,23 @@ try {
   await b.waitFor(`document.getElementById('hw-save')`);
   check(await b.eval(`getComputedStyle(document.querySelector('#hardware [data-field], #hw-new')).pointerEvents === 'none'`),
     'and so is the hardware map editor');
-  await enterPin('1111');
-  await b.waitFor(`document.querySelector('#toast').textContent.includes('Wrong PIN')`, 8000);
-  check(await b.eval(`document.body.classList.contains('locked')`), 'a wrong PIN keeps it locked');
-  await enterPin('2462');
+  await b.eval(`document.querySelector('#lock').click()`);
   await b.waitFor(`!document.body.classList.contains('locked')`, 8000);
-  check((await api('/api/settings/save', { method: 'POST' })).status === 200, 'the right PIN unlocks it');
+  check((await api('/api/settings/save', { method: 'POST' })).status === 200, 'clicking the padlock again unlocks it for everyone');
 
   // ---- 5. Run it as the autonomous ----------------------------------------------------------------
   console.log('Autonomous run');
   await b.eval(`document.querySelector('[data-tab="live"]').click()`);
   await b.waitFor(`Number(document.getElementById('field').dataset.trail) > 1`);
+  // The Path checkbox hides the drawn line (the robot's path is still kept, and comes back).
+  await b.eval(`document.getElementById('trail-toggle').click()`);
+  await b.waitFor(`document.getElementById('field').dataset.trailShown === '0' && Number(document.getElementById('field').dataset.trail) > 1`, 3000);
+  await b.eval(`document.getElementById('trail-toggle').click()`);
+  await b.waitFor(`Number(document.getElementById('field').dataset.trailShown) > 1`, 3000);
+  check(true, 'the Live field\'s Path checkbox hides the robot\'s line (still kept) and brings it back');
   await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Pedro Pathing Autonomous' } });
-  await b.waitFor(`document.getElementById('field').dataset.trail === '0'`);
+  // Wiped at INIT; the next position report may already start a new line (one point, no line).
+  await b.waitFor(`Number(document.getElementById('field').dataset.trail) <= 1`);
   check(true, 'INIT clears the line the robot drew on the Live field');
   await api('/api/opmode', { method: 'POST', body: { action: 'start' } });
   const { WebSocket: _ } = globalThis;
@@ -846,6 +915,16 @@ try {
 
   const errors = b.errors.filter((e) => !/favicon/.test(e));
   check(errors.length === 0, `no errors in the browser console${errors.length ? `: ${errors.join(' | ')}` : ''}`);
+
+  // A Wi-Fi drop: the connection stays "open" but nothing arrives. Pausing the simulator does
+  // just that. The page must notice the silence and reconnect by itself (no refresh).
+  sim.kill('SIGSTOP');
+  await b.waitFor(`!document.getElementById('conn').classList.contains('up') && document.getElementById('conn').innerText.trim() === ''`, 8000);
+  check(true, 'when nothing arrives for 3 s (a dropped Wi-Fi link), the top bar says offline');
+  sim.kill('SIGCONT');
+  await b.waitFor(`document.getElementById('conn').classList.contains('up')`, 15000);
+  const beforeState = await b.eval(`document.getElementById('op-state').textContent`);
+  check(!!beforeState, 'and when the link comes back it reconnects by itself, without a refresh');
   rmSync(scratch, { recursive: true, force: true });
   console.log(`\nAll ${passed} checks passed. Screenshots in tests/e2e/out/.`);
   cleanup();

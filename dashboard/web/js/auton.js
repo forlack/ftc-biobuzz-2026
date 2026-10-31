@@ -371,7 +371,7 @@ export class AutonTab {
   }
 
   change(fn) {
-    if (locked()) { toast('The dashboard is locked: view only. Unlock it with the PIN to edit.', true); this.render(); return; }
+    if (locked()) { toast('The dashboard is locked: view only. Click the padlock to unlock it.', true); this.render(); return; }
     this.remember();
     fn(this.route);
     this.render();

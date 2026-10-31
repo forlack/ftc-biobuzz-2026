@@ -1,6 +1,14 @@
 // Tune tab: every setting, live editing, Save to robot.
 import { api, escapeHtml, toast } from './api.js';
 
+/** Text settings that take one of a few values: shown as a dropdown. Keyed "Group.NAME". */
+const CHOICES = {
+  'Alliance.ALLIANCE': ['RED', 'BLUE'],
+  'Vision.HIVE_TARGET': ['ANY', 'SCORING', 'AUDIENCE'],
+  'Simulator.RED_HIVE_UP': ['AUDIENCE', 'SCORING'],
+  'Simulator.BLUE_HIVE_UP': ['SCORING', 'AUDIENCE'],
+};
+
 // Groups hidden or shown in this browser, overriding the code's @Configurable.Hidden.
 const HIDDEN_KEY = 'biobuzz.hiddenGroups';
 function hiddenOverrides() {
@@ -12,6 +20,23 @@ function setHidden(group, hidden) {
   try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(overrides)); } catch { /* private window */ }
 }
 
+// The order of the cards, as dragged in this browser. Groups not in it keep the code's order, after these.
+const ORDER_KEY = 'biobuzz.groupOrder';
+function groupOrder() {
+  try { return JSON.parse(localStorage.getItem(ORDER_KEY)) || []; } catch { return []; }
+}
+function saveGroupOrder(order) {
+  try { localStorage.setItem(ORDER_KEY, JSON.stringify(order)); } catch { /* private window */ }
+}
+function sortGroups(groups) {
+  const order = groupOrder();
+  const rank = (group) => {
+    const at = order.indexOf(group);
+    return at < 0 ? order.length : at;
+  };
+  return [...groups].sort(([a], [b]) => rank(a) - rank(b));
+}
+
 export class TuneTab {
   constructor() {
     this.items = [];
@@ -21,6 +46,46 @@ export class TuneTab {
     document.getElementById('settings-history').addEventListener('click', () => {
       window.dispatchEvent(new CustomEvent('biobuzz:history', { detail: 'settings/robot.json' }));
     });
+    this.bindDragging();
+  }
+
+  // Drag a card by its ⠿ grip to move it. The cards flow down columns, so the top or bottom
+  // half of the card under the pointer says before or after it.
+  bindDragging() {
+    const holder = document.getElementById('settings');
+    holder.addEventListener('dragover', (event) => {
+      if (!this.dragging) {
+        return;
+      }
+      event.preventDefault();
+      const target = event.target.closest('.settings > .card');
+      if (!target || target === this.dragging) {
+        return;
+      }
+      const box = target.getBoundingClientRect();
+      const after = event.clientY > box.top + box.height / 2;
+      holder.insertBefore(this.dragging, after ? target.nextSibling : target);
+    });
+    holder.addEventListener('drop', (event) => {
+      event.preventDefault();
+      this.finishDrag();
+    });
+  }
+
+  finishDrag() {
+    if (!this.dragging) {
+      return;
+    }
+    this.dragging.classList.remove('dragging');
+    this.dragging = null;
+    // Shown cards in their new order; hidden groups keep their old place after them.
+    const shown = [...document.querySelectorAll('#settings > .card')].map((card) => card.dataset.group);
+    saveGroupOrder([...shown, ...groupOrder().filter((group) => !shown.includes(group))]);
+    if (this.waiting) {
+      const data = this.waiting;
+      this.waiting = null;
+      this.show(data);
+    }
   }
 
   async refresh() {
@@ -39,6 +104,11 @@ export class TuneTab {
   }
 
   show(data) {
+    // Drawing again would drop the card being dragged: draw when it is let go.
+    if (this.dragging) {
+      this.waiting = data;
+      return;
+    }
     this.items = data.items;
     this.fingerprint = data.fingerprint;   // what is on screen, compared with the robot's in app.js
     const unsaved = this.items.filter((i) => i.saved && !inSync(i)).length;
@@ -57,7 +127,7 @@ export class TuneTab {
     holder.innerHTML = '';
     const overrides = hiddenOverrides();
     const hidden = [];
-    for (const [group, items] of groups) {
+    for (const [group, items] of sortGroups(groups)) {
       if (overrides[group] ?? items[0].hidden) {
         hidden.push([group, items]);
         continue;
@@ -65,9 +135,17 @@ export class TuneTab {
       const card = document.createElement('div');
       card.className = 'card';
       card.dataset.group = group;
-      card.innerHTML = `<div class="card-head"><h3>${escapeHtml(group)}</h3>
+      card.innerHTML = `<div class="card-head"><h3><span class="grip" draggable="true" title="Drag to move this card (remembered in this browser)">⠿</span>${escapeHtml(group)}</h3>
         <span class="muted">${items.length} <button class="btn small hide-group" title="Hide this group on the Tune tab (this browser). It still loads and saves.">Hide</button></span></div>`;
       card.querySelector('.hide-group').addEventListener('click', () => { setHidden(group, true); this.show(data); });
+      card.querySelector('.grip').addEventListener('dragstart', (event) => {
+        this.dragging = card;
+        card.classList.add('dragging');
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', group);
+        event.dataTransfer.setDragImage(card, 20, 20);
+      });
+      card.querySelector('.grip').addEventListener('dragend', () => this.finishDrag());
       for (const item of items) card.appendChild(this.row(item));
       holder.appendChild(card);
     }
@@ -119,6 +197,12 @@ export class TuneTab {
           (this.routes || []).includes(r) ? '' : ' (missing)'}</option>`).join('')}</select>`;
       control.querySelector('select').addEventListener('change', (event) => this.set(item, event.target.value));
       row.querySelector('.setting-name small').textContent = 'the auton that runs at INIT (autos/' + item.value + '.json)';
+    } else if (CHOICES[key]) {
+      // A setting with a few fixed values (Alliance RED / BLUE, ...): a dropdown.
+      const choices = [...new Set([...CHOICES[key], item.value])];
+      control.innerHTML = `<select data-key="${escapeHtml(key)}" class="route-select">${choices.map((c) =>
+        `<option value="${escapeHtml(c)}" ${c === item.value ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>`;
+      control.querySelector('select').addEventListener('change', (event) => this.set(item, event.target.value));
     } else if (item.type === 'boolean') {
       control.innerHTML = `<label class="toggle"><input type="checkbox" data-key="${escapeHtml(key)}" ${item.value ? 'checked' : ''}><span></span></label>`;
       control.querySelector('input').addEventListener('change', (event) => this.set(item, event.target.checked));

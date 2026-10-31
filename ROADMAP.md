@@ -95,7 +95,66 @@ there is nothing to install and nothing to sync: open it, change things, Save, p
 
 ## Next project ideas (2026-10-27)
 
-Discussed, not started. Each is a self-contained project.
+Each is a self-contained project. Priority (2026-10-30): the webcam (auto-aim, then distance
+-> flywheel speed), B trigger gating, C alliance mirror, odometry correction from the hive
+tags, A timed functions in the Auton tab, the rest of C, E. D (auto-reconnect) is done.
+
+### Next up: webcam auto-aim and distance-based flywheel speed (decided 2026-10-30)
+
+**Built 2026-10-30 (waiting for the webcam to test):** steps 2-5 below. `Alliance.ALLIANCE`
+(RED / BLUE, Tune tab, saved; operator D-pad left / right switches it in teleop; first
+telemetry line), `mechanisms/Vision` (BIOBUZZ clusters; keeps our color, `HIVE_TARGET`, and up
+by `HIVE_UP_MIN_HEIGHT_IN`, 38 in above the tiles; telemetry `Hive` with distance and angle, `Hive ignored` with why; Live
+values `Hive range in`, `Hive bearing deg`, `Hive height in`; a `hiveSeen`
+condition), and the Live tab's Camera card (`GET /api/camera`). Without "Webcam 1" in the map
+everything else runs and the telemetry says so. The simulator has a pretend camera built from
+the manual's HIVE geometry (lib/BiobuzzField), running the same hive choice (lib/HiveFinder):
+drive with the Gamepad drawer and watch the `Hive` line; Simulator RED_HIVE_UP / BLUE_HIVE_UP
+pick which CELL is up. Next: steps 6-8 (aiming, distance -> RPM), tunable in the simulator.
+
+Like last season: turn to face the hive, and pick the flywheel speed from the distance. A USB
+webcam with the FTC SDK's AprilTag processor (a HuskyLens was considered and dropped: it only
+reports flat boxes in pixels, has to be taught each tag, and has no cluster support).
+
+**What the SDK gives us (SDK 12.0, already installed):** the BIOBUZZ tag library groups the
+tags into four clusters of four 3.25" tags (at -6.5, -2.75, +2.75, +6.5 in from the center):
+RED SCORING 30-33, RED AUDIENCE 34-37, BLUE AUDIENCE 38-41, BLUE SCORING 42-45. A cluster
+detection gives its position relative to the camera: bearing (deg), range (in), height `z`
+and elevation, and how much of the cluster was found. It does NOT give the clusters' field
+positions (all 0,0,0, because the hive moves), so it is for aiming, not field position, unless
+we measure the hive's "up" position ourselves. New-API note: detections are single tags or
+clusters (`instanceof AprilTagSingleDetection` / `AprilTagClusterDetection`).
+
+1. **Hardware:** a calibrated USB webcam (Logitech C920 / C270 have built-in SDK calibrations;
+   a global-shutter camera blurs less while turning) on a Control Hub USB port, facing the way
+   the robot shoots. Driver Station: Configure Robot -> 24621-Biobuzz -> Scan -> name it
+   `Webcam 1` -> save; then `./robot-sync pull`. (A webcam is identified by its serial number,
+   so it must be plugged in for the scan.)
+2. **`Vision` mechanism** (`mechanisms/Vision`, like the others): VisionPortal + AprilTag
+   processor with the BIOBUZZ library, 640x480, short exposure (see the SDK's
+   `ConceptAprilTagOptimizeExposure`). Finds our alliance's scoring cluster and reports bearing,
+   range and height. Live values: `Tag seen`, `Tag bearing deg`, `Tag range in`, `Tag z`,
+   `Tag elevation`.
+3. **Alliance:** an `ALLIANCE` setting (RED / BLUE) so the robot only aims at its own scoring
+   cluster (never the other hive); an auton could set it.
+4. **Hive up or down:** from the cluster's height (`z` / elevation) against a Tune threshold
+   (`HIVE_UP_MIN_HEIGHT_IN`, height above the tiles; the manual gives ~45 in up, ~30 in down), picked from what the Live tab shows with the hive up and down. If the
+   tags are hidden when it is down, "not seen" is enough.
+5. **Camera view on the Live tab:** a small picture (about 5 frames a second) with the
+   detected tags outlined, for mounting and tuning.
+6. **Auto-aim in teleop:** hold a button to turn toward the hive center while still driving;
+   turn strength and max turn speed on the Tune tab; normal control when no tag is seen.
+7. **Auto-aim in the auton:** an `aimAtHive` timed step (turn until within a few degrees, with
+   a time limit) and an `onTarget` condition; they appear in the Auton tab by themselves.
+8. **Distance -> flywheel speed:** a short table on the Tune tab (range in, Pollen RPM, Nectar
+   RPM), blended between rows, filled by shooting from marked distances. Used while the tag is
+   seen; holds the last speed when it is lost.
+9. **Check `Loop ms`:** vision runs on its own thread, but confirm it on the robot.
+10. **Later:** fake detections in the simulator (from its pose) to test aiming without the
+   robot; correcting the odometry from an "up" hive once its field position is measured.
+
+**Open questions:** which webcam; turn the robot (assumed) or a turret; which cluster the robot
+shoots at (scoring vs. audience) and when the hive is up — game rules, the team knows.
 
 ### A. Build timed functions in the Auton tab (like `shoot`, without Java)
 
@@ -225,10 +284,11 @@ would protect a shot when the wheels overshoot or have not quite recovered.
 - **Drag to reorder** steps in the sequence list.
 - **Run in simulator** straight from the Auton tab.
 
-### D. Dashboard reconnects by itself after a Wi-Fi drop
+### D. Dashboard reconnects by itself after a Wi-Fi drop: done 2026-10-30
 
-Today the page needs a refresh after the laptop drops off the robot's Wi-Fi. Reconnect when
-no message has arrived for about 3 s. Small, and useful at events.
+The robot sends its state twice a second; after 3 s of silence (a dropped link often leaves the
+socket "open" but quiet) the page drops the connection and opens a new one, and it reconnects
+straight away when the computer comes back online. No refresh needed.
 
 ### E. Switch hardware maps from the dashboard
 

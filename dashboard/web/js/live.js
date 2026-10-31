@@ -60,6 +60,24 @@ export class LiveTab {
     this.latest = {};          // newest value of every key
     this.latestText = {};
     this.trail = [];
+    // The Path checkbox: draw the line the robot has driven (remembered in this browser).
+    this.showTrail = true;
+    try {
+      this.showTrail = localStorage.getItem('biobuzz.showTrail') !== 'no';
+    } catch {
+      // private window: drawn
+    }
+    const trailToggle = document.getElementById('trail-toggle');
+    trailToggle.checked = this.showTrail;
+    trailToggle.addEventListener('change', () => {
+      this.showTrail = trailToggle.checked;
+      try {
+        localStorage.setItem('biobuzz.showTrail', this.showTrail ? 'yes' : 'no');
+      } catch {
+        // private window
+      }
+      this.dirty = true;
+    });
     this.lastPose = null;
     this.rateCount = 0;
     this.rateStart = performance.now();
@@ -73,6 +91,16 @@ export class LiveTab {
     this.fieldImage.onload = () => this.drawField();
     this.bindToolbar();
     window.addEventListener('resize', () => this.resize());
+    // The Field card's two views (field, camera): each zooms to full size; again, or Esc, goes back.
+    document.querySelectorAll('#tab-live .view').forEach((view) => {
+      const button = view.querySelector('.zoom');
+      button.innerHTML = EXPAND_ICON;
+      button.addEventListener('click', () => this.zoomView(view));
+    });
+    document.addEventListener('keydown', (event) => {
+      const zoomed = document.querySelector('#tab-live .view.zoomed');
+      if (event.key === 'Escape' && zoomed) this.zoomView(zoomed);
+    });
     window.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && this.expanded) this.toggleExpand(this.expanded);
       // Space pauses and resumes the charts (not while typing in a box).
@@ -386,7 +414,30 @@ export class LiveTab {
     chart.legend.querySelector('.at').textContent = t == null ? '' : `at ${t.toFixed(2)} s`;
   }
 
+  /** One of the Field card's views (field or camera) big in the middle of the screen, or back. */
+  zoomView(view) {
+    const opening = !view.classList.contains('zoomed');
+    document.querySelectorAll('#tab-live .view.zoomed').forEach((other) => {
+      other.classList.remove('zoomed');
+      other.querySelector('.zoom').innerHTML = EXPAND_ICON;
+    });
+    if (opening) {
+      view.classList.add('zoomed');
+      view.querySelector('.zoom').innerHTML = `${SHRINK_ICON}<span>Exit full size</span>`;
+    }
+    document.body.classList.toggle('view-zoomed', opening);
+    requestAnimationFrame(() => { this.resize(); this.dirty = true; });
+  }
+
   resize() {
+    // The field drawing: as many pixels as it is shown at, so it stays sharp at any size.
+    const field = document.getElementById('field');
+    const size = Math.round(field.clientWidth * (window.devicePixelRatio || 1));
+    if (size > 0 && field.width !== size) {
+      field.width = size;
+      field.height = size;
+      this.dirty = true;
+    }
     for (const chart of this.charts) {
       if (chart === this.expanded) {
         // Fill the Live area below its toolbar; the top bar and toolbar stay visible.
@@ -449,9 +500,10 @@ export class LiveTab {
       }
     }
     canvas.dataset.trail = this.trail.length;   // for the tests
-    if (this.trail.length > 1) {
+    canvas.dataset.trailShown = this.showTrail ? this.trail.length : 0;
+    if (this.trail.length > 1 && this.showTrail) {
       g.strokeStyle = '#f5b301aa';
-      g.lineWidth = 2;
+      g.lineWidth = Math.max(2, size / 240);
       g.beginPath();
       this.trail.forEach(([x, y], i) => (i ? g.lineTo(x * s, size - y * s) : g.moveTo(x * s, size - y * s)));
       g.stroke();
@@ -465,7 +517,7 @@ export class LiveTab {
     const half = 8 * s;
     g.fillStyle = '#f5b30133';
     g.strokeStyle = '#f5b301';
-    g.lineWidth = 2;
+    g.lineWidth = Math.max(2, size / 240);
     g.fillRect(-half, -half, half * 2, half * 2);
     g.strokeRect(-half, -half, half * 2, half * 2);
     g.beginPath(); g.moveTo(0, 0); g.lineTo(half * 1.3, 0); g.stroke();

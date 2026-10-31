@@ -16,6 +16,21 @@ const STICK_TRAVEL = 22;   // svg units the knob moves at full stick
 
 // What each control does, per teleop: made at build time from the label comments in its code
 // (gamepad-controls.gradle), served as controls.json. Loaded once.
+/**
+ * The drawer lists the controls in this order: sticks, A B X Y, bumpers, triggers, D-pad, the
+ * rest, and two-button combos (such as "A + RB") last.
+ */
+const CONTROL_ORDER = ['Left stick', 'Right stick', 'A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT',
+  'D-pad ↑', 'D-pad ↓', 'D-pad ←', 'D-pad →', 'Back', 'Start', 'Guide', 'Left stick press', 'Right stick press'];
+
+function controlRank(name) {
+  if (name.includes(' + ')) return 1000 + controlRank(name.split(' + ')[0]);
+  const exact = CONTROL_ORDER.indexOf(name);
+  if (exact >= 0) return exact;
+  const prefix = CONTROL_ORDER.findIndex((key) => name.startsWith(key));   // "Right stick ←→"
+  return prefix >= 0 ? prefix : CONTROL_ORDER.length;
+}
+
 let controls = null;
 fetch('controls.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then((list) => {
   controls = list;
@@ -138,6 +153,7 @@ export class GamepadDrawer {
     const was = this.controlling();
     this.owners = state.gamepads || [0, 0];
     this.active = state.active || '';
+    this.simulated = !!state.simulated;
     this.locked = !!state.locked;
     if (was && !this.controlling()) {
       this.stopSending();
@@ -314,7 +330,10 @@ export class GamepadDrawer {
     if (!controls) return '';
     const names = Object.keys(controls);
     const opMode = controls[this.active] ? this.active : names[0];
-    const rows = opMode ? controls[opMode][this.pad] || [] : [];
+    const rows = [...(opMode ? controls[opMode][this.pad] || [] : [])];
+    // The simulator's teleop also aims with driver X, for testing (the robot uses operator Y).
+    if (this.simulated && opMode === 'Field Centric (Java)' && this.pad === 1) rows.push(['X', 'hold: aim at the hive (simulator only)']);
+    rows.sort((a, b) => controlRank(a[0]) - controlRank(b[0]));
     if (!rows.length) return `<div class="muted">${escapeHtml(this.active || 'This OpMode')} lists no controls for gamepad ${this.pad}.</div>`;
     return `<div class="muted">${escapeHtml(opMode)}, gamepad ${this.pad}</div>`
       + rows.map(([k, v]) => `<div><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</div>`).join('');
@@ -335,7 +354,7 @@ export class GamepadDrawer {
     let status;
     if (mine) status = `You are driving gamepad ${this.pad}. The robot also still takes the Driver Station's gamepad ${this.pad}.`;
     else if (owner) status = `Another browser is driving gamepad ${this.pad}. Showing what the robot gets.`;
-    else if (this.locked) status = 'Locked: view only. Unlock with the PIN to drive.';
+    else if (this.locked) status = 'Locked: view only. Click the padlock to unlock.';
     else if (!this.active) status = 'No OpMode running. Init one (and Start it) to drive.';
     else status = `Showing gamepad ${this.pad} as the robot sees it${robotPad && robotPad.station ? ' (Driver Station)' : ''}. Take control to drive it from here.`;
     const statusElement = document.getElementById('pad-status');

@@ -35,11 +35,11 @@
       <span class="pill" id="op-state">stopped</span>
       <span class="pill" id="battery">— V</span>
       <button class="pill pad-pill" id="pad-pill" title="The dashboard is driving a gamepad. Click to stop." hidden></button>
-      <button class="btn lock" id="lock" title="Unlocked: anyone can make changes. Click to lock with a PIN."></button>
-      <span class="conn" id="conn" title="Connection"><i></i><span>offline</span></span>
+      <button class="btn lock" id="lock" title="Unlocked: anyone can make changes. Click to lock."></button>
+      <span class="conn" id="conn" title="Not connected to the robot" aria-label="offline"><i></i></span>
     </div>
   </header>
-  <div class="locked-banner" id="locked-banner" hidden>Locked: view only. Click <b>Locked</b> at the top right and enter the PIN to make changes.</div>
+  <div class="locked-banner" id="locked-banner" hidden>Locked: view only. Click the padlock at the top right to make changes.</div>
 
   <main>
     <!-- LIVE -->
@@ -61,9 +61,22 @@
       <div class="live-grid">
         <div class="charts" id="charts"></div>
         <aside class="side">
-          <div class="card">
-            <div class="card-head"><h3>Field</h3><span class="muted" id="pose-text"></span></div>
+          <div class="card view field-view" id="field-view">
+            <div class="card-head"><h3>Field</h3><span class="muted" id="pose-text"></span>
+              <span class="view-tools">
+                <label class="check" title="Draw the line the robot has driven"><input type="checkbox" id="trail-toggle" checked> Path</label>
+                <button class="zoom" title="Full size (Esc to go back)"></button>
+              </span></div>
             <canvas id="field" width="480" height="480"></canvas>
+          </div>
+          <div class="card view camera-view" id="camera-card">
+            <div class="card-head"><h3>Camera</h3>
+              <span class="view-tools">
+                <label class="check" title="Show the robot's camera (it only takes pictures while shown)"><input type="checkbox" id="camera-toggle" checked> Show</label>
+                <button class="zoom" title="Full size (Esc to go back)"></button>
+              </span></div>
+            <img id="camera-image" alt="The robot's camera" hidden>
+            <div class="camera-note" id="camera-note"></div>
           </div>
           <div class="card grow">
             <div class="card-head">
@@ -192,19 +205,6 @@
       <div class="chart-actions">
         <button class="btn" value="cancel">Cancel</button>
         <button class="btn primary" id="chart-create" value="create">Add chart</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="lock-dialog">
-    <form method="dialog" class="chart-form">
-      <h3 id="lock-title">Lock the dashboard</h3>
-      <div class="muted" id="lock-hint">Anyone can still watch. Changing anything will need this PIN.</div>
-      <input id="lock-pin" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="PIN, 4 to 12 digits" aria-label="PIN">
-      <div class="status bad" id="lock-error"></div>
-      <div class="chart-actions">
-        <button class="btn" value="cancel">Cancel</button>
-        <button class="btn primary" id="lock-ok" value="ok">Lock</button>
       </div>
     </form>
   </dialog>

@@ -3,12 +3,14 @@ package org.biobuzz.sim;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 
+import org.biobuzz.sim.mirror.Alliance;
 import org.biobuzz.sim.mirror.Flywheels;
 import org.biobuzz.sim.mirror.Intake;
 import org.biobuzz.sim.mirror.MecanumDrive;
 import org.biobuzz.sim.mirror.PedroAutonomous;
 import org.biobuzz.sim.mirror.RobotStub;
 import org.biobuzz.sim.mirror.Stinger;
+import org.firstinspires.ftc.teamcode.dashboard.CameraFeed;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.dashboard.VirtualGamepads;
 import org.firstinspires.ftc.teamcode.lib.Actions;
@@ -17,7 +19,10 @@ import org.firstinspires.ftc.teamcode.lib.AutoFunctions;
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
 import org.firstinspires.ftc.teamcode.lib.Button;
+import org.firstinspires.ftc.teamcode.lib.AimController;
 import org.firstinspires.ftc.teamcode.lib.FlywheelCompensation;
+import org.firstinspires.ftc.teamcode.lib.HiveFinder;
+import org.firstinspires.ftc.teamcode.lib.Readouts;
 import org.firstinspires.ftc.teamcode.lib.RobotFiles;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
 import org.firstinspires.ftc.teamcode.lib.AutoStepFunctions;
@@ -136,6 +141,14 @@ public final class SimOpModes {
 
         /** The same telemetry names the real mechanisms send (mechanisms/). */
         void telemetry() {
+            // The same Driver Station lines as the robot (mechanisms/Flywheels, Intake).
+            double pollenRpm = world.pollen.rpm(SimWorld.FLYWHEEL_TICKS_PER_REV);
+            double nectarRpm = world.nectar.rpm(SimWorld.FLYWHEEL_TICKS_PER_REV);
+            Dash.put("Flywheels", !flywheelsOn ? "OFF" : flywheelsReady() ? "READY" : "spinning up");
+            Dash.put("Pollen error %", Readouts.percentOff(pollenRpm, flywheelsOn ? Flywheels.POLLEN_FLYWHEEL_RPM : 0));
+            Dash.put("Nectar error %", Readouts.percentOff(nectarRpm, flywheelsOn ? Flywheels.NECTAR_FLYWHEEL_RPM : 0));
+            Dash.put("Intake error %", Readouts.percentOff(world.intake.rpm(SimWorld.INTAKE_TICKS_PER_REV), intakeTarget()));
+            Dash.put("Flywheel averaged V", averageVolts.volts());
             Dash.put("Pollen RPM", world.pollen.rpm(SimWorld.FLYWHEEL_TICKS_PER_REV));
             Dash.put("Pollen target", flywheelsOn ? Flywheels.POLLEN_FLYWHEEL_RPM : 0);
             Dash.put("Nectar RPM", world.nectar.rpm(SimWorld.FLYWHEEL_TICKS_PER_REV));
@@ -151,6 +164,66 @@ public final class SimOpModes {
             Dash.put("Flywheels ready", flywheelsReady());
             Dash.put("Pollen compensated F", pollenF);
             Dash.put("Nectar compensated F", nectarF);
+            seeHive();
+        }
+
+        private final SimCamera camera = new SimCamera();
+
+        /** The hive the robot would aim at (from the last look), or null. */
+        HiveFinder.Sighting hive() {
+            return finder.hive();
+        }
+
+        private long lastPicture;
+        private volatile boolean drawing;
+        private static final java.util.concurrent.ExecutorService PICTURES =
+                java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> {
+                    Thread thread = new Thread(runnable, "sim-camera-pictures");
+                    thread.setDaemon(true);
+                    return thread;
+                });
+        private final HiveFinder finder = new HiveFinder();
+
+        /** The pretend camera, and the robot's own choice of hive (the same telemetry). */
+        private void seeHive() {
+            if (!org.biobuzz.sim.mirror.Vision.VISION_ON) {
+                Dash.put("Hive", "no camera: off (Vision.VISION_ON)");
+                return;
+            }
+            double[] pose = world.pose();
+            boolean redScoringUp = !"AUDIENCE".equalsIgnoreCase(Simulator.RED_HIVE_UP.trim());
+            boolean blueScoringUp = !"AUDIENCE".equalsIgnoreCase(Simulator.BLUE_HIVE_UP.trim());
+            // The Live tab's Camera card: drawn pictures, CAMERA_FEED_FPS a second, only while someone watches.
+            long now = System.nanoTime();
+            long gap = (long) (1e9 / Math.max(1, org.biobuzz.sim.mirror.Vision.CAMERA_FEED_FPS));
+            if (CameraFeed.wanted() && now - lastPicture > gap && !drawing) {
+                lastPicture = now;
+                drawing = true;
+                // Drawn on its own thread (like the robot's), so this loop never waits for it.
+                PICTURES.execute(() -> {
+                    try {
+                        byte[] picture = camera.picture(pose[0], pose[1], pose[2], redScoringUp, blueScoringUp);
+                        if (picture != null) {
+                            CameraFeed.publish(picture);
+                        }
+                    } finally {
+                        drawing = false;
+                    }
+                });
+            }
+            finder.pick(camera.look(pose[0], pose[1], pose[2], redScoringUp, blueScoringUp),
+                    "BLUE".equalsIgnoreCase(Alliance.ALLIANCE.trim()),
+                    org.biobuzz.sim.mirror.Vision.HIVE_TARGET,
+                    org.biobuzz.sim.mirror.Vision.HIVE_UP_MIN_HEIGHT_IN);
+            Dash.put("Hive", finder.shortLine());
+            Dash.put("Hive ignored", finder.ignoredLine());
+            HiveFinder.Sighting hive = finder.hive();
+            Dash.put("Hive seen", hive != null);
+            if (hive != null) {
+                Dash.put("Hive range in", hive.range);
+                Dash.put("Hive bearing deg", hive.bearing);
+                Dash.put("Hive height in", hive.height);
+            }
         }
     }
 
@@ -181,6 +254,11 @@ public final class SimOpModes {
         private final Button flywheelsToggleButton = buttons.add(() -> operateButtons[VirtualGamepads.A]);
         private final Button triggersButton = buttons.add(() -> operateButtons[VirtualGamepads.RIGHT_BUMPER]);
         private final Button stingerButton = buttons.add(() -> operateButtons[VirtualGamepads.LEFT_BUMPER]);
+        private final Button blueAllianceButton = buttons.add(() -> operateButtons[VirtualGamepads.DPAD_LEFT]);
+        private final Button redAllianceButton = buttons.add(() -> operateButtons[VirtualGamepads.DPAD_RIGHT]);
+        // Aim at the hive: operator Y (as on the robot), and driver X (for testing here).
+        private final Button aimButton = buttons.add(() -> operateButtons[VirtualGamepads.Y] || driveButtons[VirtualGamepads.X]);
+        private final AimController aim = new AimController();
 
         @Override public void init() {
             settings.load();
@@ -200,7 +278,7 @@ public final class SimOpModes {
             buttons.update();
             double t = world.time() - started;
 
-            if (driving) {
+            if (driving || aimButton.down()) {
                 driveFieldCentric();
             } else if (Simulator.DEMO_DRIVING && !operating) {
                 // Pretend driver: a gentle loop around the field.
@@ -210,6 +288,8 @@ public final class SimOpModes {
             }
             follower.update();
 
+            if (blueAllianceButton.pressed()) Alliance.ALLIANCE = "BLUE";
+            if (redAllianceButton.pressed()) Alliance.ALLIANCE = "RED";
             if (intakeToggleButton.pressed()) Intake.INTAKE_ON = !Intake.INTAKE_ON;
             robot.intake(Intake.INTAKE_ON);
             robot.intakeReverse = intakeReverseButton.down();
@@ -222,6 +302,15 @@ public final class SimOpModes {
 
             robot.apply();
             robot.telemetry();
+            Dash.put("Alliance", "BLUE".equalsIgnoreCase(Alliance.ALLIANCE.trim()) ? "BLUE" : "RED");
+            if (aimButton.down()) {
+                Dash.put("Aim", robot.hive() != null
+                        ? String.format(java.util.Locale.US, "%s · angle %+.1f° · turn %+.2f",
+                                aim.onTarget() ? "ON TARGET" : "turning", aim.error(), aim.turn())
+                        : "no hive in view");
+            }
+            Dash.put("Aim error deg", aim.error());
+            Dash.put("Aim turn", aim.turn());
             Dash.put("Intake", robot.intakeReverse ? "REVERSE" : robot.intakeOn ? "ON" : "OFF");
             Dash.put("Driver", driving || operating
                     ? "Dashboard gamepad " + (driving && operating ? "1 + 2" : driving ? "1" : "2")
@@ -243,6 +332,14 @@ public final class SimOpModes {
             double strafe = ignoreDrift(drive[VirtualGamepads.LEFT_STICK_X]);
             double forward = ignoreDrift(-drive[VirtualGamepads.LEFT_STICK_Y]);
             double turn = ignoreDrift(drive[VirtualGamepads.RIGHT_STICK_X]);
+            // Aiming: the robot's own PI controller turns to face the hive (Vision.AIM_* settings).
+            if (aimButton.down()) {
+                turn = aim.update(robot.hive(), org.biobuzz.sim.mirror.Vision.AIM_P, org.biobuzz.sim.mirror.Vision.AIM_I,
+                        org.biobuzz.sim.mirror.Vision.AIM_I_ZONE_DEG, org.biobuzz.sim.mirror.Vision.AIM_MAX_TURN,
+                        org.biobuzz.sim.mirror.Vision.AIM_TOLERANCE_DEG);
+            } else {
+                aim.reset();
+            }
             double speed = slowModeButton.down() ? MecanumDrive.SLOW_SPEED
                     : turboButton.down() ? MecanumDrive.TURBO_SPEED : MecanumDrive.DRIVE_SPEED;
             double yaw = world.pose()[2] - headingZero;
@@ -338,5 +435,14 @@ public final class SimOpModes {
         public static boolean DEMO_SHOOTING = true;
         @RobotSettings.NotSaved
         public static boolean FEED = false;
+        /**
+         * Which CELL of the red HIVE is up: AUDIENCE (the south one, as a match starts) or
+         * SCORING (away from the audience).
+         */
+        @RobotSettings.NotSaved
+        public static String RED_HIVE_UP = "AUDIENCE";
+        /** Which CELL of the blue HIVE is up: SCORING (the north one, as a match starts) or AUDIENCE. */
+        @RobotSettings.NotSaved
+        public static String BLUE_HIVE_UP = "SCORING";
     }
 }

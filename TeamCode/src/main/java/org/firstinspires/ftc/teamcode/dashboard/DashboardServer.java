@@ -64,8 +64,11 @@ import javax.xml.parsers.DocumentBuilderFactory;
  *   POST /api/snapshots/restore         {id}; DELETE /api/snapshots?id=... deletes one
  *   Every /api request may send X-Client-Time (browser ms): used for file dates while the
  *   robot's clock is unset (see lib/RobotClock).
- *   POST /api/lock                      {action: lock|unlock, pin}. While locked, every change
+ *   POST /api/lock                      {action: lock|unlock}, no PIN. While locked, every change
  *                                       is refused with 423 until unlocked.
+ *   GET  /api/camera?after=N            the camera's next picture after number N (JPEG, tags
+ *                                       outlined; number in X-Picture), waiting up to 0.5 s
+ *                                       for it; 404 if there is none
  *   GET  /api/adb                       adb on the robot: {listening, canRestart, note}
  *   POST /api/adb/restart               turn adb off and on (needs a one-time grant, see
  *                                       AndroidDashboard); answers with the new status
@@ -407,7 +410,7 @@ public class DashboardServer {
             }
             boolean changes = !method.equals("GET") && !path.equals("/api/lock");
             if (changes && lock.locked()) {
-                return Response.error(423, "The dashboard is locked. Unlock it with the PIN to make changes.");
+                return Response.error(423, "The dashboard is locked. Click the padlock to unlock it.");
             }
             switch (method + " " + path) {
                 case "GET /api/state": return Response.json(200, state());
@@ -441,6 +444,7 @@ public class DashboardServer {
                 }
                 case "POST /api/lock": return lockAction(request.json());
                 case "POST /api/hardware/active": return useHardwareMap(request.json());
+                case "GET /api/camera": return cameraPicture(request.param("after"));
                 case "GET /api/adb": return adb(null);
                 case "POST /api/adb/restart": return adb(host.restartAdb());
                 default: return Response.error(404, "no such API: " + method + " " + path);
@@ -701,15 +705,34 @@ public class DashboardServer {
         return Response.json(200, json);
     }
 
+    /** The newest camera picture (asking also tells the vision code someone is watching). */
+    private Response cameraPicture(String after) throws InterruptedException {
+        long seen = 0;
+        try {
+            seen = after == null ? 0 : Long.parseLong(after);
+        } catch (NumberFormatException ignored) {
+            // not a number: the newest picture
+        }
+        CameraFeed.Picture picture = CameraFeed.next(seen, 500);
+        if (picture == null) {
+            return Response.error(404, host.simulated() ? "No picture: the simulator draws one while an OpMode runs (Vision.VISION_ON on)."
+                    : "No camera picture: run an OpMode, with \"Webcam 1\" in the hardware map.");
+        }
+        Response response = new Response();
+        response.type = "image/jpeg";
+        response.body = picture.jpeg;
+        response.headers.put("X-Picture", String.valueOf(picture.number));
+        response.headers.put("Cache-Control", "no-store");
+        return response;
+    }
+
     private Response lockAction(JSONObject body) throws Exception {
         String action = body.getString("action");
-        String pin = body.optString("pin", null);
         if (action.equals("lock")) {
-            if (lock.locked()) return Response.error(400, "Already locked");
-            lock.lock(pin);
+            lock.set(true);
             VirtualGamepads.releaseIfNot("");   // locked is view only: nobody drives
         } else if (action.equals("unlock")) {
-            if (!lock.unlock(pin)) return Response.error(403, "Wrong PIN");
+            lock.set(false);
         } else {
             throw new IllegalArgumentException("action must be lock or unlock");
         }
@@ -858,7 +881,7 @@ public class DashboardServer {
         if (!message.optBoolean("take", false)) {
             VirtualGamepads.release(viewer.id, pad);
         } else if (lock.locked()) {
-            error = "The dashboard is locked. Unlock it with the PIN to drive.";
+            error = "The dashboard is locked. Click the padlock to unlock it.";
         } else {
             error = VirtualGamepads.take(viewer.id, pad, host.activeOpMode());
         }

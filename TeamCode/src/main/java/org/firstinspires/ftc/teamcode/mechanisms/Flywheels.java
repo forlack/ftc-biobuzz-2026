@@ -118,7 +118,10 @@ public class Flywheels implements Mechanism {
         transportNectar.setPower(on ? 1 : 0);
     }
 
-    /** Driver Station lines and chart values. Reads each wheel's speed once. */
+    /**
+     * Driver Station: READY / spinning up / OFF. Dashboard: the numbers (speeds, targets, % off,
+     * F, hub PIDF). Reads each wheel's speed once.
+     */
     @Override
     public void telemetry(Telemetry telemetry) {
         double pollenRpm = pollen.getRPM();
@@ -126,15 +129,14 @@ public class Flywheels implements Mechanism {
         boolean ready = on
                 && Math.abs(pollenRpm - pollen.getTargetRPM()) < VelocityMotor.RPM_TOLERANCE
                 && Math.abs(nectarRpm - nectar.getTargetRPM()) < VelocityMotor.RPM_TOLERANCE;
-        telemetry.addLine("--- SHOOTERS ---");
         telemetry.addData("Flywheels", !on ? "OFF" : ready ? "READY" : "spinning up");
-        telemetry.addData("Pollen", Robot.rpmLine(pollenRpm, pollen.getTargetRPM()));
-        telemetry.addData("Nectar", Robot.rpmLine(nectarRpm, nectar.getTargetRPM()));
-        telemetry.addData("Pollen compensated F", "%.2f", pollenF);
-        telemetry.addData("Nectar compensated F", "%.2f", nectarF);
+        Dash.put("Pollen compensated F", pollenF);
+        Dash.put("Nectar compensated F", nectarF);
         Dash.put("Flywheel averaged V", averageVolts.volts());
-        telemetry.addLine("Pollen hub PIDF " + pollen.getAppliedPIDF());
-        telemetry.addLine("Nectar hub PIDF " + nectar.getAppliedPIDF());
+        Dash.put("Pollen hub PIDF", String.valueOf(pollen.getAppliedPIDF()));
+        Dash.put("Nectar hub PIDF", String.valueOf(nectar.getAppliedPIDF()));
+        Dash.put("Pollen error %", Robot.percentOff(pollenRpm, pollen.getTargetRPM()));
+        Dash.put("Nectar error %", Robot.percentOff(nectarRpm, nectar.getTargetRPM()));
         Dash.put("Pollen RPM", pollenRpm);
         Dash.put("Pollen target", pollen.getTargetRPM());
         Dash.put("Nectar RPM", nectarRpm);

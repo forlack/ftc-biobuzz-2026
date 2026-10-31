@@ -81,6 +81,17 @@ What is different on purpose:
 - **See the cost**: the Live toolbar and the `Dashboard ms` chart series show how much of each
   loop is spent in the dashboard (`Dash.put`, `Dash.frame`); it is measured, not guessed.
 
+## What goes on the Driver Station
+
+Keep the Driver Station to what the drivers act on; send everything else to the dashboard only.
+
+- `telemetry.addData(...)`: Driver Station **and** dashboard. Teleop shows only Alliance,
+  Flywheels, Intake, Hive, Aim (while held) and Battery V; the auton shows its route picker at
+  INIT and Step while running, plus the same mechanism lines.
+- `Dash.put(...)`: dashboard only (tables and charts): speeds, targets, `… error %`, F, PIDF,
+  positions, settings status. Numbers chart; text that changes every loop costs bandwidth, so
+  prefer a number (`Pollen error %`) over a sentence (`3385 / 3400 RPM (-0.4%)`).
+
 ## A mechanism (teleop, auton and dashboard at once)
 
 Each mechanism is one class in `mechanisms/`: its hardware, its settings, its auton functions,

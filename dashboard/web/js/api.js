@@ -34,23 +34,69 @@ export function putFile(path, text, baseHash = '*') {
 }
 
 /** Keeps a websocket open, reconnecting after drops. Calls onMessage(json) and onStatus(bool); returns {send}. */
+/**
+ * The live connection to the robot, kept up by itself. The robot sends its state twice a
+ * second, so 3 s of silence means the link is dead even when the browser has not noticed (after
+ * a Wi-Fi drop the socket often just goes quiet): then it is dropped and a new one opened. It
+ * also reconnects straight away when the computer comes back online.
+ */
 export function connectLive({ onMessage, onStatus }) {
+  const SILENT_MS = 3000;
   let socket;
   let retry = 500;
+  let lastMessage = 0;
+  let timer = null;
+  const reopenLater = () => {
+    clearTimeout(timer);
+    timer = setTimeout(open, retry);
+    retry = Math.min(retry * 2, 5000);
+  };
   const open = () => {
+    clearTimeout(timer);
     const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
-    socket = new WebSocket(url);
-    socket.onopen = () => { retry = 500; onStatus(true); };
-    socket.onmessage = (event) => {
+    const mine = new WebSocket(url);
+    socket = mine;
+    lastMessage = Date.now();
+    mine.onopen = () => {
+      if (socket !== mine) return;
+      retry = 500;
+      lastMessage = Date.now();
+      onStatus(true);
+    };
+    mine.onmessage = (event) => {
+      if (socket !== mine) return;
+      lastMessage = Date.now();
       try { onMessage(JSON.parse(event.data)); } catch (error) { console.error(error); }
     };
-    socket.onclose = () => {
+    mine.onclose = () => {
+      if (socket !== mine) return;   // already replaced (the silence check)
       onStatus(false);
-      setTimeout(open, retry);
-      retry = Math.min(retry * 2, 5000);
+      reopenLater();
     };
-    socket.onerror = () => socket.close();
+    mine.onerror = () => mine.close();
   };
+  const restart = () => {
+    const old = socket;
+    socket = null;
+    if (old) {
+      old.onclose = null;
+      try { old.close(); } catch { /* already gone */ }
+    }
+    onStatus(false);
+    open();
+  };
+  setInterval(() => {
+    if (!socket) return;
+    const quiet = Date.now() - lastMessage;
+    // Open but silent, or still trying to connect after 5 s: start over.
+    if ((socket.readyState === WebSocket.OPEN && quiet > SILENT_MS)
+        || (socket.readyState === WebSocket.CONNECTING && quiet > 5000)) {
+      restart();
+    }
+  }, 1000);
+  window.addEventListener('online', () => {
+    if (!socket || socket.readyState !== WebSocket.OPEN || Date.now() - lastMessage > 1000) restart();
+  });
   open();
   return {
     send(message) {

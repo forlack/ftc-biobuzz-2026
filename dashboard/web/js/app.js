@@ -6,6 +6,7 @@ import { TuneTab } from './tune.js';
 import { RobotTab } from './robot.js';
 import { GamepadDrawer } from './gamepad.js';
 import { AutonTab } from './auton.js';
+import { CameraView } from './camera.js';
 
 const live = new LiveTab();
 const tune = new TuneTab();
@@ -159,38 +160,22 @@ function showLock(value) {
   document.body.classList.toggle('locked', locked);
   document.getElementById('locked-banner').hidden = !locked;
   const button = document.getElementById('lock');
-  button.innerHTML = `${locked ? LOCK_ICON.closed : LOCK_ICON.open}<span>${locked ? 'Locked' : 'Unlocked'}</span>`;
+  // Just the padlock (closed = locked); the words are in its tooltip.
+  button.innerHTML = locked ? LOCK_ICON.closed : LOCK_ICON.open;
+  button.setAttribute('aria-label', locked ? 'Locked' : 'Unlocked');
   button.classList.toggle('on', locked);
-  button.title = locked ? 'Locked: view only. Click and enter the PIN to unlock.'
-    : 'Unlocked: anyone can make changes. Click to lock with a PIN.';
+  button.title = locked ? 'Locked: view only for every browser. Click to unlock.'
+    : 'Unlocked: anyone can make changes. Click to lock (view only for every browser).';
 }
 showLock(false);
 
-// One PIN box, shown as you type, so there is nothing to type twice.
-const lockDialog = document.getElementById('lock-dialog');
-const pinInput = document.getElementById('lock-pin');
-
-document.getElementById('lock').addEventListener('click', () => {
-  document.getElementById('lock-title').textContent = locked ? 'Unlock the dashboard' : 'Lock the dashboard';
-  document.getElementById('lock-hint').textContent = locked
-    ? 'Enter the PIN to allow changes again.'
-    : 'Anyone can still watch. Changing anything will need this PIN.';
-  document.getElementById('lock-ok').textContent = locked ? 'Unlock' : 'Lock';
-  document.getElementById('lock-error').textContent = '';
-  pinInput.value = '';
-  lockDialog.showModal();
-  pinInput.focus();
-});
-
-pinInput.addEventListener('input', () => { pinInput.value = pinInput.value.replace(/\D/g, ''); });
-
-lockDialog.addEventListener('close', async () => {
-  if (lockDialog.returnValue !== 'ok') return;
-  const pin = pinInput.value;
+// One click locks (every browser is view only until someone clicks again). No PIN: it only
+// stops accidents.
+document.getElementById('lock').addEventListener('click', async () => {
   try {
-    const result = await api('/api/lock', { method: 'POST', body: { action: locked ? 'unlock' : 'lock', pin } });
+    const result = await api('/api/lock', { method: 'POST', body: { action: locked ? 'unlock' : 'lock' } });
     showLock(result.locked);
-    toast(result.locked ? `Locked with PIN ${pin}: view only` : 'Unlocked: changes allowed');
+    toast(result.locked ? 'Locked: view only' : 'Unlocked: changes allowed');
   } catch (error) {
     toast(error.message, true);
   }
@@ -209,7 +194,9 @@ connection = connectLive({
   onStatus(up) {
     const conn = document.getElementById('conn');
     conn.classList.toggle('up', up);
-    conn.querySelector('span').textContent = up ? 'live' : 'offline';
+    // Just the dot: green connected, red not; the words are in its tooltip.
+    conn.title = up ? 'Connected to the robot (live)' : 'Not connected to the robot';
+    conn.setAttribute('aria-label', up ? 'live' : 'offline');
     if (up) subscribe();
   },
   onMessage(message) {
@@ -223,6 +210,9 @@ connection = connectLive({
     if (telemetry.frames.length) live.addFrames(telemetry.frames);
   },
 });
+
+// The Live tab's camera picture.
+new CameraView();
 
 // The Gamepad drawer at the bottom of every tab.
 gamepad = new GamepadDrawer({ send: (message) => connection.send(message), onOpenChange: () => subscribe() });

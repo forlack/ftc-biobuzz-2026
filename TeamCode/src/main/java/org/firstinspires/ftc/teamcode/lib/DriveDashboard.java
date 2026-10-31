@@ -26,15 +26,14 @@ public class DriveDashboard {
         telemetry.update();
     }
 
-    /** Call once per loop, last: adds the drive lines and sends this loop's telemetry. */
+    /** Call once per loop, last: the drive's dashboard values, then sends this loop's telemetry. */
     public void update() {
-        telemetry.addLine("");
-        telemetry.addLine("--- DRIVE ---");
-        telemetry.addData("Speed %", Math.round(drive.getLastSpeedUsed() * 100));
-        telemetry.addData("Default speed %", Math.round(drive.getDefaultSpeed() * 100));
-        telemetry.addData("Stopping", drive.isBrakeMode() ? "BRAKE" : "COAST");
-        telemetry.addData("Heading", "%.0f", drive.getLastHeadingDegrees());
-        // Dashboard only: what the driver's sticks are doing, -1 to 1.
+        // Dashboard only (the Driver Station keeps to what the drivers act on).
+        Dash.put("Speed %", Math.round(drive.getLastSpeedUsed() * 100));
+        Dash.put("Default speed %", Math.round(drive.getDefaultSpeed() * 100));
+        Dash.put("Stopping", drive.isBrakeMode() ? "BRAKE" : "COAST");
+        Dash.put("Heading", Math.round(drive.getLastHeadingDegrees()));
+        // What the driver's sticks are doing, -1 to 1.
         Dash.put("Drive forward", drive.getLastForward());
         Dash.put("Drive strafe", drive.getLastStrafe());
         Dash.put("Drive turn", drive.getLastTurn());

@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
+import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.lib.AutoFunction;
 import org.firstinspires.ftc.teamcode.lib.RobotSettings;
@@ -45,6 +46,6 @@ public class Stinger implements Mechanism {
 
     @Override
     public void telemetry(Telemetry telemetry) {
-        telemetry.addData("Stinger", servo.getPosition());
+        Dash.put("Stinger", servo.getPosition());   // dashboard only
     }
 }

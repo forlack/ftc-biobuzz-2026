@@ -5,6 +5,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
+import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.AutoFunction;
 
 /** The two trigger servos (Pollen and Nectar) that push balls into the flywheels. */
@@ -45,6 +46,6 @@ public class Triggers implements Mechanism {
 
     @Override
     public void telemetry(Telemetry telemetry) {
-        telemetry.addData("Triggers", on);
+        Dash.put("Triggers", on);   // dashboard only
     }
 }

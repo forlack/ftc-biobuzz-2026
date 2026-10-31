@@ -4,10 +4,10 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
+import org.firstinspires.ftc.teamcode.lib.Readouts;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Every mechanism of the robot, made once from the hardware map, used by the teleop and the
@@ -30,6 +30,7 @@ public class Robot {
     public final Flywheels flywheels;
     public final Triggers triggers;
     public final Stinger stinger;
+    public final Vision vision;
 
     private final List<Mechanism> mechanisms = new ArrayList<>();
     private final HardwareMap hardwareMap;
@@ -39,10 +40,12 @@ public class Robot {
     /** Finds every mechanism's hardware. Moves nothing. */
     public Robot(HardwareMap hardwareMap) {
         this.hardwareMap = hardwareMap;
-        intake = add(new Intake(hardwareMap));
+        // This order is also the Driver Station's: Flywheels, Intake, Hive.
         flywheels = add(new Flywheels(hardwareMap, this::batteryVolts));
+        intake = add(new Intake(hardwareMap));
         triggers = add(new Triggers(hardwareMap));
         stinger = add(new Stinger(hardwareMap));
+        vision = add(new Vision(hardwareMap));
     }
 
     private <M extends Mechanism> M add(M mechanism) {
@@ -79,6 +82,10 @@ public class Robot {
         for (Mechanism mechanism : mechanisms) {
             mechanism.telemetry(telemetry);
         }
+    }
+
+    /** The battery line, last on the Driver Station. */
+    public void batteryTelemetry(Telemetry telemetry) {
         telemetry.addData("Battery V", "%.2f", batteryVolts);
     }
 
@@ -94,9 +101,8 @@ public class Robot {
         return Double.isFinite(volts) ? volts : previous;
     }
 
-    /** "3385 / 3400 RPM (-0.4%)" for the Driver Station. */
-    static String rpmLine(double rpm, double target) {
-        String line = Math.round(rpm) + " / " + Math.round(target) + " RPM";
-        return target == 0 ? line : String.format(Locale.US, "%s (%+.1f%%)", line, (rpm - target) / Math.abs(target) * 100);
+    /** How far off the target, as a % of it (0 with no target); for the dashboard's charts. */
+    static double percentOff(double rpm, double target) {
+        return Readouts.percentOff(rpm, target);
     }
 }

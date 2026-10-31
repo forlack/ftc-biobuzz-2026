@@ -58,8 +58,11 @@ public class PedroAutonomous extends OpMode {
         telemetry = new DashboardTelemetry(telemetry);
         // Same robot.json as teleop, so the flywheel and stinger numbers match.
         RobotSettings settings = new RobotSettings().load();
-        telemetry.addData("Settings", settings.status());
-        for (String warning : settings.warnings()) telemetry.addData("Settings warning", warning);
+        // Dashboard only (the Driver Station shows the route picker and the run).
+        Dash.put("Settings", settings.status());
+        for (String warning : settings.warnings()) {
+            Dash.put("Settings warning", warning);
+        }
 
         follower = Constants.create(hardwareMap);
 
@@ -126,17 +129,17 @@ public class PedroAutonomous extends OpMode {
     }
 
     private void showInit() {
+        telemetry.addData("Alliance", Alliance.name() + "   (set on the Tune tab before the match)");
         if (problem != null) {
             telemetry.addData("ROUTE PROBLEM", problem);
             telemetry.addData("Route", ROUTE + "  (D-pad up/down to pick another)");
             Dash.put("Status", "Route problem: " + problem);
         } else {
             telemetry.addData("Route", ROUTE + "  (D-pad up/down to pick another)");
-            telemetry.addData("From", source);
             telemetry.addData("Steps", auto.stepCount());
-            telemetry.addData("Start X", start.x());
-            telemetry.addData("Start Y", start.y());
-            telemetry.addData("Start heading (deg)", Math.toDegrees(start.heading()));
+            telemetry.addData("Start", String.format(java.util.Locale.US, "x %.1f, y %.1f, %.0f°",
+                    start.x(), start.y(), Math.toDegrees(start.heading())));
+            Dash.put("From", source);
             Dash.put("Status", "Route " + ROUTE + " ready: " + auto.stepCount() + " steps");
             Dash.put("Start", String.format(java.util.Locale.US, "%.1f, %.1f, %.0f°", start.x(), start.y(), Math.toDegrees(start.heading())));
         }
@@ -174,16 +177,19 @@ public class PedroAutonomous extends OpMode {
         robot.update();
 
         Pose pose = follower.pose();
+        // The Driver Station: the alliance, what the auton is doing, the mechanisms, the battery.
+        telemetry.addData("Alliance", Alliance.name());
         telemetry.addData("Step", auto.stepNumber() + "/" + auto.stepCount() + "  " + auto.stepName());
-        telemetry.addData("Following", follower.isBusy());
-        telemetry.addData("Completion", follower.completion());
-        telemetry.addData("X", pose.x());
-        telemetry.addData("Y", pose.y());
-        telemetry.addData("Heading", Math.toDegrees(pose.heading()));
+        robot.telemetry(telemetry);   // Flywheels, Intake, Hive
+        robot.batteryTelemetry(telemetry);
 
         // Dashboard only: the same names the teleop and the simulator chart.
+        Dash.put("Following", follower.isBusy());
+        Dash.put("Completion", follower.completion());
+        Dash.put("X", pose.x());
+        Dash.put("Y", pose.y());
+        Dash.put("Heading", Math.toDegrees(pose.heading()));
         Dash.put("Route done", auto.finished());
-        robot.telemetry(telemetry);
         long now = System.nanoTime();
         if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
         lastLoop = now;
