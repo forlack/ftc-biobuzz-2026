@@ -75,11 +75,11 @@ public class Vision implements Mechanism {
     /** Turn stick per degree of angle. */
     public static double AIM_P = 0.02;
     /** Turn stick per degree-second, to finish the last few degrees. */
-    public static double AIM_I = 0.01;
+    public static double AIM_I = 0;
     /** I only builds up within this many degrees of the target. */
     public static double AIM_I_ZONE_DEG = 5;
     /** The most turn stick aiming may use (0 to 1). */
-    public static double AIM_MAX_TURN = 0.6;
+    public static double AIM_MAX_TURN = 0.75;
     /** Within this many degrees counts as on target. */
     public static double AIM_TOLERANCE_DEG = 1;
 

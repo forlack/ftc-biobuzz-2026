@@ -105,6 +105,22 @@ Fill in the log and commit it:
 git add dashboard/ROBOT-TEST.md && git commit -m "Robot test log" && git push
 ```
 
+## Webcam and auto aim (first run planned 2026-10-31)
+
+Do sections 1 to 3 first (build on real internet, back up, deploy). Then:
+
+| # | Check | Pass when |
+|---|---|---|
+| W1 | Webcam in the map | Driver Station: Configure Robot → 24621-Biobuzz → **Scan** with the webcam plugged into the Control Hub → name it exactly **`Webcam 1`** → Save, activate. Then `./robot-sync pull` and commit the map. Field Centric's telemetry no longer says `Hive: no camera` |
+| W2 | Camera card | Live tab, Camera **Show** on, Field Centric running: a picture about 10 times a second, tags outlined. Hiding it: `Loop ms` back to normal |
+| W3 | Tags give numbers | With our hive in view: `Hive` shows a cluster name, inches and an angle; `Hive range in` about right with a tape measure. If tags are outlined but `Hive` stays "not seen", the webcam has no SDK calibration: note the model (see AGENTS.md "Next session") |
+| W4 | Camera mount | Measure and set (Tune → Vision) `CAMERA_HEIGHT_IN` (lens above the tiles), `CAMERA_PITCH_UP_DEG` (tilt up), `CAMERA_FORWARD_IN` / `CAMERA_LEFT_IN`; Save to robot |
+| W5 | Up or down | `Hive height in` with a cell up (about 45 in) and down (about 30 in) lands either side of `HIVE_UP_MIN_HEIGHT_IN` (38). A down cell shows in `Hive ignored` ("down"). Write both heights in the log |
+| W6 | Alliance | `Alliance` line right; operator D-pad left = BLUE, right = RED; the other alliance's hive shows in `Hive ignored` |
+| W7 | Angle sign | Hive to the robot's **left** gives a **+** `Hive bearing deg` (and right gives −). If it is the other way round, stop: aim would turn away |
+| W8 | Auto aim | Point about 20° off the hive, hold **driver Y**: it turns to face it, Driver Station `Aim` says ON TARGET, and holds while you drive with the left stick. Let go: the turn stick works again. No hive in view: `Aim` says "no hive in view" and it does not turn. Tune on the Tune tab → Vision: swinging back and forth → lower `AIM_P` (or `AIM_MAX_TURN`, 0.75); slow or stops short → raise `AIM_P` a little (or `AIM_I`, 0 now). Charts: `Aim error deg`, `Aim turn`. **Save to robot**; write the values in the log |
+| W9 | Keep it | `./robot-sync pull` (settings and the map into Git), commit, push |
+
 ## Log
 
 | Date | Who | Branch commit | Checks failed | Load: loop, in Dash, + loop (ms), KB/s, 0/1/2 viewers | MAX_SAMPLES | Notes |

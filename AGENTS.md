@@ -2,7 +2,38 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-25
+Last updated: 2026-10-30
+
+---
+
+## Next session (2026-10-31): first webcam + auto aim run on the robot. Read this first.
+
+Everything is committed and pushed on `main`; the simulator, unit tests and e2e (167) pass.
+Built but **never run on the robot**: the webcam hive finder (`mechanisms/Vision`,
+`lib/HiveFinder`), the Live tab Camera card, and the auto aim (`lib/AimController`, **driver Y**
+held, robot and simulator). Checklist and what to write down:
+`dashboard/ROBOT-TEST.md` "Webcam and auto aim".
+
+How to help the user tomorrow:
+- **The user deploys, not the agent.** Joining the robot's Wi-Fi drops this laptop's internet
+  (and the agent's session). Give the commands (`./deploy --stay` / `./deploy-linux --stay`),
+  or use USB (keeps internet). Wi-Fi credentials never go in Git.
+- **No code changes without asking**; Java bodies on their own lines (no one-line methods);
+  don't invent hardware. Commit / push only when asked.
+- Aim defaults now (user's choice from the simulator, 2026-10-30): `AIM_P` 0.02, **`AIM_I` 0**,
+  `AIM_I_ZONE_DEG` 5, **`AIM_MAX_TURN` 0.75**, `AIM_TOLERANCE_DEG` 1. They tune live on the
+  Tune tab (Vision card); **Save to robot**, then `./robot-sync pull` + commit to keep them.
+- Likely snags, in order: (1) webcam not in the hardware map as exactly `Webcam 1` (Driver
+  Station Scan, then `./robot-sync pull`); (2) **no pose from the tags**: the SDK only gives
+  range / bearing for webcams it has a calibration for (Logitech C920 / C270 etc.); an unknown
+  camera shows tags but `ftcPose` is null, so `Hive` stays "not seen". Find the model, then add
+  a calibration (`setLensIntrinsics` on the AprilTagProcessor builder in `Vision`, or a
+  `teamwebcamcalibrations.xml`); (3) `CAMERA_HEIGHT_IN` / `CAMERA_PITCH_UP_DEG` not measured
+  (heights wrong, so up/down filtering wrong: compare `Hive height in` up vs down against
+  `HIVE_UP_MIN_HEIGHT_IN` 38); (4) aim turning the wrong way (camera mounted another way than
+  facing forward, upright): check the sign of `Hive bearing deg` (+ = hive to the left) first.
+- After the robot test: the next projects are ROADMAP.md webcam steps 7 (aim step in the
+  auton) and 8 (distance -> flywheel RPM table), then B (trigger gating).
 
 ---
 
@@ -316,7 +347,7 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
 - **Aim, telemetry cleanup, Live layout (2026-10-30):** lib/AimController (PI on the hive's
   signed angle, + = left/CCW; output turn stick + = clockwise; I only within AIM_I_ZONE_DEG,
   clamped so I alone <= AIM_MAX_TURN; resets on release/lost hive); Vision.AIM_P 0.02, AIM_I
-  0.01, AIM_I_ZONE_DEG 5, AIM_MAX_TURN 0.6, AIM_TOLERANCE_DEG 1. **Driver Y** holds aim, robot
+  0 (was 0.01), AIM_I_ZONE_DEG 5, AIM_MAX_TURN 0.75 (was 0.6), AIM_TOLERANCE_DEG 1. **Driver Y** holds aim, robot
   and sim (taken out for a student project in 1203a9e, put back from da92596 at the user's
   request, moved from operator Y to driver Y); while held it replaces the turn stick, and
   MecanumDrive.drive(..., exactTurn) skips the stick deadzone for it. Sim run: 40 deg off -> on
