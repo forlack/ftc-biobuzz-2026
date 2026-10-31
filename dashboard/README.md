@@ -32,7 +32,7 @@ or the dashboard is locked. **Not allowed in matches.** In code:
 ```bash
 ./simulate                     # then open http://localhost:8686 (teleop starts running)
 ./simulate --fresh             # start over with a clean fake SD card
-./simulate --idle              # start with no OpMode (battery and wheels still report)
+./simulate --idle              # start with no OpMode (like the robot, nothing reports until one runs)
 ./simulate --init "Pedro Pathing Autonomous" --start
 ```
 

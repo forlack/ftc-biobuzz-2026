@@ -45,40 +45,6 @@ public class SimHost implements RobotHost {
         add("Field Centric (Java)", "teleop", SimOpModes.TeleOp::new);
         add("Pedro Pathing Autonomous", "autonomous", SimOpModes.Autonomous::new);
         settings.load();
-        startIdleTelemetry();
-    }
-
-    /**
-     * With no OpMode running the robot still has a battery and coasting wheels, so keep
-     * sending those 20 times a second: the charts never go blank between runs.
-     */
-    private void startIdleTelemetry() {
-        Thread idle = new Thread(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(50);
-                    if (current == null) {
-                        Dash.put("Battery V", world.battery());
-                        Dash.put("Pollen RPM", world.pollen.rpm(SimWorld.FLYWHEEL_TICKS_PER_REV));
-                        Dash.put("Pollen target", 0);
-                        Dash.put("Nectar RPM", world.nectar.rpm(SimWorld.FLYWHEEL_TICKS_PER_REV));
-                        Dash.put("Nectar target", 0);
-                        Dash.put("Intake RPM", world.intake.rpm(SimWorld.INTAKE_TICKS_PER_REV));
-                        Dash.put("Intake target", 0);
-                        Dash.put("Status", "No OpMode running");
-                        double[] pose = world.pose();
-                        Dash.pose(pose[0], pose[1], pose[2]);
-                        Dash.frame();
-                    }
-                } catch (InterruptedException error) {
-                    return;
-                } catch (Throwable ignored) {
-                    // Keep going.
-                }
-            }
-        }, "sim-idle-telemetry");
-        idle.setDaemon(true);
-        idle.start();
     }
 
     private void add(String name, String kind, Supplier<SimOpModes.SimOpMode> factory) {

@@ -312,6 +312,9 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   aim himself. Do not write it for him or describe a finished design: help him reason, explain
   ideas and debug his code, but let him make the choices. See ROADMAP.md "Auto aim (student
   project)".
+- **Sim sends nothing while stopped (2026-10-30):** SimHost's 20 Hz idle telemetry (battery,
+  RPMs, pose, "No OpMode running") was removed at the user's request, so after Stop the table
+  empties and the charts freeze, like the robot.
 - **Simulator demo off by default (2026-10-30):** Simulator.DEMO_DRIVING / DEMO_SHOOTING start
   false (user's choice); `./simulate --demo` turns both on, and the e2e test starts with it.
 - **Telemetry cleanup, Live layout (2026-10-30):** **Driver Station telemetry (user's
