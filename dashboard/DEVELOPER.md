@@ -86,7 +86,7 @@ What is different on purpose:
 Keep the Driver Station to what the drivers act on; send everything else to the dashboard only.
 
 - `telemetry.addData(...)`: Driver Station **and** dashboard. Teleop shows only Alliance,
-  Flywheels, Intake, Hive and Battery V; the auton shows its route picker at
+  Flywheels, Intake, Hive, Aim (while held) and Battery V; the auton shows its route picker at
   INIT and Step while running, plus the same mechanism lines.
 - `Dash.put(...)`: dashboard only (tables and charts): speeds, targets, `… error %`, F, PIDF,
   positions, settings status. Numbers chart; text that changes every loop costs bandwidth, so
