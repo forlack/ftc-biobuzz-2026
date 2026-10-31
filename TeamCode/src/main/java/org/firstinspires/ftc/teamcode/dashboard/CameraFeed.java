@@ -24,7 +24,37 @@ public final class CameraFeed {
 
     private static final Object LOCK = new Object();
     private static Picture latest;
-    private static long publishedNanos;
+    private static volatile long publishedNanos;
+    private static volatile String cameraState = "not initialized";
+    private static volatile double cameraFps;
+    private static volatile long reportedNanos;
+    private static volatile boolean previewEnabled;
+    private static volatile String cameraProblem = "";
+
+    public static void report(String state, double fps, boolean preview, String problem) {
+        if (!state.equals(cameraState)) RobotDiagnostics.info("Camera", "State: " + cameraState + " -> " + state);
+        if (problem != null && !problem.isEmpty() && !problem.equals(cameraProblem)) RobotDiagnostics.warn("Camera", problem);
+        reportedNanos = System.nanoTime();
+        cameraState = state;
+        cameraFps = fps;
+        previewEnabled = preview;
+        cameraProblem = problem == null ? "" : problem;
+    }
+
+    public static org.json.JSONObject diagnostics() throws org.json.JSONException {
+        org.json.JSONObject result = new org.json.JSONObject();
+        result.put("state", cameraState);
+        result.put("reportAgeMs", reportedNanos == 0 ? org.json.JSONObject.NULL
+                : (Object) ((System.nanoTime() - reportedNanos) / 1_000_000L));
+        result.put("fps", Double.isFinite(cameraFps) ? cameraFps : 0);
+        result.put("previewEnabled", previewEnabled);
+        result.put("previewWanted", wanted());
+        result.put("previewAgeMs", publishedNanos == 0 ? org.json.JSONObject.NULL
+                : (Object) ((System.nanoTime() - publishedNanos) / 1_000_000L));
+        result.put("problem", cameraProblem);
+        return result;
+    }
+
     private static volatile long askedNanos;
 
     /** For the vision code: does anyone want pictures right now? */

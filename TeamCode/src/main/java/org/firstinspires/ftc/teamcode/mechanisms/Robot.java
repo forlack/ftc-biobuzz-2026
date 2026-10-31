@@ -86,6 +86,7 @@ public class Robot {
 
     /** The battery line, last on the Driver Station. */
     public void batteryTelemetry(Telemetry telemetry) {
+        readBattery(); // Also refresh during INIT; the 4 Hz limit still applies.
         telemetry.addData("Battery V", "%.2f", batteryVolts);
     }
 

@@ -1554,3 +1554,111 @@ It only speeds up the *configuration* phase. Our costs are elsewhere: a clean bu
 means editing `gradle.properties`, an upstream file, adding a merge conflict for half a
 second — and it is still `[Incubating]`, failing in confusing serialization errors that a
 student has no way to interpret. Use `./gradlew --configuration-cache` ad hoc if ever needed.
+
+## Webcam and hardware map — 2026-10-31
+
+Canonical map is robot-config/24621-Biobuzz-Main.xml; user activated it and removed
+other root XML files on the hub. DS still shows a stale blank 24621-Biobuzz entry;
+not resolved. Restored webcam map was pulled into ~/ftc-dashboard-demo (detached
+old dashboard worktree); its pulled settings/autos/history remain there, uncommitted.
+Camera name Webcam 1, serial UC852. goBILDA global shutter 3122-0004-0001:
+640x480 requires MJPEG; Vision now explicitly requests MJPEG and factory intrinsics
+fx=fy=545.584, cx=350.588, cy=223.150. Source:
+https://www.gobilda.com/content/user_manuals/3122-0004-0001_user_guide.pdf
+Hardware map changes preserve all motor/servo/Pinpoint ports. Camera initializes at
+TeleOp INIT, but dashboard frame capture currently runs only after PLAY; INIT-only
+dashboard preview has not been implemented.
+
+### Operator aiming update — 2026-10-31
+
+TeleOp auto aim is now operator/gamepad2 Y (hold), also requested by operator
+right-bumper shoot and driver forceShoot. Driver Y no longer requests aim.
+Only a finite nonzero correction from the selected alliance hive overrides driver
+rotation and enables exact-turn driving. No target or within tolerance restores
+normal driver rotation; translation remains driver-controlled throughout.
+
+### INIT and telemetry cleanup — 2026-10-31
+
+TeleOp INIT now reads operator D-pad left/right for alliance selection, updates only
+vision and telemetry (no mechanism commands), and supports dashboard camera preview.
+Battery telemetry refreshes at the existing 4 Hz limit during INIT too.
+Live telemetry defaults to concise status/RPM/battery/alliance/hive/aim values;
+Show all or search exposes diagnostics. Numeric stream, chart picker and CSV remain
+unchanged. Hive ignored is no longer published by Vision or displayed in the table.
+Frontend check: node tests/test_telemetry_summary.mjs.
+
+### Source telemetry reduction — 2026-10-31
+
+Removed publications (not merely hidden): full hub PIDF strings, raw drive sticks,
+default speed and stop-mode constants, per-section timing, duplicate flywheel
+on/ready and hive seen/height, duplicate motor percent errors, path busy/done.
+Keep RPM actual/target, applied F, averaged/measured voltage, mechanism states,
+alliance/hive range+bearing, aim error/turn, active speed/heading, autonomous
+step/progress/pose, Loop ms and dashboard load. Standard flywheel error charts
+compute percent locally. Existing custom charts for removed keys stop receiving
+new samples. See dashboard/README.md for the job-to-measurement mapping.
+
+### Deploy robot-side ADB recovery — 2026-10-31
+
+Mac/Linux deploy now disconnect stale transport before online build, join robot
+Wi-Fi, disconnect again, POST dashboard /api/adb/restart (same as Robot tab button;
+20 s timeout, no automatic retry), then existing laptop kill-server/connect/get-state
+verification and install. HTTP unavailable/locked/missing permission reports a warning
+and falls back to normal connect. Does not reboot hub or auto-unlock dashboard.
+Tests mock robot restart so no real HTTP/robot mutations occur in deploy test runs.
+
+### Guarded operator controls and preview — 2026-10-31
+
+Operator toggles require held Start: Start+X intake, Start+A flywheels.
+Alliance: Start+D-pad left BLUE, Start+D-pad right RED, during INIT and PLAY.
+Aim Y, shoot right bumper, reverse D-pad down and stinger left bumper remain direct.
+Button combos still use pressed edges so holding a combo toggles once.
+Dashboard webcam preview now encodes the full 640x480 bitmap at JPEG quality 85,
+without downscaling; only when viewed, existing CAMERA_FEED_FPS limit unchanged.
+AprilTag processing remains 640x480 MJPEG with the same calibration.
+
+### B modifier, install retry and aim trim — 2026-10-31
+
+Start combos interfered with DS pairing; user reports Back ineffective. Current
+operator modifier is B: B+A flywheels toggle, B+X intake toggle, B+D-pad left/right
+BLUE/RED during INIT and PLAY. Earlier Start/Back instructions are superseded.
+Aim left trim is Vision.AIM_LEFT_TRIM_DEG (default 0), positive rotates further
+left to correct rightward shots. Shared AimController supports trim; sim passes it.
+Deploy install failures now disconnect/reconnect/verify ADB and retry install once
+with --no-daemon (fresh Gradle monitor). No repeated robot restart during retry.
+Retry failure propagates through existing network restore; interrupts not retried.
+
+### Camera preview isolation — 2026-10-31
+
+Vision.CAMERA_FEED_ON defaults false, dashboard-editable/persistable. Gates only
+dashboard bitmap requests/JPEG encoding; VisionPortal capture, MJPEG decoding,
+AprilTag processing and aiming continue. Callback rechecks flag for pending requests.
+Simulator honors the flag. Existing VISION_ON controls camera construction at INIT,
+not a live camera shutdown. To fully disable vision, set VISION_ON=false then STOP
+and re-INIT. Preview flag is a diagnostic isolation tool, not a confirmed crash fix.
+Desktop captured log: 12:19 SIGABRT stack corruption in libturbojpeg decompression;
+12:41 camera start UVC_ERROR_IO with kernel insufficient USB bandwidth. No observed
+OutOfMemoryError; do not conflate these incidents or assert preview was root cause.
+
+### Robot-tab log viewer — 2026-10-31
+
+Robot logs defaults to saved events/errors, with filter/refresh/download. Other
+sources: previous events, performance context, previous performance, Android
+logcat (on-demand only, permissions limited, 300 entries/96KB/3sec subprocess cap).
+New RobotDiagnostics.info/warn/error(source,message[,throwable]) queues messages,
+no drive-loop disk writes. Existing dashboard meter flushes at 1Hz: 2x512KB event
+files, 2x1MB performance files, tails bounded 64KB. Queue100, message2048 chars.
+Camera state transitions/problems and caught preview encoding exceptions logged;
+Android OpMode lifecycle recorded. Background samples retain CPU/loop + Java
+heap use/limit, native allocated, OS available/low-memory, camera state/FPS and
+preview/report age; no extra driver telemetry. OS-native crash logs are not
+automatically persisted; use logcat/ADB. Last unflushed second may be lost.
+Log I/O failure exposed in viewer. Logs aren't yet robot-sync-managed.
+
+### Verified on robot — 2026-10-31
+
+User confirmed the Robot tab log viewer works and captures logs. All current
+webcam, B-modifier controls, INIT alliance/preview, telemetry cleanup, deploy ADB
+recovery/retry, aim trim and single Main hardware map are being committed together.
+Preview remains CAMERA_FEED_ON=false by default for diagnostic isolation; saved
+robot settings can override defaults. No confirmed camera crash root cause yet.

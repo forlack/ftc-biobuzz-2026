@@ -10,6 +10,8 @@ import stat
 import subprocess
 import sys
 import time
+import urllib.request
+import urllib.error
 
 ROOT = Path(__file__).resolve().parent
 HARDWARE_MAP_DIR = ROOT / 'robot-config'
@@ -195,6 +197,29 @@ def tuning_flag(args):
     return flags
 
 
+def restart_robot_adb(robot_ip):
+    """Use the dashboard's Restart adb button, even when the ADB transport is dead."""
+    print('Restarting robot ADB through the dashboard…', flush=True)
+    request = urllib.request.Request(
+        f'http://{robot_ip}:8686/api/adb/restart', data=b'{}', method='POST',
+        headers={'Content-Type': 'application/json'})
+    try:
+        # The robot toggles ADB off for 2 s, then waits up to 10 s for port 5555.
+        # Do not repeat a timed-out POST: it may already have restarted ADB.
+        with urllib.request.urlopen(request, timeout=20) as response:
+            status = json.load(response)
+        if not isinstance(status, dict):
+            raise ValueError('Unexpected dashboard response')
+        if status.get('error'):
+            print(f"Robot ADB restart: {status['error']}", flush=True)
+        elif status.get('canRestart') is False:
+            print('Robot ADB restart unavailable: ' + status.get('note', 'not supported'), flush=True)
+        else:
+            print('Robot ADB restart requested; checking the ADB connection next.', flush=True)
+    except (OSError, ValueError) as error:
+        print(f'Robot ADB restart unavailable ({error}); trying the normal ADB connection.', flush=True)
+
+
 def connect_adb(adb, target):
     # Start every connection with a fresh ADB server. After switching Wi-Fi, an old server
     # often keeps a dead transport and reports the robot "offline" until it is killed.
@@ -224,6 +249,23 @@ def connect_adb(adb, target):
     raise RuntimeError('Control Hub ADB is not ready. Check hub power and Wi-Fi.')
 
 
+def install_debug(args, adb, target, env):
+    command = [str(ROOT / 'gradlew'), '--offline', *tuning_flag(args),
+               ':TeamCode:installDebug', '--console=auto']
+    try:
+        run(command, timeout=300, capture=False, env=env)
+    except subprocess.CalledProcessError:
+        # ADB may die after get-state passed, while Gradle opens its device monitor.
+        # Retry once after reconnecting, with a fresh Gradle process/device monitor.
+        print('Install failed; reconnecting ADB and retrying once…', flush=True)
+        try:
+            run([adb, 'disconnect', target], timeout=10)
+        except (subprocess.SubprocessError, OSError):
+            pass
+        connect_adb(adb, target)
+        run(command + ['--no-daemon'], timeout=300, capture=False, env=env)
+
+
 def deploy(args, interface, previous, previous_router, adb, env, passwords):
     target = f'{args.robot_ip}:5555'
     restore = previous != args.ssid
@@ -237,6 +279,7 @@ def deploy(args, interface, previous, previous_router, adb, env, passwords):
             run([adb, 'disconnect', target])
         except subprocess.CalledProcessError:
             pass  # No existing transport is normal on the first deployment.
+        restart_robot_adb(args.robot_ip)
         connect_adb(adb, target)
         # Explicit serial avoids accidentally installing onto a USB-connected Driver Hub.
         deploy_env = dict(env, ANDROID_SERIAL=target)
@@ -247,8 +290,7 @@ def deploy(args, interface, previous, previous_router, adb, env, passwords):
             restart_robot_controller(adb, target)
         else:
             push_new_autos(adb, target)
-            run([str(ROOT / 'gradlew'), '--offline', *tuning_flag(args), ':TeamCode:installDebug',
-                 '--console=auto'], timeout=300, capture=False, env=deploy_env)
+            install_debug(args, adb, target, deploy_env)
     except BaseException as exc:
         error = exc
     finally:
@@ -356,6 +398,10 @@ def main():
         return
     os.chdir(ROOT)
     if not args.map_only:
+        try:
+            run([adb, 'disconnect', f'{args.robot_ip}:5555'], timeout=10)
+        except (subprocess.SubprocessError, OSError):
+            pass  # A missing or stale transport must not prevent the online build.
         print('Building before switching Wi-Fi…', flush=True)
         run([str(ROOT / 'gradlew'), *tuning_flag(args), ':TeamCode:assembleDebug', '--console=auto'],
             timeout=600, capture=False, env=env)

@@ -242,6 +242,45 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
                 + "if it stays off, power-cycle the hub.";
     }
 
+    @Override public JSONObject diagnosticMemory() {
+        JSONObject memory = new JSONObject();
+        try {
+            memory.put("nativeAllocatedBytes", android.os.Debug.getNativeHeapAllocatedSize());
+            android.app.ActivityManager manager = (android.app.ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+            android.app.ActivityManager.MemoryInfo info = new android.app.ActivityManager.MemoryInfo();
+            manager.getMemoryInfo(info);
+            memory.put("systemAvailableBytes", info.availMem);
+            memory.put("systemLowMemory", info.lowMemory);
+            memory.put("deviceUptimeMs", android.os.SystemClock.elapsedRealtime());
+        } catch (Exception error) {
+            try { memory.put("error", error.toString()); } catch (JSONException ignored) { }
+        }
+        return memory;
+    }
+
+    /** No root or permission changes. Android may return only this app's accessible logs. */
+    @Override public String systemLog() throws IOException {
+        Process process = new ProcessBuilder("logcat", "-d", "-b", "all", "-v", "threadtime", "-t", "300")
+                .redirectErrorStream(true).start();
+        Thread deadline = new Thread(() -> {
+            try { Thread.sleep(3000); process.destroy(); } catch (InterruptedException ignored) { }
+        }, "dashboard-logcat-timeout");
+        deadline.setDaemon(true);
+        deadline.start();
+        try (InputStream input = process.getInputStream();
+             java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int count;
+            while (output.size() < 96 * 1024 && (count = input.read(buffer, 0,
+                    Math.min(buffer.length, 96 * 1024 - output.size()))) > 0) output.write(buffer, 0, count);
+            String text = new String(output.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
+            return text.isEmpty() ? "No accessible Android log entries. Use adb logcat -b all -d for a full capture.\n" : text;
+        } finally {
+            deadline.interrupt();
+            process.destroy();
+        }
+    }
+
     @Override public RobotSettings settings() { return settings; }
 
     @Override public Actions actions() { return actions; }
@@ -256,9 +295,18 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
 
     // ---- OpMode notifications -------------------------------------------------
 
-    @Override public void onOpModePreInit(OpMode opMode) { state = "init"; }
+    @Override public void onOpModePreInit(OpMode opMode) {
+        state = "init";
+        org.firstinspires.ftc.teamcode.dashboard.RobotDiagnostics.info("OpMode", "INIT " + activeOpMode());
+    }
 
-    @Override public void onOpModePreStart(OpMode opMode) { state = "running"; }
+    @Override public void onOpModePreStart(OpMode opMode) {
+        state = "running";
+        org.firstinspires.ftc.teamcode.dashboard.RobotDiagnostics.info("OpMode", "START " + activeOpMode());
+    }
 
-    @Override public void onOpModePostStop(OpMode opMode) { state = "stopped"; }
+    @Override public void onOpModePostStop(OpMode opMode) {
+        state = "stopped";
+        org.firstinspires.ftc.teamcode.dashboard.RobotDiagnostics.info("OpMode", "STOP " + opMode.getClass().getSimpleName());
+    }
 }

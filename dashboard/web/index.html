@@ -81,7 +81,8 @@
           <div class="card grow">
             <div class="card-head">
               <h3>Telemetry</h3>
-              <input id="telemetry-filter" placeholder="Filter" aria-label="Filter telemetry">
+              <label><input type="checkbox" id="telemetry-details"> Show all</label>
+              <input id="telemetry-filter" placeholder="Search all values" aria-label="Filter telemetry">
             </div>
             <table class="kv" id="telemetry"></table>
           </div>
@@ -138,6 +139,24 @@
           <table class="kv" id="load"></table>
           <div class="muted">What the dashboard costs the robot. CPU is % of one core, like <code>top</code>; the Control Hub has 4.
             Too high? Lower <code>DashboardConfig</code> on the Tune tab. <code>./dashboard-load</code> compares 0, 1 and 2 viewers.</div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Robot logs</h3><button class="btn small" id="logs-refresh">Refresh</button></div>
+          <div class="hw-actions">
+            <select id="logs-source" aria-label="Log source">
+              <option value="events">Robot events &amp; errors</option>
+              <option value="events-previous">Previous events</option>
+              <option value="diagnostics">Performance context</option>
+              <option value="previous">Previous log file</option>
+              <option value="system">Android logcat</option>
+            </select>
+            <input id="logs-filter" placeholder="Filter log" aria-label="Filter log">
+            <label><input type="checkbox" id="logs-auto" checked> Auto refresh</label>
+            <a class="btn small" id="logs-download" href="/api/logs?source=events" download="robot-events.txt">Download shown log</a>
+          </div>
+          <div class="muted" id="logs-status">Once-per-second diagnostics persist on the hub, even with no browser open.</div>
+          <pre id="robot-log" style="max-height:360px;overflow:auto;white-space:pre-wrap;font-size:12px" aria-label="Robot diagnostic log"></pre>
+          <div class="muted">Event logs: two files up to 512 KB each. Performance logs: two files up to 1 MB each; viewer/download shows the last 64 KB. Android logcat is on-demand, up to 300 entries and subject to Android permissions. Full reboot may erase Android logcat; capture it with ADB after a failure.</div>
         </div>
         <div class="card">
           <div class="card-head"><h3>Known good snapshots</h3></div>

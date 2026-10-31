@@ -48,16 +48,16 @@ public class FieldCentricJava extends LinearOpMode {
     private final Button turboButton           = buttons.add(() -> drive.right_bumper);              // hold: turbo
     private final Button resetFrontButton      = buttons.add(() -> drive.b);                         // reset forward
     private final Button forceShootButton      = buttons.add(() -> drive.a && drive.right_bumper);   // hold: force shoot
-    private final Button aimButton             = buttons.add(() -> drive.y);                         // hold: aim at the hive
 
     // Mechanism controls.
-    private final Button intakeToggleButton    = buttons.add(() -> operate.x);                       // intake on / off
+    private final Button aimButton             = buttons.add(() -> operate.y);                       // hold: aim at the hive
+    private final Button intakeToggleButton    = buttons.add(() -> operate.b && operate.x);                       // B + X: intake on / off
     private final Button intakeReverseButton   = buttons.add(() -> operate.dpad_down);               // hold: reverse intake
-    private final Button flywheelsToggleButton = buttons.add(() -> operate.a);                       // flywheels on / off
-    private final Button triggersButton        = buttons.add(() -> operate.right_bumper);            // hold: triggers (shoot)
+    private final Button flywheelsToggleButton = buttons.add(() -> operate.b && operate.a);                       // B + A: flywheels on / off
+    private final Button triggersButton        = buttons.add(() -> operate.right_bumper);            // hold: shoot and aim
     private final Button stingerButton         = buttons.add(() -> operate.left_bumper);             // hold: stinger down
-    private final Button blueAllianceButton    = buttons.add(() -> operate.dpad_left);               // alliance: BLUE
-    private final Button redAllianceButton     = buttons.add(() -> operate.dpad_right);              // alliance: RED
+    private final Button blueAllianceButton    = buttons.add(() -> operate.b && operate.dpad_left);               // B + D-pad left: alliance BLUE
+    private final Button redAllianceButton     = buttons.add(() -> operate.b && operate.dpad_right);              // B + D-pad right: alliance RED
 
     private final AimController aim = new AimController();
     private RobotSettings settings;
@@ -79,6 +79,18 @@ public class FieldCentricJava extends LinearOpMode {
         telemetry.addData("Alliance", allianceLine());
         dashboard.showReady("Field Centric (Java)");
 
+        // Pre-start controls and camera preview, without commanding any mechanisms.
+        while (opModeInInit()) {
+            readGamepad();
+            updateAlliance();
+            robot.vision.update();
+            telemetry.addData("Status", "Ready — operator B + D-pad: left BLUE / right RED");
+            telemetry.addData("Alliance", allianceLine());
+            robot.vision.telemetry(telemetry);
+            robot.batteryTelemetry(telemetry);
+            telemetry.update();
+            sleep(20);
+        }
         waitForStart();
         if (!opModeIsActive()) {
             return;
@@ -86,18 +98,11 @@ public class FieldCentricJava extends LinearOpMode {
         chassis.resetHeading();
 
         while (opModeIsActive()) {
-            long start = System.nanoTime();
             readGamepad();
+            updateAlliance();
             updateDriving();
-            long driven = System.nanoTime();
             updateMechanisms();
-            long mechanisms = System.nanoTime();
             updateTelemetry();
-            // Where the loop time goes (Live tab charts). The rest of Loop ms is sending the
-            // telemetry to the Driver Station and the SDK between loops.
-            Dash.put("Time drive ms", (driven - start) / 1e6);
-            Dash.put("Time mechanisms ms", (mechanisms - driven) / 1e6);
-            Dash.put("Time sensors+telemetry ms", (System.nanoTime() - mechanisms) / 1e6);
             dashboard.update();
         }
     }
@@ -113,15 +118,23 @@ public class FieldCentricJava extends LinearOpMode {
         buttons.update();
     }
 
+    private boolean aimRequested() {
+        return aimButton.down() || triggersButton.down() || forceShootButton.down();
+    }
+
     private void updateDriving() {
         // left_stick_y is negative when you push the stick forward, so flip it.
         double strafe = drive.left_stick_x;     // drive (field-centric)
         double forward = -drive.left_stick_y;   // drive (field-centric)
         double turn = drive.right_stick_x;      // turn
-        // Driver Y held: turn to face the hive instead (PD on its angle; the Vision settings).
-        if (aimButton.down()) {
-            turn = aim.update(robot.vision.hive(), Vision.AIM_P, Vision.AIM_D, Vision.AIM_D_MIN_DEG,
-                    Vision.AIM_MAX_TURN, Vision.AIM_TOLERANCE_DEG);
+        // Operator Y or either shoot control requests aim. Only take over rotation
+        // while a valid alliance hive is visible and the controller is correcting.
+        boolean correcting = false;
+        if (aimRequested()) {
+            double correction = aim.update(robot.vision.hive(), Vision.AIM_P, Vision.AIM_D, Vision.AIM_D_MIN_DEG,
+                    Vision.AIM_MAX_TURN, Vision.AIM_TOLERANCE_DEG, Vision.AIM_LEFT_TRIM_DEG);
+            correcting = Double.isFinite(correction) && Math.abs(correction) > 1e-6;
+            if (correcting) turn = correction;
         } else {
             aim.reset();
         }
@@ -135,7 +148,7 @@ public class FieldCentricJava extends LinearOpMode {
             speed = MecanumDrive.TURBO_SPEED;
         }
 
-        chassis.drive(strafe, forward, turn, speed, aimButton.down());
+        chassis.drive(strafe, forward, turn, speed, correcting);
 
         // After the driving on purpose, so this loop still uses the old heading.
         if (resetFrontButton.down()) {
@@ -145,11 +158,10 @@ public class FieldCentricJava extends LinearOpMode {
 
     /** The alliance we are, for the first telemetry line, and how the operator changes it. */
     private static String allianceLine() {
-        return Alliance.name() + "   (operator D-pad: left = BLUE, right = RED)";
+        return Alliance.name();
     }
 
-    /** The operator's buttons say what each mechanism should do; robot.update() then does it. */
-    private void updateMechanisms() {
+    private void updateAlliance() {
         // The alliance (set before the match on the Tune tab); the operator can switch it.
         if (blueAllianceButton.pressed()) {
             Alliance.set(true);
@@ -157,6 +169,10 @@ public class FieldCentricJava extends LinearOpMode {
         if (redAllianceButton.pressed()) {
             Alliance.set(false);
         }
+    }
+
+    /** The operator's buttons say what each mechanism should do; robot.update() then does it. */
+    private void updateMechanisms() {
         // Flips the same switch the Tune tab shows (it starts on), like the flywheels' A.
         if (intakeToggleButton.pressed()) {
             Intake.INTAKE_ON = !Intake.INTAKE_ON;
@@ -186,7 +202,7 @@ public class FieldCentricJava extends LinearOpMode {
         // The Driver Station: only what the drivers act on. Everything else is Dash.put (dashboard only).
         telemetry.addData("Alliance", allianceLine());
         robot.telemetry(telemetry);   // Flywheels, Intake, Hive
-        if (aimButton.down()) {
+        if (aimRequested()) {
             telemetry.addData("Aim", !robot.vision.seen() ? "no hive in view"
                     : aim.onTarget() ? "ON TARGET" : String.format(java.util.Locale.US, "turning · angle %+.1f°", aim.error()));
         }

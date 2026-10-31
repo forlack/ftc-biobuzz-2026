@@ -196,7 +196,7 @@ public final class SimOpModes {
             // The Live tab's Camera card: drawn pictures, CAMERA_FEED_FPS a second, only while someone watches.
             long now = System.nanoTime();
             long gap = (long) (1e9 / Math.max(1, org.biobuzz.sim.mirror.Vision.CAMERA_FEED_FPS));
-            if (CameraFeed.wanted() && now - lastPicture > gap && !drawing) {
+            if (org.biobuzz.sim.mirror.Vision.CAMERA_FEED_ON && CameraFeed.wanted() && now - lastPicture > gap && !drawing) {
                 lastPicture = now;
                 drawing = true;
                 // Drawn on its own thread (like the robot's), so this loop never waits for it.
@@ -337,7 +337,8 @@ public final class SimOpModes {
             if (aimButton.down()) {
                 turn = aim.update(robot.hive(), org.biobuzz.sim.mirror.Vision.AIM_P, org.biobuzz.sim.mirror.Vision.AIM_D,
                         org.biobuzz.sim.mirror.Vision.AIM_D_MIN_DEG, org.biobuzz.sim.mirror.Vision.AIM_MAX_TURN,
-                        org.biobuzz.sim.mirror.Vision.AIM_TOLERANCE_DEG);
+                        org.biobuzz.sim.mirror.Vision.AIM_TOLERANCE_DEG,
+                        org.biobuzz.sim.mirror.Vision.AIM_LEFT_TRIM_DEG);
             } else {
                 aim.reset();
             }

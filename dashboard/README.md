@@ -177,3 +177,22 @@ building a route with actions in the path editor, Save as new, the robot refusin
 route, snapshots, the lock, and running the route as the autonomous until Pedro parks the
 simulated robot. Screenshots go to `tests/e2e/out/`. It needs Node and Playwright's Chromium
 (`npx playwright install chromium`); the simulator alone needs neither.
+
+### Troubleshooting telemetry (2026-10-31)
+
+Robot telemetry now focuses on jobs rather than all available internals:
+
+| Job | Kept measurements |
+|---|---|
+| Shooting consistency / battery sag | Pollen and Nectar actual/target RPM, applied F per motor, compensation's averaged voltage, Battery V, Flywheels status |
+| Intake / feeding / arm | Intake state and actual/target RPM, Triggers, Stinger position |
+| Aim / camera | Alliance, Hive status or problem, range/bearing, Aim status/error/turn |
+| Drive / autonomous | Active speed, heading; autonomous step, completion and pose |
+| Responsiveness | Loop ms and existing dashboard load metrics |
+
+Removed at the source: raw drive stick values, default speed and brake/coast labels,
+full PIDF strings, per-section loop timings, duplicate flywheel on/ready flags,
+hive seen/height/ignored, redundant path busy/done flags and motor percentage errors.
+Standard flywheel error charts still calculate percentages from actual/target RPM;
+removed fields no longer produce new chart/CSV samples. Warning/problem messages
+remain visible in the concise telemetry list. Tune still holds PIDF/settings.

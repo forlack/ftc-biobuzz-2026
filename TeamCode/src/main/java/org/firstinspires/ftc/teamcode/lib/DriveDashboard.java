@@ -30,13 +30,7 @@ public class DriveDashboard {
     public void update() {
         // Dashboard only (the Driver Station keeps to what the drivers act on).
         Dash.put("Speed %", Math.round(drive.getLastSpeedUsed() * 100));
-        Dash.put("Default speed %", Math.round(drive.getDefaultSpeed() * 100));
-        Dash.put("Stopping", drive.isBrakeMode() ? "BRAKE" : "COAST");
         Dash.put("Heading", Math.round(drive.getLastHeadingDegrees()));
-        // What the driver's sticks are doing, -1 to 1.
-        Dash.put("Drive forward", drive.getLastForward());
-        Dash.put("Drive strafe", drive.getLastStrafe());
-        Dash.put("Drive turn", drive.getLastTurn());
         telemetry.update();   // with DashboardTelemetry this also ends the dashboard frame
     }
 }

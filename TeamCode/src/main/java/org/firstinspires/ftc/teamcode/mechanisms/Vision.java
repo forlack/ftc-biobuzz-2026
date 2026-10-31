@@ -48,6 +48,8 @@ import java.util.concurrent.Executors;
 public class Vision implements Mechanism {
     /** Off: the camera is not started (saves the Control Hub's time). */
     public static boolean VISION_ON = true;
+    /** Dashboard preview only. Off leaves AprilTag detection and aiming running. */
+    public static boolean CAMERA_FEED_ON = false;
     /** Camera pictures a second for the dashboard's Live tab, while someone watches it. */
     public static double CAMERA_FEED_FPS = 10;
     /**
@@ -82,6 +84,8 @@ public class Vision implements Mechanism {
     public static double AIM_MAX_TURN = 0.75;
     /** Within this many degrees counts as on target: aiming sends no turn there. */
     public static double AIM_TOLERANCE_DEG = 1;
+    /** Positive aims further LEFT to correct shots landing right; degrees. */
+    public static double AIM_LEFT_TRIM_DEG = 0;
 
     public static final String CAMERA = "Webcam 1";
 
@@ -110,12 +114,16 @@ public class Vision implements Mechanism {
         }
         try {
             tags = new AprilTagProcessor.Builder()
+                    // goBILDA 3122-0004-0001 factory calibration at 640x480.
+                    .setLensIntrinsics(545.584, 545.584, 350.588, 223.150)
                     .setTagLibrary(AprilTagGameDatabase.getBioBuzzTagLibrary())
                     .setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)
                     .build();
             portal = new VisionPortal.Builder()
                     .setCamera(camera)
                     .setCameraResolution(new Size(640, 480))
+                    // This camera exposes 640x480 in MJPEG, not default YUY2.
+                    .setStreamFormat(VisionPortal.StreamFormat.MJPEG)
                     .addProcessor(tags)
                     .build();
         } catch (RuntimeException error) {
@@ -137,13 +145,21 @@ public class Vision implements Mechanism {
         return finder.hive();
     }
 
+    private long nextDiagnostic;
+
     @Override
     public void update() {
+        long now = System.nanoTime();
+        if (now >= nextDiagnostic) {
+            nextDiagnostic = now + 1_000_000_000L;
+            CameraFeed.report(portal == null ? "unavailable" : portal.getCameraState().name(),
+                    portal == null ? 0 : portal.getFps(), CAMERA_FEED_ON, problem);
+        }
         if (tags == null) {
             return;
         }
         pickHive(tags.getDetections());
-        if (CameraFeed.wanted()) {
+        if (CAMERA_FEED_ON && CameraFeed.wanted()) {
             grabPicture();
         }
     }
@@ -161,7 +177,7 @@ public class Vision implements Mechanism {
         finder.pick(sightings, Alliance.isBlue(), HIVE_TARGET, HIVE_UP_MIN_HEIGHT_IN);
     }
 
-    /** CAMERA_FEED_FPS pictures a second for the dashboard, scaled down and compressed. */
+    /** CAMERA_FEED_FPS full-resolution pictures a second for the dashboard, JPEG quality 85. */
     private void grabPicture() {
         long now = System.nanoTime();
         long gap = (long) (1e9 / Math.max(1, CAMERA_FEED_FPS));
@@ -174,13 +190,13 @@ public class Vision implements Mechanism {
             @Override
             public void accept(Bitmap frame) {
                 try {
-                    Bitmap small = Bitmap.createScaledBitmap(frame, 320, 240, true);
+                    if (!CAMERA_FEED_ON) return; // A queued request may finish after disabling.
                     ByteArrayOutputStream jpeg = new ByteArrayOutputStream();
-                    small.compress(Bitmap.CompressFormat.JPEG, 60, jpeg);
-                    if (small != frame) {
-                        small.recycle();
-                    }
+                    frame.compress(Bitmap.CompressFormat.JPEG, 85, jpeg);
                     CameraFeed.publish(jpeg.toByteArray());
+                } catch (RuntimeException error) {
+                    problem = "Preview failed: " + error.getMessage();
+                    org.firstinspires.ftc.teamcode.dashboard.RobotDiagnostics.error("Camera", "Preview encoding failed", error);
                 } finally {
                     grabbing = false;
                 }
@@ -196,13 +212,10 @@ public class Vision implements Mechanism {
             return;
         }
         telemetry.addData("Hive", finder.shortLine());
-        Dash.put("Hive ignored", finder.ignoredLine());   // dashboard only
         HiveFinder.Sighting hive = finder.hive();
-        Dash.put("Hive seen", hive != null);
         if (hive != null) {
             Dash.put("Hive range in", hive.range);
             Dash.put("Hive bearing deg", hive.bearing);
-            Dash.put("Hive height in", hive.height);
         }
     }
 }

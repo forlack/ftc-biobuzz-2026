@@ -231,3 +231,27 @@ same class: `@RobotSettings.Renamed("OLD_NAME")` on the field (`MecanumDrive.DRI
   fork of the Pedro visualizer (github.com/forlack/Visualizer) is no longer used.
 - **Tests:** `node tests/e2e/dashboard.e2e.mjs` drives the whole dashboard in a headless
   browser against the simulator.
+
+## Robot log messages
+
+The Robot tab's **Robot logs** shows saved events/errors, with filter, refresh and
+download. **Android logcat** shows the last 300 accessible Android entries on demand
+(native camera/USB errors may appear there; app permissions can restrict access).
+Performance context is a separate source, not more driver telemetry.
+
+```java
+import org.firstinspires.ftc.teamcode.dashboard.RobotDiagnostics;
+
+RobotDiagnostics.info("Intake", "Starting jam recovery");
+RobotDiagnostics.warn("Vision", "No useful target during aim");
+RobotDiagnostics.error("Camera", "Preview failed", exception);
+```
+
+Log transitions/errors, not every loop. Enqueueing does no file I/O; the dashboard
+meter flushes once per second. Queue is bounded to 100 messages (oldest discarded),
+messages to 2048 characters. Event storage rotates two 512 KB files; performance
+samples rotate two 1 MB files in `/sdcard/FIRST/logs/`. A crash/power loss can lose
+the last unflushed second. Logcat is read on demand and isn't copied into our
+persistent files. A native fatal crash cannot be safely caught by Java; capture
+`adb logcat -b all -d` promptly if it occurs. Files are not included in robot-sync;
+download through Robot logs or `adb pull /sdcard/FIRST/logs`.

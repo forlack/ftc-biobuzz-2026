@@ -133,15 +133,9 @@ public class Flywheels implements Mechanism {
         Dash.put("Pollen compensated F", pollenF);
         Dash.put("Nectar compensated F", nectarF);
         Dash.put("Flywheel averaged V", averageVolts.volts());
-        Dash.put("Pollen hub PIDF", String.valueOf(pollen.getAppliedPIDF()));
-        Dash.put("Nectar hub PIDF", String.valueOf(nectar.getAppliedPIDF()));
-        Dash.put("Pollen error %", Robot.percentOff(pollenRpm, pollen.getTargetRPM()));
-        Dash.put("Nectar error %", Robot.percentOff(nectarRpm, nectar.getTargetRPM()));
         Dash.put("Pollen RPM", pollenRpm);
         Dash.put("Pollen target", pollen.getTargetRPM());
         Dash.put("Nectar RPM", nectarRpm);
         Dash.put("Nectar target", nectar.getTargetRPM());
-        Dash.put("Flywheels on", on);
-        Dash.put("Flywheels ready", ready);
     }
 }

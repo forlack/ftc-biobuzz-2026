@@ -2,6 +2,12 @@
 /* global uPlot */
 import { escapeHtml } from './api.js';
 
+// Keep the driving view short. All numeric samples still feed charts and CSV.
+const SUMMARY_KEYS = [
+  'Status', 'Alliance', 'Battery V', 'Flywheels', 'Pollen RPM', 'Nectar RPM',
+  'Intake', 'Hive', 'Hive problem', 'Aim', 'Triggers', 'Stinger', 'Step', 'Settings',
+];
+
 const COLORS = ['#f5b301', '#58a6ff', '#3fb950', '#bc8cff', '#ff7b72', '#39c5cf', '#d2a8ff', '#ffa657'];
 
 // Charts every robot program feeds. A series can be a telemetry key, or computed from keys.
@@ -268,6 +274,7 @@ export class LiveTab {
       if (confirm('Go back to the standard charts? Charts you added are removed (in this browser only).')) this.resetCharts();
     });
     document.getElementById('telemetry-filter').addEventListener('input', () => this.renderTable());
+    document.getElementById('telemetry-details').addEventListener('change', () => this.renderTable());
   }
 
   setPaused(paused) {
@@ -476,8 +483,11 @@ export class LiveTab {
     const rows = [];
     for (const [key, value] of Object.entries(this.latestText)) rows.push([key, value]);
     for (const [key, value] of Object.entries(this.latest)) rows.push([key, formatNumber(value)]);
-    document.getElementById('telemetry').innerHTML = rows
-      .filter(([key]) => !filter || key.toLowerCase().includes(filter))
+    const details = document.getElementById('telemetry-details').checked;
+    const visible = rows.filter(([key]) => key !== 'Hive ignored' && (
+      filter ? key.toLowerCase().includes(filter) : details || SUMMARY_KEYS.includes(key) || /warning|problem|error/i.test(key) && !/error %|error deg/i.test(key)));
+    if (!details && !filter) visible.sort((a, b) => SUMMARY_KEYS.indexOf(a[0]) - SUMMARY_KEYS.indexOf(b[0]));
+    document.getElementById('telemetry').innerHTML = visible
       .map(([key, value]) => `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`).join('');
   }
 

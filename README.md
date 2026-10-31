@@ -321,3 +321,14 @@ conventions, and the gotchas that have already cost us time.
 
 FIRST's original code is under the license in [LICENSE](LICENSE). Team code in `TeamCode/`
 is ours.
+
+### Deploy ADB recovery
+
+Both `./deploy` and `./deploy-linux` now disconnect the old robot transport, build
+on internet Wi-Fi, join robot Wi-Fi, and call the dashboard's **Restart adb** endpoint
+(`POST http://192.168.43.1:8686/api/adb/restart`). Then they restart laptop ADB,
+connect and check `get-state` before syncing/installing. No new flag is needed.
+This restarts robot ADB, not the robot or Robot Controller app. The dashboard must
+be running/unlocked and its existing one-time restart permission granted. If HTTP
+restart is unavailable, the helper explains why and tries normal ADB; it never
+automatically unlocks the dashboard. Existing Wi-Fi restore/`--stay` behavior remains.

@@ -70,6 +70,12 @@ public interface RobotHost {
         return "Only the real robot has adb.";
     }
 
+    /** Platform-specific low-cost memory counters; no full dumpsys on the drive thread. */
+    default org.json.JSONObject diagnosticMemory() { return new org.json.JSONObject(); }
+
+    /** On-demand Android logcat tail. Availability depends on OS permissions. */
+    default String systemLog() throws IOException { return "Android logcat is unavailable in the simulator.\n"; }
+
     RobotSettings settings();
 
     /** The autonomous actions the path editor may use. */

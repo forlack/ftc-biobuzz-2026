@@ -106,12 +106,14 @@ public class DashboardServer {
     private final DashboardLock lock;
 
     private final TelemetryStream stream = new TelemetryStream(this::state, this::gamepadsMessage);
+    private final RobotDiagnostics diagnostics = new RobotDiagnostics();
     private volatile JSONObject load = new JSONObject();   // what the dashboard costs the robot
 
     public DashboardServer(RobotHost host, int port) {
         this.host = host;
         this.port = port;
         this.lock = new DashboardLock();
+        RobotDiagnostics.info("Dashboard", "Dashboard server created");
     }
 
     /** Starts listening on a background thread. Never throws; check {@link #lastError}. */
@@ -172,6 +174,16 @@ public class DashboardServer {
                 json.put("dashboardMs", costCount == 0 ? JSONObject.NULL : (Object) round(costSum / costCount, 3));
                 json.put("maxSamplesPerSecond", DashboardConfig.MAX_SAMPLES_PER_SECOND);
                 load = json;
+                JSONObject sample = new JSONObject();
+                sample.put("load", json);
+                Runtime runtime = Runtime.getRuntime();
+                sample.put("javaUsedBytes", runtime.totalMemory() - runtime.freeMemory());
+                sample.put("javaHeapLimitBytes", runtime.maxMemory());
+                sample.put("memory", host.diagnosticMemory());
+                sample.put("camera", CameraFeed.diagnostics());
+                sample.put("opMode", host.activeOpMode());
+                sample.put("opModeState", host.opModeState());
+                diagnostics.record(sample);
                 lastWall = wall;
                 lastBusy = busy;
                 lastBytes = bytes;
@@ -413,6 +425,8 @@ public class DashboardServer {
                 return Response.error(423, "The dashboard is locked. Click the padlock to unlock it.");
             }
             switch (method + " " + path) {
+                case "GET /api/diagnostics": return Response.json(200, diagnostics.status());
+                case "GET /api/logs": return diagnosticLog(request.param("source"));
                 case "GET /api/state": return Response.json(200, state());
                 case "GET /api/settings": return Response.json(200, settingsJson());
                 case "POST /api/settings": return setSetting(request.json());
@@ -706,6 +720,21 @@ public class DashboardServer {
     }
 
     /** The newest camera picture (asking also tells the vision code someone is watching). */
+    private Response diagnosticLog(String source) throws IOException {
+        String text;
+        if ("events".equals(source)) text = diagnostics.tail("events", false);
+        else if ("events-previous".equals(source)) text = diagnostics.tail("events", true);
+        else if ("system".equals(source)) text = host.systemLog();
+        else if ("previous".equals(source)) text = diagnostics.tail(true);
+        else if (source == null || source.isEmpty() || "diagnostics".equals(source)) text = diagnostics.tail(false);
+        else return Response.error(400, "Unknown log source");
+        Response response = new Response();
+        response.type = "text/plain; charset=utf-8";
+        response.body = text.getBytes(StandardCharsets.UTF_8);
+        response.headers.put("Cache-Control", "no-store");
+        return response;
+    }
+
     private Response cameraPicture(String after) throws InterruptedException {
         long seen = 0;
         try {
@@ -716,7 +745,7 @@ public class DashboardServer {
         CameraFeed.Picture picture = CameraFeed.next(seen, 500);
         if (picture == null) {
             return Response.error(404, host.simulated() ? "No picture: the simulator draws one while an OpMode runs (Vision.VISION_ON on)."
-                    : "No camera picture: run an OpMode, with \"Webcam 1\" in the hardware map.");
+                    : "No camera picture: run an OpMode, enable Vision.CAMERA_FEED_ON, and configure \"Webcam 1\".");
         }
         Response response = new Response();
         response.type = "image/jpeg";

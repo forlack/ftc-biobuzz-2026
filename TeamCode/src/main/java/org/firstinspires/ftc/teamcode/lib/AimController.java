@@ -28,12 +28,18 @@ public final class AimController {
      */
     public double update(HiveFinder.Sighting hive, double p, double d, double dMinDegrees,
                          double maxTurn, double toleranceDegrees) {
+        return update(hive, p, d, dMinDegrees, maxTurn, toleranceDegrees, 0);
+    }
+
+    /** Positive trim turns further left; zero preserves the camera-centered aim. */
+    public double update(HiveFinder.Sighting hive, double p, double d, double dMinDegrees,
+                         double maxTurn, double toleranceDegrees, double leftTrimDegrees) {
         long now = System.nanoTime();
         if (hive == null) {
             reset();
             return 0;
         }
-        error = hive.bearing;
+        error = hive.bearing + leftTrimDegrees;
         if (lastReadingNanos == 0) {
             derivative = 0;
             lastReading = error;

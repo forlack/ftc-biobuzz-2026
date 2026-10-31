@@ -16,6 +16,17 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
+def setUpModule():
+    # Deploy tests never contact a real dashboard or restart robot ADB.
+    global robot_adb_mock
+    robot_adb_mock = patch.object(module, 'restart_robot_adb')
+    robot_adb_mock.start()
+
+
+def tearDownModule():
+    robot_adb_mock.stop()
+
+
 class HardwareMapTests(unittest.TestCase):
     def commands(self, hardware_map, map_only=False):
         args = SimpleNamespace(ssid='Robot Wi-Fi', robot_ip='192.168.43.1',

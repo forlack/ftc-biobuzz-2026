@@ -184,12 +184,10 @@ public class PedroAutonomous extends OpMode {
         robot.batteryTelemetry(telemetry);
 
         // Dashboard only: the same names the teleop and the simulator chart.
-        Dash.put("Following", follower.isBusy());
         Dash.put("Completion", follower.completion());
         Dash.put("X", pose.x());
         Dash.put("Y", pose.y());
         Dash.put("Heading", Math.toDegrees(pose.heading()));
-        Dash.put("Route done", auto.finished());
         long now = System.nanoTime();
         if (lastLoop != 0) Dash.put("Loop ms", (now - lastLoop) / 1e6);
         lastLoop = now;

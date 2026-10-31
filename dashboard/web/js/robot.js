@@ -1,10 +1,12 @@
 // Robot tab: files on the robot (view, edit, download) and the hardware map editor.
 import { api, escapeHtml, formatTime, getFile, putFile, toast } from './api.js';
+import { RobotLogView } from './logs.js';
 import { HardwareEditor } from './hardware.js';
 import { HistoryPanel } from './history.js';
 
 export class RobotTab {
   constructor() {
+    this.logs = new RobotLogView();
     this.hardware = new HardwareEditor(document.getElementById('hardware'), () => this.refresh());
     this.history = new HistoryPanel(document.getElementById('history'), (path) => {
       this.refresh();
@@ -57,6 +59,7 @@ export class RobotTab {
   async refresh(hardwareMap) {
     if (hardwareMap !== undefined) this.hardwareMap = hardwareMap;
     this.refreshAdb();
+    this.logs.refresh();
     try {
       const files = await api('/api/files');
       document.getElementById('files').innerHTML = files.map((f) => `<tr>

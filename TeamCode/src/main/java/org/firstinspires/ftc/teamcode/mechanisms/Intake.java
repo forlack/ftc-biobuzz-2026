@@ -75,6 +75,5 @@ public class Intake implements Mechanism {
         telemetry.addData("Intake", reverse ? "REVERSE" : (on ? "ON" : "OFF"));
         Dash.put("Intake RPM", rpm);
         Dash.put("Intake target", motor.getTargetRPM());
-        Dash.put("Intake error %", Robot.percentOff(rpm, motor.getTargetRPM()));
     }
 }
