@@ -97,6 +97,7 @@
         <button class="btn" id="settings-reload">Reload from robot</button>
         <button class="btn" id="settings-download">Download robot.json</button>
         <button class="btn" id="settings-history">History</button>
+        <label class="favorites-only" title="Show only the starred settings (☆ next to each name)"><input type="checkbox" id="settings-favorites-only"> ★ Favorites only</label>
         <span class="status" id="settings-status"></span>
       </div>
       <div id="settings-warnings"></div>
@@ -104,6 +105,7 @@
         <span class="dot synced" style="display:inline-block"></span> saved &nbsp;
         <span class="dot unsaved" style="display:inline-block"></span> changed, not saved yet: <b>Save to robot</b> keeps it after a restart.
         <code>./robot-sync pull</code> then copies robot.json into Git.</p>
+      <p class="hint" id="settings-no-favorites" hidden>No favorites yet. Untick <b>★ Favorites only</b>, then click the ☆ next to a setting to star it.</p>
       <div class="settings" id="settings"></div>
       <div class="settings-hidden" id="settings-hidden" hidden></div>
     </section>

@@ -381,6 +381,13 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   someone clicks again. It stops accidents, not people. Tune cards move by their ⠿ grip
   (localStorage `biobuzz.groupOrder`; new groups go after the saved ones; a redraw waits until
   the drag ends). e2e 167.
+- **Tune favorites (2026-10-31):** ☆ next to each setting stars it; the stars live on the robot
+  in `settings/favorites.json` (`{"favorites": ["Group.NAME", ...]}`, saved with PUT /api/file
+  against its hash, so one browser never drops another's star). Shared by every browser, refused
+  while locked, has History, and `./robot-sync` pulls it into Git. The toolbar's **★ Favorites
+  only** (per browser, localStorage `biobuzz.favoritesOnly`) shows just the starred rows and
+  drops cards left empty; a hidden group stays hidden. A second browser sees new stars when it
+  opens the Tune tab or reloads. e2e 178.
 - **Next project ideas (2026-10-27):** ROADMAP.md "Next project ideas" is the one list of
   planned work: A dashboard-built timed functions, B teleop trigger gating on flywheel speed,
   C Auton tab extras (alliance mirror, snapping, reorder, run in sim), D auto reconnect (done),

@@ -1,5 +1,5 @@
 // Tune tab: every setting, live editing, Save to robot.
-import { api, escapeHtml, toast } from './api.js';
+import { api, escapeHtml, getFile, putFile, toast } from './api.js';
 
 /** Text settings that take one of a few values: shown as a dropdown. Keyed "Group.NAME". */
 const CHOICES = {
@@ -37,6 +37,25 @@ function sortGroups(groups) {
   return [...groups].sort(([a], [b]) => rank(a) - rank(b));
 }
 
+// Starred settings ("Group.NAME") live on the robot, so every browser sees the same ones and
+// ./robot-sync pull keeps them in Git. Whether to show only them is this browser's choice.
+const FAVORITES_FILE = 'settings/favorites.json';
+const FAVORITES_ONLY_KEY = 'biobuzz.favoritesOnly';
+function favoritesOnly() {
+  try { return localStorage.getItem(FAVORITES_ONLY_KEY) === 'true'; } catch { return false; }
+}
+function saveFavoritesOnly(on) {
+  try { localStorage.setItem(FAVORITES_ONLY_KEY, String(on)); } catch { /* private window */ }
+}
+async function readFavorites() {
+  try {
+    const file = await getFile(FAVORITES_FILE);
+    return { list: JSON.parse(file.text).favorites || [], hash: file.hash };
+  } catch {
+    return { list: [], hash: 'new' };   // none starred yet
+  }
+}
+
 export class TuneTab {
   constructor() {
     this.items = [];
@@ -46,7 +65,38 @@ export class TuneTab {
     document.getElementById('settings-history').addEventListener('click', () => {
       window.dispatchEvent(new CustomEvent('biobuzz:history', { detail: 'settings/robot.json' }));
     });
+    this.favorites = new Set();
+    const only = document.getElementById('settings-favorites-only');
+    only.checked = favoritesOnly();
+    only.addEventListener('change', () => {
+      saveFavoritesOnly(only.checked);
+      if (this.data) this.show(this.data);
+    });
     this.bindDragging();
+  }
+
+  // Star or unstar one setting. Reads the file first and saves against its hash, so another
+  // browser's star made in the meantime is kept; on a clash it tries once more.
+  async toggleFavorite(key) {
+    this.starring = (this.starring || 0) + 1;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const current = await readFavorites();
+      const favorites = new Set(current.list);
+      if (favorites.has(key)) favorites.delete(key);
+      else favorites.add(key);
+      const text = JSON.stringify({ favorites: [...favorites].sort() }, null, 2) + '\n';
+      try {
+        await putFile(FAVORITES_FILE, text, current.hash);
+        this.favorites = favorites;
+        if (this.data) this.show(this.data);
+        return;
+      } catch (error) {
+        if (error.status !== 409 || attempt === 1) {
+          toast(error.message, true);
+          return;
+        }
+      }
+    }
   }
 
   // Drag a card by its ⠿ grip to move it. The cards flow down columns, so the top or bottom
@@ -96,8 +146,14 @@ export class TuneTab {
       const files = await api('/api/files').catch(() => []);
       this.routes = files.map((f) => f.path).filter((p) => /^autos\/.+\.json$/.test(p))
         .map((p) => p.slice('autos/'.length, -'.json'.length));
+      // A star clicked while this was on its way is newer than the favorites read here.
+      const starring = this.starring;
+      const favorites = await readFavorites();
       const data = await api('/api/settings');
-      if (mine === this.request) this.show(data);
+      if (mine === this.request) {
+        if (starring === this.starring) this.favorites = new Set(favorites.list);
+        this.show(data);
+      }
     } catch (error) {
       this.status(`Could not read settings: ${error.message}`, 'bad');
     }
@@ -109,6 +165,7 @@ export class TuneTab {
       this.waiting = data;
       return;
     }
+    this.data = data;
     this.items = data.items;
     this.fingerprint = data.fingerprint;   // what is on screen, compared with the robot's in app.js
     const unsaved = this.items.filter((i) => i.saved && !inSync(i)).length;
@@ -127,11 +184,19 @@ export class TuneTab {
     holder.innerHTML = '';
     const overrides = hiddenOverrides();
     const hidden = [];
-    for (const [group, items] of sortGroups(groups)) {
-      if (overrides[group] ?? items[0].hidden) {
-        hidden.push([group, items]);
+    // Favorites only: just the starred rows, and no card for a group with none starred.
+    const onlyFavorites = favoritesOnly();
+    let shownCards = 0;
+    for (const [group, allItems] of sortGroups(groups)) {
+      if (overrides[group] ?? allItems[0].hidden) {
+        hidden.push([group, allItems]);
         continue;
       }
+      const items = onlyFavorites ? allItems.filter((i) => this.favorites.has(`${i.group}.${i.name}`)) : allItems;
+      if (items.length === 0) {
+        continue;
+      }
+      shownCards++;
       const card = document.createElement('div');
       card.className = 'card';
       card.dataset.group = group;
@@ -149,6 +214,8 @@ export class TuneTab {
       for (const item of items) card.appendChild(this.row(item));
       holder.appendChild(card);
     }
+    const empty = document.getElementById('settings-no-favorites');
+    empty.hidden = !(onlyFavorites && shownCards === 0);
     const shelf = document.getElementById('settings-hidden');
     shelf.hidden = hidden.length === 0;
     shelf.innerHTML = hidden.length ? `<span class="muted">Hidden:</span> ` + hidden.map(([group, items]) => {
@@ -183,9 +250,13 @@ export class TuneTab {
     }
     // The code's value, and what robot.json sets instead (robot.json wins at every INIT).
     const inFileDiffers = item.saved && item.inFile !== null && !same(item.inFile, item.default);
-    row.innerHTML = `<div class="setting-name" title="${escapeHtml(key)}">${escapeHtml(item.name)}
+    const starred = this.favorites.has(key);
+    row.innerHTML = `<button class="star${starred ? ' on' : ''}" data-star="${escapeHtml(key)}" aria-pressed="${starred}"
+        title="${starred ? 'Favorite: click to unstar' : 'Click to star (shared by every browser)'}">${starred ? '★' : '☆'}</button>
+      <div class="setting-name" title="${escapeHtml(key)}">${escapeHtml(item.name)}
         <small>code default ${escapeHtml(format(item.default))}${inFileDiffers ? ` · robot.json: ${escapeHtml(format(item.inFile))}` : ''}</small></div>
       <div class="control"></div>${tag}`;
+    row.querySelector('[data-star]').addEventListener('click', () => this.toggleFavorite(key));
     const undo = row.querySelector('[data-undo]');
     if (undo) undo.addEventListener('click', () => this.set(item, item.inFile !== null ? item.inFile : item.default));
     const control = row.querySelector('.control');

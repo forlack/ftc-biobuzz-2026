@@ -52,7 +52,8 @@ import javax.xml.parsers.DocumentBuilderFactory;
  *   POST /api/settings/reload           re-read robot.json
  *   GET  /api/actions                   autonomous actions for the path editor
  *   GET  /api/files                     robot files the dashboard may read and write:
- *                                       settings/robot.json, autos/*.json, hardware maps (*.xml)
+ *                                       settings/robot.json, settings/favorites.json (the Tune
+ *                                       tab's starred settings), autos/*.json, hardware maps (*.xml)
  *   GET  /api/file?path=...             raw file, with its hash in X-Hash
  *   PUT  /api/file?path=...             replace a file; send X-Base-Hash to refuse if it changed
  *   DELETE /api/file?path=...           delete an auton or a hardware map (not robot.json, not
@@ -86,7 +87,7 @@ public class DashboardServer {
 
     /** Files the dashboard may touch, relative to the robot's storage folder. */
     private static final Pattern MANAGED = Pattern.compile(
-            "settings/robot\\.json|autos/[A-Za-z0-9_.-]+\\.json|[A-Za-z0-9_ .-]+\\.xml");
+            "settings/(robot|favorites)\\.json|autos/[A-Za-z0-9_.-]+\\.json|[A-Za-z0-9_ .-]+\\.xml");
 
     /** History and snapshot copies: readable (for robot-sync and the History panel), never writable. */
     private static final Pattern ARCHIVE = Pattern.compile(
@@ -565,6 +566,7 @@ public class DashboardServer {
     private static List<String> managedNames() {
         List<String> names = new ArrayList<>();
         if (RobotSettings.location().isFile()) names.add("settings/robot.json");
+        if (RobotFiles.file("settings/favorites.json").isFile()) names.add("settings/favorites.json");
         for (String folder : new String[]{"autos", ""}) {
             File[] files = RobotFiles.file(folder).listFiles();
             if (files == null) continue;
@@ -807,6 +809,10 @@ public class DashboardServer {
                 JSONObject json = new JSONObject(text);
                 if (relative.equals("settings/robot.json") && json.optInt("version", 0) != 1) {
                     return "robot.json must say \"version\": 1";
+                }
+                if (relative.equals("settings/favorites.json")) {
+                    // {"favorites": ["Group.NAME", ...]}
+                    json.getJSONArray("favorites");
                 }
                 if (relative.startsWith("autos/")) {
                     AutoRoute route = new AutoRoute(text);

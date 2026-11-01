@@ -432,6 +432,48 @@ try {
   await b.waitFor(`document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]')`);
   check(JSON.stringify(await cardOrder()) === JSON.stringify(dragged), 'and this browser remembers the order');
   await b.eval(`localStorage.removeItem('biobuzz.groupOrder')`);
+  // Favorites: star settings (saved on the robot, so every browser sees them), then show only those.
+  const star = (key) => b.eval(`document.querySelector('[data-star="${key}"]').click()`);
+  const starred = (key) => b.eval(`document.querySelector('[data-star="${key}"]')?.classList.contains('on')`);
+  const favoritesFile = async () => (await api('/api/file?path=settings/favorites.json')).data.favorites || [];
+  await star('Flywheels.POLLEN_FLYWHEEL_RPM');
+  await b.waitFor(`document.querySelector('[data-star="Flywheels.POLLEN_FLYWHEEL_RPM"]').classList.contains('on')`);
+  await star('Vision.AIM_P');
+  await b.waitFor(`document.querySelector('[data-star="Vision.AIM_P"]').classList.contains('on')`);
+  check(JSON.stringify(await favoritesFile()) === JSON.stringify(['Flywheels.POLLEN_FLYWHEEL_RPM', 'Vision.AIM_P']),
+    'clicking ☆ stars a setting, saved on the robot in settings/favorites.json');
+  const shownRows = () => b.eval(`[...document.querySelectorAll('#settings .setting-row [data-star]')].map((s) => s.dataset.star)`);
+  await b.eval(`document.getElementById('settings-favorites-only').click()`);
+  await b.waitFor(`document.querySelectorAll('#settings .setting-row').length === 2`);
+  check(JSON.stringify(await cardOrder()) === JSON.stringify(before.filter((g) => g === 'Flywheels' || g === 'Vision'))
+    && (await shownRows()).length === 2,
+    `★ Favorites only shows just the starred rows, and no card left empty: ${(await cardOrder()).join(', ')}`);
+  await b.goto(URL);
+  await showAllTelemetry();
+  await b.eval(`document.querySelector('[data-tab="tune"]').click()`);
+  await b.waitFor(`document.querySelector('[data-star="Vision.AIM_P"]')`);
+  check(await b.eval(`document.getElementById('settings-favorites-only').checked`) && (await shownRows()).length === 2
+    && await starred('Flywheels.POLLEN_FLYWHEEL_RPM'),
+    'after a reload the stars come back from the robot, and this browser remembers the filter');
+  await star('Vision.AIM_P');
+  await b.waitFor(`!document.querySelector('[data-star="Vision.AIM_P"]')`);
+  check(JSON.stringify(await cardOrder()) === '["Flywheels"]', 'unstarring the last Vision setting hides its card while filtering');
+  await star('Flywheels.POLLEN_FLYWHEEL_RPM');
+  await b.waitFor(`document.querySelectorAll('#settings .setting-row').length === 0`);
+  check(await b.eval(`!document.getElementById('settings-no-favorites').hidden`), 'with nothing starred it says how to star one');
+  await b.eval(`document.getElementById('settings-favorites-only').click()`);
+  await b.waitFor(`document.querySelectorAll('#settings .setting-row').length > 20`);
+  check(await b.eval(`document.getElementById('settings-no-favorites').hidden`) && (await cardOrder()).length === before.length,
+    'unticking it shows every setting again');
+  // Another browser starred something in the meantime: this browser's star keeps it.
+  await api('/api/file?path=settings/favorites.json', { method: 'PUT', headers: { 'X-Base-Hash': '*' },
+    body: JSON.stringify({ favorites: ['Intake.INTAKE_RPM'] }) });
+  await star('Flywheels.POLLEN_FLYWHEEL_RPM');
+  await b.waitFor(`document.querySelector('[data-star="Flywheels.POLLEN_FLYWHEEL_RPM"]').classList.contains('on')`);
+  check(JSON.stringify(await favoritesFile()) === JSON.stringify(['Flywheels.POLLEN_FLYWHEEL_RPM', 'Intake.INTAKE_RPM']),
+    'a star made from another browser is kept, not overwritten');
+  check((await api('/api/file?path=settings/favorites.json', { method: 'PUT', headers: { 'X-Base-Hash': '*' }, body: '[1]' })).status === 400,
+    'the robot refuses a favorites file that is not {"favorites": [...]}');
   await b.eval(`(() => {
     const input = document.querySelector('[data-key="Flywheels.POLLEN_FLYWHEEL_RPM"]');
     input.value = '3000';
@@ -510,6 +552,8 @@ try {
   sync('pull');
   const pulled = JSON.parse(readFileSync(join(scratch, 'settings/robot.json'), 'utf8'));
   check(pulled.Flywheels.POLLEN_FLYWHEEL_RPM === 3000, 'robot-sync pull copies it into the repo');
+  check(JSON.parse(readFileSync(join(scratch, 'settings/favorites.json'), 'utf8')).favorites.includes('Intake.INTAKE_RPM'),
+    'and the Tune favorites with it');
   check(!sync('status').includes('->'), 'after the pull everything is in sync');
   const historyFiles = execFileSync('find', [join(scratch, 'history'), '-type', 'f'], { encoding: 'utf8' }).trim().split('\n');
   check(historyFiles.length >= 3, `robot-sync pull also copies the robot's history into the repo (${historyFiles.length} versions)`);
@@ -661,8 +705,9 @@ try {
     await api('/api/snapshots', { method: 'POST', body: { name: 'locked' } }),
     await api('/api/hardware/active', { method: 'POST', body: { name: 'CamBot.xml' } }),
     await api('/api/adb/restart', { method: 'POST' }),
+    await api('/api/file?path=settings/favorites.json', { method: 'PUT', body: '{"favorites": []}' }),
   ];
-  check(lockedTries.every((r) => r.status === 423), 'and saving files, snapshots, the hardware map and Restart adb');
+  check(lockedTries.every((r) => r.status === 423), 'and saving files, snapshots, the hardware map, Restart adb and Tune stars');
   await b.eval(`document.querySelector('[data-tab="auton"]').click()`);
   await b.waitFor(`document.getElementById('auton-add-drive')`);
   const lockedLook = await b.eval(`(() => {
