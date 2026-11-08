@@ -38,6 +38,14 @@ public class MecanumDrive {
     /** BRAKE mode makes the robot stop hard instead of rolling when the sticks are released. */
     public static boolean START_IN_BRAKE_MODE = true;
 
+    /**
+     * Ramp each wheel's power up instead of jumping, so flooring the stick (or reversing) does
+     * not pull a big current spike from the battery. Slowing down and stopping stay instant.
+     */
+    public static boolean SLEW_RATE_ON = false;
+    /** How fast power may rise, per second: 4 = stopped to full power in 0.25 s. */
+    public static double SLEW_RATE = 4;
+
     private final DcMotorEx frontLeft, frontRight, backLeft, backRight;
     private final DcMotorEx[] motors;
     private final IMU imu;
@@ -48,6 +56,10 @@ public class MecanumDrive {
     private double lastStrafe, lastForward, lastTurn;
     private double lastFieldX, lastFieldY, lastSpeedUsed;
     private double lastHeadingDegrees, lastHeadingRadians;
+
+    // Power each wheel got last loop, for the slew rate (frontLeft, frontRight, backLeft, backRight).
+    private final double[] lastPowers = new double[4];
+    private long lastDriveNanos;
 
     public MecanumDrive(HardwareMap hardwareMap) {
         frontLeft = hardwareMap.get(DcMotorEx.class, "frontLeft");
@@ -115,10 +127,23 @@ public class MecanumDrive {
         double fieldY = strafe * Math.sin(headingRadians) + forward * Math.cos(headingRadians);
 
         // Not scaled to fit: a hard diagonal plus a turn can go past 1.0 and get clipped.
-        frontLeft.setPower((fieldY + fieldX + turn) * speed);
-        frontRight.setPower((fieldY - fieldX - turn) * speed);
-        backLeft.setPower((fieldY - fieldX + turn) * speed);
-        backRight.setPower((fieldY + fieldX - turn) * speed);
+        double[] powers = {
+                (fieldY + fieldX + turn) * speed,
+                (fieldY - fieldX - turn) * speed,
+                (fieldY - fieldX + turn) * speed,
+                (fieldY + fieldX - turn) * speed};
+        long now = System.nanoTime();
+        // Seconds since the last loop; at most 0.1 so a pause cannot allow a sudden jump.
+        double seconds = lastDriveNanos == 0 ? 0 : Math.min(0.1, (now - lastDriveNanos) / 1e9);
+        lastDriveNanos = now;
+        for (int i = 0; i < motors.length; i++) {
+            double power = Math.max(-1, Math.min(1, powers[i]));
+            if (SLEW_RATE_ON) {
+                power = slew(lastPowers[i], power, SLEW_RATE * seconds);
+            }
+            motors[i].setPower(power);
+            lastPowers[i] = power;
+        }
 
         lastStrafe = strafe;
         lastForward = forward;
@@ -132,6 +157,20 @@ public class MecanumDrive {
         for (DcMotorEx motor : motors) {
             motor.setPower(0);
         }
+        java.util.Arrays.fill(lastPowers, 0);
+    }
+
+    /**
+     * The power to send, moving from {@code last} toward {@code target} by at most {@code step}
+     * when speeding up. Slowing down (toward 0) is instant; reversing drops to 0 at once, then
+     * ramps up the other way.
+     */
+    private static double slew(double last, double target, double step) {
+        double from = Math.signum(last) == Math.signum(target) ? last : 0;
+        if (Math.abs(target) <= Math.abs(from)) {
+            return target;
+        }
+        return from + Math.max(-step, Math.min(step, target - from));
     }
 
     /** Makes whichever way the robot is facing right now the new "forward" for the driver. */

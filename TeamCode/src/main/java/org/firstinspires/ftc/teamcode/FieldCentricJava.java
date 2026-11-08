@@ -123,7 +123,7 @@ public class FieldCentricJava extends LinearOpMode {
                 dashboard.update();
             }
         } finally {
-            robot.vision.stopUpdates();
+            robot.vision.close();
         }
     }
 

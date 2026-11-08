@@ -9,9 +9,16 @@ Last updated: 2026-11-07
 ## Camera investigation update (2026-11-07)
 
 Read [CAMERA-TROUBLESHOOTING.md](CAMERA-TROUBLESHOOTING.md) before changing camera
-lifecycle/recovery. Repeated INIT is now a reported reproduction case. The USB
-reset experiment failed repeated robot tests and has been removed. No proven
-software camera reboot or root cause. These notes supersede older recovery notes.
+lifecycle/recovery. Camera dead after re-INIT: cause found and fixed (EasyOpenCV
+closes the camera at STOP without updating the VisionPortal; we now call
+`VisionPortal.close()` ourselves), robot-tested. The mid-drive restart is still
+open (suspect: native MJPEG decode crash on damaged USB frames). The USB reset
+experiment failed and stays removed. Keep camera changes minimal: the user does not
+want piles of guard code.
+
+`MecanumDrive.SLEW_RATE_ON` / `SLEW_RATE` (power per second, 4 = 0 to full in
+0.25 s; slowing down stays instant): off by default. User's first test: battery dip
+9.5 V without, about 10.5 V with. Field test with a fresh battery pending.
 
 ## Current state (2026-10-31). Read this first.
 

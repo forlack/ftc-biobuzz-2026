@@ -2,7 +2,52 @@
 
 Updated 2026-11-07. Team 24621 Total Chaos.
 
-## Current finding: repeated INIT is a reproduction case
+## Fixed: camera dead after re-INIT (cause found, robot-tested 2026-11-07)
+
+**Cause (our code).** At OpMode STOP the SDK's EasyOpenCV closes the camera through
+its own OpMode listener (`OpenCvCameraBase$OpModeNotifications.onOpModePostStop` ->
+`closeCameraDevice()`), but never tells the VisionPortal. `VisionPortalImpl` only
+sets `CAMERA_DEVICE_CLOSED` inside its own `close()`, which nothing called, so the
+old portal reported `STREAMING` forever. Our 2-second guard (added earlier on Nov 7)
+waited for CLOSED on every later INIT, timed out, skipped vision, and never forgot
+the old session: camera dead until the app restarted; unplug/replug could not help.
+Verified in the SDK 12.0 / EasyOpenCV 1.7.3 sources and bytecode in the Gradle cache.
+
+**Fix (`mechanisms/Vision.java`, TeleOp `finally` calls `robot.vision.close()`):**
+
+- At STOP we call `VisionPortal.close()` ourselves, on a background thread (it can
+  block while a camera is still opening; an OpMode stuck in STOP makes the SDK
+  restart the robot). EasyOpenCV's own close then finds the camera closed: its close
+  is synchronized and skips a null camera, so the two cannot collide.
+- INIT opens a new session only once the last one reports CLOSED (asking it to
+  close if STOP never did), waiting up to 2 s. If it never closes, vision is skipped
+  with "INIT again, or Restart Robot". A new HardwareMap (the SDK makes one per robot
+  start) means the robot restarted, so the old session is forgotten.
+- Aim drops the target when no new frame arrives for 0.5 s (`getFreshDetections()`),
+  so a frozen camera cannot keep steering toward an old bearing.
+- `enableLiveView(false)`: the hub has no screen; the dashboard preview is separate.
+- Driver Station line `Camera:` shows the portal state. Wait for STREAMING before STOP.
+
+**Robot test 2026-11-07:** repeated INIT / STOP: camera reached STREAMING every time.
+About 8 minutes of TeleOp on the ground (no hard hits), stock modified cable:
+`adb logcat` counted 22 "failed to send EOF" and 0 UVC errors.
+
+**Still open: the mid-drive restart after the camera feed dies.** The most likely
+mechanism is a native crash in MJPEG decoding: EasyOpenCV's
+`mjpegBufToRgbaMat` calls libjpeg-turbo 3.0.3 `tj3Decompress8` into a 640x480
+buffer without `tj3DecompressHeader` or a check that the frame is complete, and the
+Oct 31 log has a SIGABRT (stack corruption) in `tj3Decompress8`. A native crash
+cannot be caught in Java. Damaged frames (missing EOF) come from the USB link, so a
+clean cable is the first fix. Next crash: `adb shell cat /proc/uptime` (hub reboot
+vs app crash) and `adb logcat -d -b crash` before power cycling.
+
+Possible later software step (not done): a patched EasyOpenCV that drops frames
+without JPEG start/end markers (`FF D8` ... `FF D9`), checks the header size, and
+requests a lower frame rate. EasyOpenCV always asks for the camera's maximum
+(`getMaxFramesPerSecond`, 120 at 640x480); VisionPortal cannot change it.
+YUY2 (no decoder) exists only at 1280x800 / 1280x720 @ 10 fps: ruled out (lag).
+
+## Earlier finding: repeated INIT was a reproduction case
 
 Latest robot observation from the team:
 
@@ -25,7 +70,7 @@ did not specify a new physical cable change for this comparison.
 **Do not keep pressing INIT to recover a dead camera.** The team has observed
 that doing so can escalate the failure. Capture logs before rebooting when possible.
 
-## Current software after removing the failed recovery experiment
+## Software after removing the failed recovery experiment (before the fix above)
 
 - No automatic USB reset or camera reopen/retry loop.
 - No `RESET_CAMERA` Tune switch, hidden Android ioctl code, or USB reset helper.
@@ -184,6 +229,7 @@ why cleanup first got stuck.
 | Low-level USB reset, five attempts with 2 s waits | **Repeated robot tests did not recover the failed camera. Removed at user's request.** |
 | Repeated INIT without PLAY | First INIT preview works; another INIT kills camera; another one or two can precede reboot. Latest concrete reproduction case. |
 | Repeated STOP/INIT/re-INIT with VISION_ON false | Team reports no problems. Camera-disabled comparison is stable; camera-enabled lifecycle remains implicated, without identifying hardware vs. software. |
+| Close the portal ourselves at STOP; INIT waits for a truthful CLOSED | **Fixed re-INIT.** See "Fixed" at the top. Robot-tested Nov 7. |
 
 The removed USB experiment used Android UsbManager to open only the configured
 webcam and reflected Android 7 `Os.ioctlInt`/`MutableInt` to request Linux
@@ -277,11 +323,9 @@ hub restarted. Keep captured logs local until reviewed for private information.
    the robot just to collect redundant warnings.
 2. Compare with an intact cable/plug, temporarily moving hardware for clearance.
    Keep USB 3, resolution, settings, and test sequence fixed so one factor changes.
-3. Add stale-frame detection before trusting auto aim. Current `getDetections()`
-   may keep old results while the portal says STREAMING. A freshness timeout is
-   still unimplemented; a target disappearing and a camera failing are different.
-4. Evaluate disabling unused RC LiveView (separate from our browser feed).
-   No capture-FPS cap, exposure/gain controls, or new camera manager was added.
+3. Done (Nov 7): aim drops the target after 0.5 s without a fresh frame.
+4. Done (Nov 7): LiveView disabled. No capture-FPS cap (needs a patched EasyOpenCV),
+   exposure/gain controls, or new camera manager was added.
 5. Investigate dashboard initial-connect latency separately: first connection
    delay vs. fast TCP/slow state response. Idle state updates currently read hub
    battery voltage directly; a stall there is a code suspect, not a proven cause.
@@ -291,5 +335,6 @@ hub restarted. Keep captured logs local until reviewed for private information.
    operator Y/shoot or driver forceShoot; no trace has identified which input, if
    any, was active during the reported unintended movement.
 
-No confirmed root cause or reliable software camera reboot has been established.
-Do not describe the failed reset experiment as working recovery.
+The re-INIT failure's cause is confirmed and fixed (top of this file). The mid-drive
+restart has no confirmed cause yet. Do not describe the failed reset experiment as
+working recovery.
