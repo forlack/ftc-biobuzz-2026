@@ -1787,3 +1787,7 @@ camera; another one or two INITs can precede a robot crash/reboot. Original came
 failures predate our explicit-close experiment. Need fatal trace for this sequence.
 Full evidence, chronological experiments/results, research, logging instructions,
 and open questions: [CAMERA-TROUBLESHOOTING.md](CAMERA-TROUBLESHOOTING.md).
+
+Follow-up: team reports repeated STOP/INIT/re-INIT works without problems when
+VISION_ON=false. This isolates the observed failure to camera-enabled activity;
+it does not establish SDK lifecycle vs. USB/camera hardware as the cause.

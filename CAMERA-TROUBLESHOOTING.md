@@ -16,6 +16,12 @@ INIT -> INIT without PLAY. It does **not** establish which layer fails. We have
 not captured a fatal trace for this exact sequence. A reported robot reboot may
 be an RC app/event-loop restart or a full hub reboot; distinguish using uptime.
 
+Follow-up comparison: with `VISION_ON = false`, the team can repeatedly STOP,
+INIT, re-INIT, STOP, and INIT without problems. This narrows the reproduction to
+the camera-enabled execution path. It does not distinguish an SDK/session
+lifecycle problem from camera/USB faults triggered by active streaming. The team
+did not specify a new physical cable change for this comparison.
+
 **Do not keep pressing INIT to recover a dead camera.** The team has observed
 that doing so can escalate the failure. Capture logs before rebooting when possible.
 
@@ -177,6 +183,7 @@ why cleanup first got stuck.
 | Wait up to 2 s for prior session CLOSED | Implemented. Detects stuck cleanup and skips vision; does not recover it. |
 | Low-level USB reset, five attempts with 2 s waits | **Repeated robot tests did not recover the failed camera. Removed at user's request.** |
 | Repeated INIT without PLAY | First INIT preview works; another INIT kills camera; another one or two can precede reboot. Latest concrete reproduction case. |
+| Repeated STOP/INIT/re-INIT with VISION_ON false | Team reports no problems. Camera-disabled comparison is stable; camera-enabled lifecycle remains implicated, without identifying hardware vs. software. |
 
 The removed USB experiment used Android UsbManager to open only the configured
 webcam and reflected Android 7 `Os.ioctlInt`/`MutableInt` to request Linux
