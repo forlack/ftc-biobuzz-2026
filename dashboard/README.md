@@ -5,6 +5,8 @@ path editor with robot actions, OpMode control, and the hardware map. It is a pl
 (`dashboard/web/`, no build step) served by a small Java server that runs **in the Robot
 Controller app** or **in the desktop simulator**. Same page, same server code, same files.
 
+Camera failures/restarts: [investigation and test history](../CAMERA-TROUBLESHOOTING.md).
+
 | Tab | What it does |
 |---|---|
 | **Live** | Charts of every loop (flywheel RPM vs target, % error, intake, battery, loop time), the field with the robot's trail (wiped at each INIT; the **Path** checkbox hides it), and every telemetry value. Pause, drag to zoom, double click to resume, Export CSV. **+ Add chart** plots any numbers the robot sends (remembered in that browser; ✕ removes). The toolbar shows the OpMode loop time and how much of it the dashboard's own code takes (`Loop 10.1 ms · dashboard +0.01 ms · 17 KB/s`); `Dashboard ms` is also on the Battery & loop chart. |
@@ -196,3 +198,19 @@ hive seen/height/ignored, redundant path busy/done flags and motor percentage er
 Standard flywheel error charts still calculate percentages from actual/target RPM;
 removed fields no longer produce new chart/CSV samples. Warning/problem messages
 remain visible in the concise telemetry list. Tune still holds PIDF/settings.
+
+### Problems and route confirmation (2026-11-07)
+
+Robot logs defaults to **Problems — combined**. Refresh gathers robot WARN/ERROR
+entries from both event files, accessible Android warnings/errors plus UVC EOF
+debug messages, and fresh camera/low-memory faults. Repeats are grouped by message
+with count and first/last time. Unsupported webcam zoom/pan error-9 probes are
+omitted. Problems/logcat refresh manually, not in a background loop. Download
+keeps the raw bounded snapshot. Missing entries do not rule out hardware or
+localization faults; Android permissions, log rotation and reboots limit coverage.
+
+During autonomous INIT, **gamepad 1 B + D-pad up/down** changes routes. Dashboard
+ROUTE/file edits refresh during INIT. DS shows the loaded filename, a content-hash
+prefix and start pose; Robot events records full hash on load and PLAY. At PLAY,
+changed valid content reloads before motion without requiring re-INIT; missing or
+invalid content prevents driving. Running sequences keep their loaded route.

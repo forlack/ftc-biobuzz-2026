@@ -196,6 +196,13 @@ public class RobotSettings {
         return readFile();
     }
 
+    /** Loads saved settings at dashboard startup without resetting an active OpMode's switches.
+     * An unchanged file keeps current values, including unsaved live tuning.
+     */
+    public synchronized RobotSettings loadSaved() {
+        return readFile();
+    }
+
     /** Every @RobotSettings.NotSaved switch back to its value in the code. */
     private void resetLiveSwitches() {
         for (Class<?> settingsClass : classes) {

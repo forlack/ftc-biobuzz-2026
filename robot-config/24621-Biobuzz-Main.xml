@@ -17,6 +17,8 @@
             <goBILDA5202SeriesMotor name="shooterNectar" port="3" />
             <ContinuousRotationServo name="transportNectar" port="0" />
             <ContinuousRotationServo name="triggerNectar" port="1" />
+            <Servo name="aimLight1" port="2" />
+            <Servo name="aimLight2" port="3" />
             <goBILDAPinpoint name="pinpoint" port="1" bus="0" />
             <ControlHubImuBHI260AP name="imu" port="0" bus="0" />
         </LynxModule>

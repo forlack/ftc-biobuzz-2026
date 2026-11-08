@@ -79,6 +79,8 @@ class RestoreTests(unittest.TestCase):
         def run(command, **kwargs):
             if command[-1] == 'get-state':
                 return SimpleNamespace(stdout='device\n', stderr='')
+            if 'install' in command and failure:
+                raise failure
             if ':TeamCode:installDebug' in command:
                 self.assertEqual(kwargs['env']['ANDROID_SERIAL'], '192.168.43.1:5555')
                 self.assertIn('--offline', command)

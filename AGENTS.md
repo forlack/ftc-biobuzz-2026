@@ -2,9 +2,16 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-10-31
+Last updated: 2026-11-07
 
 ---
+
+## Camera investigation update (2026-11-07)
+
+Read [CAMERA-TROUBLESHOOTING.md](CAMERA-TROUBLESHOOTING.md) before changing camera
+lifecycle/recovery. Repeated INIT is now a reported reproduction case. The USB
+reset experiment failed repeated robot tests and has been removed. No proven
+software camera reboot or root cause. These notes supersede older recovery notes.
 
 ## Current state (2026-10-31). Read this first.
 
@@ -1669,3 +1676,114 @@ webcam, B-modifier controls, INIT alliance/preview, telemetry cleanup, deploy AD
 recovery/retry, aim trim and single Main hardware map are being committed together.
 Preview remains CAMERA_FEED_ON=false by default for diagnostic isolation; saved
 robot settings can override defaults. No confirmed camera crash root cause yet.
+
+## Aim indicator lights — 2026-11-07
+
+FieldCentricJava controls two goBILDA PWM RGB indicators named aimLight1 and
+aimLight2 on Control Hub servo ports 2/3, configured as Servo in Main XML.
+Both update at INIT and PLAY: red = no selected-alliance hive, yellow = visible
+but not aligned, green = abs(bearing + AIM_LEFT_TRIM_DEG) <= AIM_TOLERANCE_DEG.
+Independent of aim/shoot button and flywheel readiness. All logic stays in TeleOp.
+Explicit PWM range 600–2400 us, red1100/yellow1300/green1500 per product chart:
+https://www.gobilda.com/rgb-indicator-light-pwm-controlled/
+Only color transitions send servo commands. Deploy code plus updated hardware map
+(`./deploy -m --stay`), keep 24621-Biobuzz-Main active.
+
+LED troubleshooting 2026-11-07: indicators reported dark. Red moved from exact
+1100 us off/on boundary to 1120 us; explicit PWM enable on each color transition.
+Robot logs source "Aim lights" records commanded color/pulse (not proof of light
+output). Need hardware verification; only Field Centric controls LEDs, not auton.
+
+Aim lights telemetry: one line in DS and dashboard summary during INIT/PLAY
+reports requested color and pulse for both lights; no extra hub sensor reads.
+This is command intent, not optical confirmation. Transition logs retained.
+
+2026-11-07 follow-up: user manually changed LEDs to red/no target, green/any valid
+target, removed yellow/alignment gating; preserve that test behavior. Removed
+unused computed aim error from LED method. Deploy no longer kills healthy laptop
+ADB on initial connect; retry disconnects transport and escalates server reset
+after three failures. Gradle install failure falls back to reconnect + direct SDK
+adb install -r -t of already-built APK. Manual Gradle install worked for user; exact
+race/root cause remains unconfirmed.
+
+2026-11-07 reliability review: camera/robot glitches root cause still unknown;
+hardware USB connection/power and native camera/USB errors remain candidates.
+No broad restart/extra camera manager added: EasyOpenCV already closes at STOP.
+Dashboard LinearOpMode state now reads isStarted/isStopRequested, so delayed
+dashboard startup cannot leave a running teleop displayed stopped. Old dashboard
+listener unregistered on replacement. Vision clears selected target while camera
+is not STREAMING, preventing stale auto-aim/green indication. LED event logging
+removed (commanded LED telemetry retained). Android logcat is on-demand only, now
+*:W warnings/errors; no continuous logcat collector. Existing bounded samples/event
+files remain. No Pedro/route/motor mapping changes in this review.
+
+2026-11-07 Problems view: default Robot log source combines current/previous robot
+WARN/ERROR events, on-demand Android W/E/F plus UvcStream:D (keeps EOF), and
+fresh active camera/OS low-memory faults. Repeats grouped with counts/first/last;
+known unsupported zoom/pan error-9 probes omitted. Download retains raw JSON
+snapshot. No automatic polling of Problems/logcat or extra background collector.
+Recent accessible tails only; not a guarantee of full fault capture.
+Autonomous robustness: INIT records route file/hash/start; refreshes route changes
+during INIT and checks exact bytes at PLAY, reloads changed valid file before
+motion. No forced re-INIT. Invalid/missing route prevents start. Route stays fixed
+while running. No Pedro tuning/localizer direction changes.
+
+Auton route controller selection now requires gamepad1 B+D-pad up/down; plain
+D-pad ignored. New path guard and Problems view approved by user. No forced
+re-INIT on valid route edits: refresh at INIT/PLAY before motion only.
+
+2026-11-07 log/UI follow-up: explanatory boilerplate removed; empty Problems
+view says "No problems found." Logs now newest-first; grouped Problems sorted
+by latest occurrence. Hive telemetry requested axes X=horizontal ground range
+(inches), Y=estimated hive height above floor (inches), not native camera x/y.
+No selected target shows --. Driver Station and dashboard summary both show these.
+
+### Camera lifecycle hardening — 2026-11-07
+
+User reproduced accidental TeleOp START -> STOP -> autonomous INIT/PLAY, then
+camera/startup errors and reboot. Auton routes do not use camera, but Robot's
+constructor previously opened one anyway. PedroAutonomous now calls
+new Robot(hardwareMap,false), so it does not create VisionPortal. TeleOp uses
+try/finally to request Vision.close even on cancelled INIT/errors. Close requested
+once per Vision instance on daemon worker, not blocking STOP. A new Vision
+serializes opening and waits <=2s for prior portal CAMERA_DEVICE_CLOSED; if still
+closing, skips vision and reports warning instead of opening overlapping sessions.
+No automatic reopen/retry. Closed instances return no target and skip preview.
+Native/cable/USB faults remain possible; hardware transition test still needed.
+Existing autonomous hiveSeen conditions now see false because vision is disabled
+in autonomous; current routes use no vision. Future vision-based auton must opt in.
+
+### Saved tuning at dashboard startup — 2026-11-07
+
+AndroidDashboard now calls RobotSettings.loadSaved() before serving Tune, so a fresh
+app loads settings/robot.json before displaying or saving values. Previously saved
+settings loaded only at OpMode INIT or manual Load from robot. Startup uses the
+existing unchanged-file guard and does not reset live switches: recreating the
+dashboard during an OpMode preserves unsaved tuning and on/off state. OpMode INIT
+still resets NotSaved switches and preserves tuning when robot.json is unchanged.
+RobotSettingsStartupCheck covers startup, dashboard recreation, and INIT behavior.
+
+### Camera cleanup isolation test — 2026-11-07
+
+Original crashes/dead camera predate our explicit asynchronous VisionPortal.close()
+hardening. User approved removing that extra close after finding older FTC reports
+of manual/automatic cleanup races (related stopStreaming/close bug fixed in SDK 9.1;
+we run 12.0, so no confirmed match). Vision.stopUpdates() now only disables our
+target/preview callbacks at STOP; SDK automatic cleanup owns camera shutdown.
+Next TeleOp still waits up to 2 seconds for CAMERA_DEVICE_CLOSED before opening
+another portal, without requesting another native close. Auton still opens no
+camera. This isolates a possible additional conflict, not a proven original fix.
+
+### USB camera reset experiment removed — 2026-11-07
+
+Team repeatedly tested the five-attempt low-level USB reset and it did NOT recover
+failed cameras. Removed at user's request: UsbCameraReset helper, retry workers,
+startup watchdog, RESET_CAMERA Tune switch, and failure-triggered explicit closes.
+Do not reintroduce or claim successful recovery. Normal STOP remains SDK-owned;
+stopUpdates suppresses our callbacks and the two-second prior-session guard stays.
+
+Latest reproduction: first TeleOp INIT preview works; pressing INIT again kills
+camera; another one or two INITs can precede a robot crash/reboot. Original camera
+failures predate our explicit-close experiment. Need fatal trace for this sequence.
+Full evidence, chronological experiments/results, research, logging instructions,
+and open questions: [CAMERA-TROUBLESHOOTING.md](CAMERA-TROUBLESHOOTING.md).

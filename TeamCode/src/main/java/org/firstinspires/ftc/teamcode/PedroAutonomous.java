@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.dashboard.Configurable;
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
+import org.firstinspires.ftc.teamcode.dashboard.RobotDiagnostics;
 import org.firstinspires.ftc.teamcode.lib.AutoRoute;
 import org.firstinspires.ftc.teamcode.lib.AutoFunctions;
 import org.firstinspires.ftc.teamcode.lib.AutoSequence;
@@ -29,7 +30,7 @@ import java.util.List;
  * The route's functions (intake on, shoot, stinger down...) are the mechanisms' @AutoFunction
  * methods, run on the same mechanisms/Robot as the teleop.
  *
- * During INIT, D-pad up/down picks another route file. Place the robot at the start pose shown.
+ * During INIT, gamepad 1 B + D-pad up/down picks another route file. Place the robot at the start pose shown.
  *
  * setPose() does not move the robot; it tells Pedro where the robot already is. Lie to it and
  * the follower immediately lurches to "correct".
@@ -47,6 +48,8 @@ public class PedroAutonomous extends OpMode {
     private Pose start;
     private String source = "";
     private String problem = null;
+    private String loadedRoute = "", loadedHash = "";
+    private long nextRouteCheck;
     private boolean lastUp, lastDown;
     private long lastLoop;
 
@@ -66,7 +69,7 @@ public class PedroAutonomous extends OpMode {
 
         follower = Constants.create(hardwareMap);
 
-        robot = new Robot(hardwareMap);
+        robot = new Robot(hardwareMap, false); // These routes do not need the camera.
         // As before: stinger up and triggers stopped at INIT; nothing else moves until start
         // (the intake and flywheels start off).
         robot.stinger.up();
@@ -80,28 +83,39 @@ public class PedroAutonomous extends OpMode {
     private void prepare() {
         problem = null;
         auto = null;
-        File file = RobotFiles.file("autos/" + ROUTE + ".json");
+        loadedRoute = ROUTE;
+        loadedHash = "";
+        File file = RobotFiles.file("autos/" + loadedRoute + ".json");
         try {
+            if (loadedRoute == null || !loadedRoute.matches("[A-Za-z0-9_.-]+")) {
+                throw new IllegalArgumentException("Invalid route filename");
+            }
             if (!file.isFile()) {
                 throw new IllegalArgumentException("No auton file " + file.getPath()
                         + ". Save one from the dashboard's Paths tab, or pick another with the D-pad.");
             }
-            AutoRoute route = AutoRoute.read(file);
+            byte[] bytes = RobotFiles.readBytes(file);
+            AutoRoute route = new AutoRoute(new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
+            loadedHash = RobotFiles.hash(bytes);
             start = route.start;
             auto = route.build(follower, AutoStepFunctions.create(AutoFunctions.of(robot)));
             source = file.getPath() + " (\"" + route.name + "\")";
             follower.setPose(start);
+            RobotDiagnostics.info("Autonomous", "Loaded " + source + " SHA " + loadedHash
+                    + " start " + start.x() + "," + start.y() + "," + Math.toDegrees(start.heading()));
         } catch (Exception error) {
             problem = error.getMessage();
             auto = null;
+            RobotDiagnostics.error("Autonomous", "Cannot load " + loadedRoute + ": " + problem);
         }
         showInit();
     }
 
     @Override
     public void init_loop() {
-        // D-pad up/down: the next or previous route file in autos/.
-        boolean up = gamepad1.dpad_up, down = gamepad1.dpad_down;
+        // Gamepad 1 B + D-pad up/down: deliberately select another route.
+        boolean up = gamepad1.b && gamepad1.dpad_up;
+        boolean down = gamepad1.b && gamepad1.dpad_down;
         if ((up && !lastUp) || (down && !lastDown)) {
             List<String> routes = routeNames();
             if (!routes.isEmpty()) {
@@ -113,6 +127,24 @@ public class PedroAutonomous extends OpMode {
         }
         lastUp = up;
         lastDown = down;
+        // Check edits during INIT only; never swap route data during a running sequence.
+        long now = System.nanoTime();
+        if (now >= nextRouteCheck) {
+            nextRouteCheck = now + 500_000_000L;
+            if (!java.util.Objects.equals(ROUTE, loadedRoute)) {
+                prepare();
+            } else if (auto != null) {
+                try {
+                    String hash = RobotFiles.hash(RobotFiles.readBytes(RobotFiles.file("autos/" + loadedRoute + ".json")));
+                    if (!hash.equals(loadedHash)) prepare();
+                } catch (Exception error) {
+                    problem = "Route file unavailable: " + error.getMessage();
+                    auto = null;
+                    RobotDiagnostics.error("Autonomous", problem);
+                    showInit();
+                }
+            }
+        }
         Dash.frame();
     }
 
@@ -132,10 +164,11 @@ public class PedroAutonomous extends OpMode {
         telemetry.addData("Alliance", Alliance.name() + "   (set on the Tune tab before the match)");
         if (problem != null) {
             telemetry.addData("ROUTE PROBLEM", problem);
-            telemetry.addData("Route", ROUTE + "  (D-pad up/down to pick another)");
+            telemetry.addData("Route", ROUTE + "  (B + D-pad up/down to pick another)");
             Dash.put("Status", "Route problem: " + problem);
         } else {
-            telemetry.addData("Route", ROUTE + "  (D-pad up/down to pick another)");
+            telemetry.addData("Route", ROUTE + "  (B + D-pad up/down to pick another)");
+            telemetry.addData("File", loadedRoute + ".json · " + loadedHash.substring(0, 12));
             telemetry.addData("Steps", auto.stepCount());
             telemetry.addData("Start", String.format(java.util.Locale.US, "x %.1f, y %.1f, %.0f°",
                     start.x(), start.y(), Math.toDegrees(start.heading())));
@@ -148,10 +181,23 @@ public class PedroAutonomous extends OpMode {
 
     @Override
     public void start() {
+        try {
+            if (auto == null || !java.util.Objects.equals(ROUTE, loadedRoute)
+                    || !loadedHash.equals(RobotFiles.hash(RobotFiles.readBytes(
+                    RobotFiles.file("autos/" + loadedRoute + ".json"))))) {
+                prepare(); // Refresh a changed route before any mechanism or drive starts.
+            }
+        } catch (Exception error) {
+            problem = error.getMessage();
+            auto = null;
+            RobotDiagnostics.error("Autonomous", problem);
+            showInit();
+        }
         if (auto == null) {
             requestOpModeStop();
             return;
         }
+        RobotDiagnostics.info("Autonomous", "START " + loadedRoute + ".json SHA " + loadedHash);
         // Intake and flywheels run the whole match.
         robot.intake.on();
         robot.flywheels.on();

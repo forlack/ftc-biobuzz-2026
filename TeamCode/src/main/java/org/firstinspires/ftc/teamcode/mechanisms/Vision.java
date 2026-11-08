@@ -92,9 +92,12 @@ public class Vision implements Mechanism {
     /** Turns pictures into JPEGs for the dashboard, away from the camera's own thread. */
     private static final Executor PICTURES = Executors.newSingleThreadExecutor();
 
-    private VisionPortal portal;
-    private AprilTagProcessor tags;
-    private String problem = "";
+    private static final Object CAMERA_LOCK = new Object();
+    private static Vision cameraOwner;
+    private volatile boolean closed;
+    private volatile VisionPortal portal;
+    private volatile AprilTagProcessor tags;
+    private volatile String problem = "";
 
     private final HiveFinder finder = new HiveFinder();
     private final List<HiveFinder.Sighting> sightings = new ArrayList<>();
@@ -103,6 +106,41 @@ public class Vision implements Mechanism {
     private long lastGrab;
 
     public Vision(HardwareMap hardwareMap) {
+        this(hardwareMap, true);
+    }
+
+    public Vision(HardwareMap hardwareMap, boolean useCamera) {
+        if (!useCamera) {
+            problem = "off (not used by this OpMode)";
+            return;
+        }
+        synchronized (CAMERA_LOCK) {
+            if (cameraOwner != null) {
+                cameraOwner.stopUpdates();
+                long deadline = System.nanoTime() + 2_000_000_000L;
+                while (cameraOwner.portal != null && cameraOwner.portal.getCameraState()
+                        != VisionPortal.CameraState.CAMERA_DEVICE_CLOSED) {
+                    if (System.nanoTime() >= deadline) {
+                        problem = "Previous camera session is still closing; vision skipped";
+                        org.firstinspires.ftc.teamcode.dashboard.RobotDiagnostics.warn("Camera", problem);
+                        return;
+                    }
+                    try {
+                        Thread.sleep(20);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        problem = "Camera init cancelled";
+                        return;
+                    }
+                }
+                cameraOwner = null;
+            }
+            open(hardwareMap);
+            if (portal != null) cameraOwner = this;
+        }
+    }
+
+    private void open(HardwareMap hardwareMap) {
         if (!VISION_ON) {
             problem = "off (Vision.VISION_ON)";
             return;
@@ -134,28 +172,37 @@ public class Vision implements Mechanism {
         }
     }
 
+    /** Stop our target/preview callbacks; the SDK owns camera shutdown at OpMode STOP. */
+    public void stopUpdates() {
+        closed = true;
+    }
+
     /** The hive to aim at is in view (our color, the right kind, up). */
     @AutoFunction(name = "hiveSeen", label = "hive seen", help = "The camera sees our alliance's hive (up).")
     public boolean seen() {
-        return finder.hive() != null;
+        return hive() != null;
     }
 
     /** The hive to aim at (distance, turn, height), or null when none is in view. */
     public HiveFinder.Sighting hive() {
-        return finder.hive();
+        return closed || tags == null ? null : finder.hive();
     }
 
     private long nextDiagnostic;
 
     @Override
     public void update() {
+        if (closed) return;
         long now = System.nanoTime();
         if (now >= nextDiagnostic) {
             nextDiagnostic = now + 1_000_000_000L;
             CameraFeed.report(portal == null ? "unavailable" : portal.getCameraState().name(),
                     portal == null ? 0 : portal.getFps(), CAMERA_FEED_ON, problem);
         }
-        if (tags == null) {
+        if (tags == null || portal == null || portal.getCameraState() != VisionPortal.CameraState.STREAMING) {
+            // A disconnected/stopped camera must not leave yesterday's target active.
+            sightings.clear();
+            finder.pick(sightings, Alliance.isBlue(), HIVE_TARGET, HIVE_UP_MIN_HEIGHT_IN);
             return;
         }
         pickHive(tags.getDetections());
@@ -190,7 +237,7 @@ public class Vision implements Mechanism {
             @Override
             public void accept(Bitmap frame) {
                 try {
-                    if (!CAMERA_FEED_ON) return; // A queued request may finish after disabling.
+                    if (closed || !CAMERA_FEED_ON) return; // A queued request may finish after disabling.
                     ByteArrayOutputStream jpeg = new ByteArrayOutputStream();
                     frame.compress(Bitmap.CompressFormat.JPEG, 85, jpeg);
                     CameraFeed.publish(jpeg.toByteArray());
@@ -206,15 +253,17 @@ public class Vision implements Mechanism {
 
     @Override
     public void telemetry(Telemetry telemetry) {
+        HiveFinder.Sighting hive = hive();
+        // Driver-requested axes: X is ground range, Y is height above the floor (inches).
+        telemetry.addData("Hive X distance in", hive == null ? "--" : Math.round(hive.range * 10) / 10.0);
+        telemetry.addData("Hive Y height in", hive == null ? "--" : Math.round(hive.height * 10) / 10.0);
         if (tags == null) {
             telemetry.addData("Hive", "no camera");
             Dash.put("Hive problem", problem);
             return;
         }
         telemetry.addData("Hive", finder.shortLine());
-        HiveFinder.Sighting hive = finder.hive();
         if (hive != null) {
-            Dash.put("Hive range in", hive.range);
             Dash.put("Hive bearing deg", hive.bearing);
         }
     }

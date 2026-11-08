@@ -722,7 +722,27 @@ public class DashboardServer {
     }
 
     /** The newest camera picture (asking also tells the vision code someone is watching). */
+    /** On-demand collection only; no new logcat polling thread. */
+    private Response problems() throws IOException {
+        try {
+            JSONObject result = new JSONObject();
+            result.put("events", diagnostics.tail("events", true) + "\n" + diagnostics.tail("events", false));
+            result.put("context", diagnostics.status());
+            try {
+                result.put("android", host.systemLog());
+            } catch (IOException error) {
+                result.put("android", "");
+                result.put("notice", "Android logs unavailable: " + error.getMessage());
+            }
+            result.put("collectedAt", System.currentTimeMillis());
+            return Response.json(200, result);
+        } catch (org.json.JSONException error) {
+            throw new IOException(error);
+        }
+    }
+
     private Response diagnosticLog(String source) throws IOException {
+        if ("problems".equals(source)) return problems();
         String text;
         if ("events".equals(source)) text = diagnostics.tail("events", false);
         else if ("events-previous".equals(source)) text = diagnostics.tail("events", true);

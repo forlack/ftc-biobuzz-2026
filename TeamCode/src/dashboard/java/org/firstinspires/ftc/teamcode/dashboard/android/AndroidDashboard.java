@@ -9,6 +9,7 @@ import com.qualcomm.ftccommon.FtcEventLoop;
 import com.qualcomm.ftccommon.configuration.RobotConfigFile;
 import com.qualcomm.ftccommon.configuration.RobotConfigFileManager;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.OpModeManager;
 import com.qualcomm.robotcore.eventloop.opmode.OpModeManagerImpl;
 import com.qualcomm.robotcore.eventloop.opmode.OpModeManagerNotifier;
@@ -58,6 +59,9 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
     private AndroidDashboard(Context context, OpModeManagerImpl opModes) {
         this.context = context;
         this.opModes = opModes;
+        // Load before Tune can display or save defaults. If INIT already loaded the file,
+        // keep live tuning and switches instead of resetting them when the dashboard starts.
+        settings.loadSaved();
     }
 
     @OnCreateEventLoop
@@ -67,7 +71,10 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
                 Thread.sleep(5000);   // let the Robot Controller finish starting first
                 ensureAdbOn(context.getApplicationContext());
                 synchronized (AndroidDashboard.class) {
-                    if (instance != null) instance.server.stop();
+                    if (instance != null) {
+                        instance.opModes.unregisterListener(instance);
+                        instance.server.stop();
+                    }
                     instance = new AndroidDashboard(context.getApplicationContext(), eventLoop.getOpModeManager());
                     instance.opModes.registerListener(instance);
                     instance.server = new DashboardServer(instance, DashboardServer.DEFAULT_PORT);
@@ -109,7 +116,16 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
     }
 
     @Override public String opModeState() {
-        return activeOpMode().isEmpty() ? "stopped" : state;
+        if (activeOpMode().isEmpty()) return "stopped";
+        // Dashboard starts after a delay and can miss INIT/START notifications.
+        // LinearOpMode's own flags are authoritative even for a Driver Station start.
+        OpMode active = opModes.getActiveOpMode();
+        if (active instanceof LinearOpMode) {
+            LinearOpMode linear = (LinearOpMode) active;
+            if (linear.isStopRequested()) return "stopped";
+            return linear.isStarted() ? "running" : "init";
+        }
+        return state;
     }
 
     @Override public void initOpMode(String name) { opModes.initOpMode(name); }
@@ -260,7 +276,7 @@ public final class AndroidDashboard implements RobotHost, OpModeManagerNotifier.
 
     /** No root or permission changes. Android may return only this app's accessible logs. */
     @Override public String systemLog() throws IOException {
-        Process process = new ProcessBuilder("logcat", "-d", "-b", "all", "-v", "threadtime", "-t", "300")
+        Process process = new ProcessBuilder("logcat", "-d", "-b", "all", "-v", "threadtime", "-t", "300", "*:W", "UvcStream:D")
                 .redirectErrorStream(true).start();
         Thread deadline = new Thread(() -> {
             try { Thread.sleep(3000); process.destroy(); } catch (InterruptedException ignored) { }

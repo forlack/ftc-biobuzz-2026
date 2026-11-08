@@ -220,9 +220,9 @@ public final class SimOpModes {
             HiveFinder.Sighting hive = finder.hive();
             Dash.put("Hive seen", hive != null);
             if (hive != null) {
-                Dash.put("Hive range in", hive.range);
+                Dash.put("Hive X distance in", hive.range);
                 Dash.put("Hive bearing deg", hive.bearing);
-                Dash.put("Hive height in", hive.height);
+                Dash.put("Hive Y height in", hive.height);
             }
         }
     }

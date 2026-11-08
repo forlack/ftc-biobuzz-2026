@@ -30,6 +30,8 @@ def fake_run(failure=None):
 
     def run(command, **kwargs):
         commands.append(command)
+        if 'install' in command and failure:
+            raise failure
         if ':TeamCode:installDebug' in command:
             assert kwargs['env']['ANDROID_SERIAL'] == '192.168.43.1:5555'
             assert '--offline' in command
@@ -129,11 +131,11 @@ class LinuxDeployTests(unittest.TestCase):
         self.assertEqual(module.tuning_flag(SimpleNamespace(tuning=True)), ['-Ptuning'])
         self.assertEqual(module.tuning_flag(SimpleNamespace(dashboard=True)), ['-Pdashboard'])
 
-    def test_adb_server_restarted_before_connecting(self):
-        _, commands, _ = self.deploy()
-        kill = next(i for i, c in enumerate(commands) if c[1:] == ['kill-server'])
-        connect = next(i for i, c in enumerate(commands) if c[1:2] == ['connect'])
-        self.assertLess(kill, connect)
+    def test_healthy_adb_server_is_preserved(self):
+        _, commands, error = self.deploy()
+        self.assertIsNone(error)
+        self.assertFalse(any('kill-server' in c for c in commands))
+        self.assertTrue(any('connect' in c for c in commands))
 
     def test_match_connection_ignores_case_and_punctuation(self):
         saved = ['Home', '2222-RC']

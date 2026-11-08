@@ -3,10 +3,13 @@ package org.firstinspires.ftc.teamcode;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.Gamepad;
+import com.qualcomm.robotcore.hardware.ServoImplEx;
+import com.qualcomm.robotcore.hardware.PwmControl;
 
 import org.firstinspires.ftc.teamcode.dashboard.Dash;
 import org.firstinspires.ftc.teamcode.lib.AimController;
 import org.firstinspires.ftc.teamcode.lib.Button;
+import org.firstinspires.ftc.teamcode.lib.HiveFinder;
 import org.firstinspires.ftc.teamcode.lib.DashboardGamepads;
 import org.firstinspires.ftc.teamcode.lib.DashboardTelemetry;
 import org.firstinspires.ftc.teamcode.lib.DriveDashboard;
@@ -37,6 +40,13 @@ public class FieldCentricJava extends LinearOpMode {
     private Robot robot;
     private Gamepad drive;
     private Gamepad operate;
+
+    // goBILDA PWM RGB indicators, Control Hub servo ports 2 and 3.
+    // Explicit 600–2400 us range: red 1120 us (above off threshold), green 1500 us.
+    private ServoImplEx aimLight1, aimLight2;
+    private static final double LIGHT_RED = (1120.0 - 600) / 1800;
+    private static final double LIGHT_GREEN = (1500.0 - 600) / 1800;
+    private double lastLightPosition = -1;
 
     // Must be ABOVE the buttons -- they register themselves during construction.
     private final Button.Group buttons = new Button.Group();
@@ -73,37 +83,47 @@ public class FieldCentricJava extends LinearOpMode {
         // Hardware names must match the active robot config exactly (each mechanism has its own).
         chassis = new MecanumDrive(hardwareMap);
         robot = new Robot(hardwareMap);
+        try {
+            aimLight1 = hardwareMap.get(ServoImplEx.class, "aimLight1");
+            aimLight2 = hardwareMap.get(ServoImplEx.class, "aimLight2");
+            aimLight1.setPwmRange(new PwmControl.PwmRange(600, 2400));
+            aimLight2.setPwmRange(new PwmControl.PwmRange(600, 2400));
 
-        // Dashboard.
-        dashboard = new DriveDashboard(chassis, telemetry);
-        telemetry.addData("Alliance", allianceLine());
-        dashboard.showReady("Field Centric (Java)");
-
-        // Pre-start controls and camera preview, without commanding any mechanisms.
-        while (opModeInInit()) {
-            readGamepad();
-            updateAlliance();
-            robot.vision.update();
-            telemetry.addData("Status", "Ready — operator B + D-pad: left BLUE / right RED");
+            // Dashboard.
+            dashboard = new DriveDashboard(chassis, telemetry);
             telemetry.addData("Alliance", allianceLine());
-            robot.vision.telemetry(telemetry);
-            robot.batteryTelemetry(telemetry);
-            telemetry.update();
-            sleep(20);
-        }
-        waitForStart();
-        if (!opModeIsActive()) {
-            return;
-        }
-        chassis.resetHeading();
+            dashboard.showReady("Field Centric (Java)");
 
-        while (opModeIsActive()) {
-            readGamepad();
-            updateAlliance();
-            updateDriving();
-            updateMechanisms();
-            updateTelemetry();
-            dashboard.update();
+            // Pre-start controls and camera preview, without commanding any mechanisms.
+            while (opModeInInit()) {
+                readGamepad();
+                updateAlliance();
+                robot.vision.update();
+                updateAimLights();
+                telemetry.addData("Status", "Ready — operator B + D-pad: left BLUE / right RED");
+                telemetry.addData("Alliance", allianceLine());
+                robot.vision.telemetry(telemetry);
+                robot.batteryTelemetry(telemetry);
+                telemetry.update();
+                sleep(20);
+            }
+            waitForStart();
+            if (!opModeIsActive()) {
+                return;
+            }
+            chassis.resetHeading();
+
+            while (opModeIsActive()) {
+                readGamepad();
+                updateAlliance();
+                updateDriving();
+                updateMechanisms();
+                updateAimLights();
+                updateTelemetry();
+                dashboard.update();
+            }
+        } finally {
+            robot.vision.stopUpdates();
         }
     }
 
@@ -116,6 +136,26 @@ public class FieldCentricJava extends LinearOpMode {
         operate = DashboardGamepads.combine(gamepad2, 2);
         drive = DashboardGamepads.combine(gamepad1, 1);
         buttons.update();
+    }
+
+    /** Target status independent of whether the operator is holding aim/shoot. */
+    private void updateAimLights() {
+        HiveFinder.Sighting hive = robot.vision.hive(); // Already filtered for our alliance/cell.
+        double position = LIGHT_RED;
+        if (hive != null && Double.isFinite(hive.bearing)) {
+            position = LIGHT_GREEN; // Current student test: green means target visible, not aligned.
+        }
+        String color = position == LIGHT_GREEN ? "GREEN" : "RED";
+        long pulse = Math.round(600 + position * 1800);
+        telemetry.addData("Aim lights", color + " requested (" + pulse + " us, both lights)");
+        // Only write on color changes, avoiding two extra hub commands every loop.
+        if (position != lastLightPosition) {
+            aimLight1.setPosition(position);
+            aimLight2.setPosition(position);
+            aimLight1.setPwmEnable();
+            aimLight2.setPwmEnable();
+            lastLightPosition = position;
+        }
     }
 
     private boolean aimRequested() {

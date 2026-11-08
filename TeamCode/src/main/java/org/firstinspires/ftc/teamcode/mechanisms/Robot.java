@@ -39,13 +39,18 @@ public class Robot {
 
     /** Finds every mechanism's hardware. Moves nothing. */
     public Robot(HardwareMap hardwareMap) {
+        this(hardwareMap, true);
+    }
+
+    /** Autonomous can use mechanisms without opening the USB camera. */
+    public Robot(HardwareMap hardwareMap, boolean useCamera) {
         this.hardwareMap = hardwareMap;
         // This order is also the Driver Station's: Flywheels, Intake, Hive.
         flywheels = add(new Flywheels(hardwareMap, this::batteryVolts));
         intake = add(new Intake(hardwareMap));
         triggers = add(new Triggers(hardwareMap));
         stinger = add(new Stinger(hardwareMap));
-        vision = add(new Vision(hardwareMap));
+        vision = add(new Vision(hardwareMap, useCamera));
     }
 
     private <M extends Mechanism> M add(M mechanism) {

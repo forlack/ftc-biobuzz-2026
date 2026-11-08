@@ -195,13 +195,14 @@ def restart_robot_adb(robot_ip):
 
 
 def connect_adb(adb, target):
-    # Start every connection with a fresh ADB server. After switching Wi-Fi, an old server
-    # often keeps a dead transport and reports the robot "offline" until it is killed.
-    try:
-        run([adb, 'kill-server'], timeout=10)
-    except (subprocess.SubprocessError, OSError):
-        pass  # No server running is fine.
+    # Keep a healthy laptop server alive, matching a manual disconnect/connect.
+    # Killing it while Android Studio/Gradle monitors devices can disrupt discovery.
     for attempt in range(10):
+        if attempt > 0:
+            try:
+                run([adb, 'disconnect', target], timeout=10)
+            except (subprocess.SubprocessError, OSError):
+                pass
         if attempt == 3:
             # A wedged transport makes `adb connect` answer "already connected" forever
             # while get-state stays "offline". Only killing the server clears it.
@@ -231,14 +232,16 @@ def install_debug(args, adb, target, env):
         run(command, timeout=300, capture=False, env=env)
     except subprocess.CalledProcessError:
         # ADB may die after get-state passed, while Gradle opens its device monitor.
-        # Retry once after reconnecting, with a fresh Gradle process/device monitor.
-        print('Install failed; reconnecting ADB and retrying once…', flush=True)
+        # Reconnect and bypass Gradle's device monitor using the APK just built.
+        print('Gradle install failed; reconnecting and installing the built APK directly…', flush=True)
         try:
             run([adb, 'disconnect', target], timeout=10)
         except (subprocess.SubprocessError, OSError):
             pass
         connect_adb(adb, target)
-        run(command + ['--no-daemon'], timeout=300, capture=False, env=env)
+        apk = ROOT / 'TeamCode/build/outputs/apk/debug/TeamCode-debug.apk'
+        run([adb, '-s', target, 'install', '-r', '-t', str(apk)],
+            timeout=300, capture=False, env=env)
 
 
 def deploy(args, previous, adb, env):

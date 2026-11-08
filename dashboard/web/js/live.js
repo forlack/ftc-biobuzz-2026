@@ -5,7 +5,7 @@ import { escapeHtml } from './api.js';
 // Keep the driving view short. All numeric samples still feed charts and CSV.
 const SUMMARY_KEYS = [
   'Status', 'Alliance', 'Battery V', 'Flywheels', 'Pollen RPM', 'Nectar RPM',
-  'Intake', 'Hive', 'Hive problem', 'Aim', 'Triggers', 'Stinger', 'Step', 'Settings',
+  'Intake', 'Hive', 'Hive X distance in', 'Hive Y height in', 'Hive problem', 'Aim', 'Aim lights', 'Triggers', 'Stinger', 'Step', 'Settings',
 ];
 
 const COLORS = ['#f5b301', '#58a6ff', '#3fb950', '#bc8cff', '#ff7b72', '#39c5cf', '#d2a8ff', '#ffa657'];
