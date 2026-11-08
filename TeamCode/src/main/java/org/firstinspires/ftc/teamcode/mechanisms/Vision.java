@@ -326,6 +326,12 @@ public class Vision implements Mechanism {
             return;
         }
         telemetry.addData("Hive", finder.shortLine());
+        // Camera health, for the Live tab's charts: frames processed a second, and how long
+        // since the last new one (it climbs when frames stall).
+        Dash.put("Camera FPS", portal.getFps());
+        if (lastFrameNanos != 0) {
+            Dash.put("Camera frame age ms", (System.nanoTime() - lastFrameNanos) / 1e6);
+        }
         if (hive != null) {
             Dash.put("Hive bearing deg", hive.bearing);
         }
