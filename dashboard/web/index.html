@@ -216,6 +216,17 @@
     </div>
   </div>
 
+  <dialog id="draft-dialog">
+    <form method="dialog" class="chart-form">
+      <h3>Unsaved changes</h3>
+      <div id="draft-text"></div>
+      <div class="chart-actions">
+        <button class="btn" value="discard" id="draft-discard">Discard them</button>
+        <button class="btn primary" value="keep" id="draft-keep" autofocus>Keep editing</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="chart-dialog">
     <form method="dialog" class="chart-form">
       <h3>Add a chart</h3>

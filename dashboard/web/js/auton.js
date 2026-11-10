@@ -295,13 +295,13 @@ export class AutonTab {
       if (this.restored) {
         this.route = draft.route;
         this.hash = draft.hash;     // saving then refuses if the robot's copy changed since
-        if (draft.hash !== hash) toast(`${path} changed on the robot since your unsaved changes: Save will ask`, true);
       }
       this.selected = -1;
       this.undoStack = [];
       this.redoStack = [];
       this.stopPreview();
       this.remember_(path);
+      if (this.restored) this.askAboutDraft(path.replace(/^autos\/|\.json$/g, ''), draft.hash !== hash);
     } catch (error) {
       toast(error.message, true);
     }
@@ -321,7 +321,23 @@ export class AutonTab {
     this.redoStack = [];
     this.stopPreview();
     this.remember_(null);
+    if (draft) this.askAboutDraft('Your new auton', false);
     this.render();
+  }
+
+  /**
+   * Unsaved changes from this browser were brought back: keep editing them, or discard them and
+   * go back to the copy on the robot. Esc keeps them (nothing is lost).
+   */
+  askAboutDraft(name, changedOnRobot) {
+    const dialog = document.getElementById('draft-dialog');
+    document.getElementById('draft-text').textContent = `${name} has unsaved changes from this browser.`
+      + (changedOnRobot ? ' The copy on the robot has also changed since: Save will ask before replacing it.' : '');
+    dialog.returnValue = '';
+    dialog.onclose = () => {
+      if (dialog.returnValue === 'discard') this.discard();
+    };
+    if (!dialog.open) dialog.showModal();
   }
 
   /** Throws the unsaved changes away: back to the file on the robot. */

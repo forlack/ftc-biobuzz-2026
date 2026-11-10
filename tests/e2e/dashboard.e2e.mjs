@@ -965,8 +965,13 @@ try {
   await b.goto(URL);
   await showAllTelemetry();
   await b.eval(`document.querySelector('[data-tab="auton"]').click()`);
-  await b.waitFor(`document.getElementById('auton-discard')`);
-  check(await b.eval(`document.querySelectorAll('.auton-step:not(.start)').length`) === stepsBefore, 'unsaved changes are still there after reloading the page, with a Discard button');
+  await b.waitFor(`document.getElementById('draft-dialog').open`);
+  check(await b.eval(`document.getElementById('draft-text').textContent.includes('unsaved changes from this browser')`),
+    'opening an auton with unsaved changes from this browser asks: Discard them or Keep editing');
+  await b.screenshot(join(OUT, '6d-auton-unsaved-dialog.png'));
+  await b.eval(`document.getElementById('draft-keep').click()`);
+  await b.waitFor(`!document.getElementById('draft-dialog').open && document.getElementById('auton-discard')`);
+  check(await b.eval(`document.querySelectorAll('.auton-step:not(.start)').length`) === stepsBefore, 'Keep editing: the unsaved changes are still there, with a Discard button');
   await b.screenshot(join(OUT, '6-auton-editor.png'));
   // The selected step and the Selected card are in that step's colour.
   await b.eval(`document.querySelectorAll('.auton-step.drive')[1].click()`);
@@ -983,6 +988,17 @@ try {
   check(made.version === 3 && madeDrive.segments.length === 2 && madeDrive.segments[0].via && madeDrive.segments[1].via
     && madeDrive.heading.type === 'face' && madeDrive.heading.away === true && made.robot.length === 17.5 && madeDrive.events[0].action === 'deployStinger' && madeDrive.events[1].action === 'shoot' && made.steps.at(-1).action === 'stowStinger',
     'Save as… writes a version 3 auton the robot accepts: the waypoint, its bends, face away from a point, the robot size, the function');
+  // Discard them: back to the copy on the robot.
+  await b.eval(`(() => { const i = document.getElementById('auton-robot-length'); i.value = '20'; i.dispatchEvent(new Event('change')); })()`);
+  await b.waitFor(`document.querySelector('.auton-card-head .warn-text')`);
+  await b.goto(URL);
+  await showAllTelemetry();
+  await b.eval(`document.querySelector('[data-tab="auton"]').click()`);
+  await b.waitFor(`document.getElementById('draft-dialog').open`);
+  await b.eval(`document.getElementById('draft-discard').click()`);
+  await b.waitFor(`!document.getElementById('draft-dialog').open && document.getElementById('auton-robot-length').value === '17.5'`);
+  check(!await b.eval(`!!document.querySelector('.auton-card-head .warn-text') || !!document.getElementById('auton-discard')`),
+    'Discard them: back to the copy on the robot, nothing unsaved');
   await api('/api/settings', { method: 'POST', body: { group: 'PedroAutonomous', name: 'ROUTE', value: 'editor-test' } });
   const editorSince = (await api('/api/state')).data.time;   // a new connection first gets the last seconds of frames
   const editorInit = await api('/api/opmode', { method: 'POST', body: { action: 'init', name: 'Pedro Pathing Autonomous' } });

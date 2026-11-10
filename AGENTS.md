@@ -308,6 +308,10 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   X s" (red with ": over 30 s!" past 30); ↶ ↷ there are undo/redo.
   Field robots: solid ones (start, drive ends, preview) show FRONT inside the front edge instead
   of the heading arrow (turned to never read upside down); faint ones keep the small arrow.
+- **Unsaved changes dialog (2026-11-09):** opening an auton (or New) that has a draft in this
+  browser shows #draft-dialog: "Discard them" (back to the robot's copy) or "Keep editing"
+  (Esc keeps too); it says when the robot's copy changed since (Save will ask). Came from the
+  Mac/PC preview difference: the Mac had old unsaved edits. The small Discard banner stays. e2e 186.
 - **Preview fitted to the simulator; Pedro tab removed (2026-10-25):** user timed saturday at
   13 s on one carpet, 8.7 s on another (surface). Preview profile now fitted to sim straight
   drives (6-100 in, 50%, turn 180°): cruise 68.5×1.065, accel = decel 230 in/s², +0.1 s end

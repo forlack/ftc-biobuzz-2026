@@ -115,8 +115,8 @@ main { flex: 1; min-height: 0; display: flex; }
 .side .grow .card-head { position: sticky; top: -12px; background: var(--panel); padding: 2px 0 8px; z-index: 1; }
 .chart .remove { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 2px; }
 .chart .remove:hover { color: var(--red); }
-dialog#chart-dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 18px; width: min(460px, 92vw); box-shadow: 0 20px 60px #000a; }
-dialog#chart-dialog::backdrop { background: #0008; }
+dialog#chart-dialog, dialog#draft-dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 18px; width: min(460px, 92vw); box-shadow: 0 20px 60px #000a; }
+dialog#chart-dialog::backdrop, dialog#draft-dialog::backdrop { background: #0008; }
 .chart-form { display: flex; flex-direction: column; gap: 10px; }
 .chart-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .chart-keys { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; }
