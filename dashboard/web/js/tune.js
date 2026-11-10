@@ -87,6 +87,7 @@ export class TuneTab {
       const text = JSON.stringify({ favorites: [...favorites].sort() }, null, 2) + '\n';
       try {
         await putFile(FAVORITES_FILE, text, current.hash);
+        this.starring++;   // a reload that started while this saved read the old favorites
         this.favorites = favorites;
         if (this.data) this.show(this.data);
         return;

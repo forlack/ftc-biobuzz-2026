@@ -286,6 +286,28 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   hardware map editor are view only too. Snapshots hold robot.json, every autos/*.json and every
   *.xml map (managedNames), not which map is active. Preview vs real robot: saturday preview
   6.7 s, sim ~8 s, real robot 13 s (user timed): needs per-step times from the robot. e2e 171.
+- **Preview Play/Pause, ⏮ and Loop (2026-11-09):** the button says ▶ Preview / ❚❚ Pause /
+  ▶ Play and follows the state every frame (dragging the bar used to pause but leave "Stop").
+  Pause cancels the animation frame (a quick pause-play could run two loops, double speed).
+  ⏮ goes back to 0 and plays; ↻ Loop (honey when on; on by default, per page) starts again
+  at the end. No ✕ close (the user didn't want it); the time shows only seconds elapsed (the
+  total is in the Sequence header). e2e 182, screenshot 6b-auton-preview.png.
+  Auton file card: the picker is a honey-outlined 📂 dropdown (opens a file); the old "Name"
+  box is now "✎ Label" (dashed, with a hint): it is only the label inside the JSON
+  (route.name, shown on the robot as From: autos/x.json ("Label")), not the file name, which
+  Save as… asks for. tune.js: toggleFavorite bumps `starring` again after its save, so a
+  reload that started during the save can't flip the star back (the e2e hit it every run).
+  The robot size boxes moved from the Auton file card to their own "Robot Rendered Size" card
+  at the bottom (UI only: still saved in each auton as route.robot; only the preview uses it).
+  Sequence rows: thin grey border + 5px left edge in their colour (--step: a drive's path colour
+  in the same COLORS order, functions grey, Start green). Selected row = outlined all round and
+  tinted in its colour; the separate Selected card's border and heading use the same colour. The
+  step the preview is on shows a green ▶ for its number. The user tried and rejected full
+  coloured borders on every row (selection hard to see) and settings rolling down under the row.
+  Robot Rendered Size card is last (after the help text). Sequence header says "Estimated time
+  X s" (red with ": over 30 s!" past 30); ↶ ↷ there are undo/redo.
+  Field robots: solid ones (start, drive ends, preview) show FRONT inside the front edge instead
+  of the heading arrow (turned to never read upside down); faint ones keep the small arrow.
 - **Preview fitted to the simulator; Pedro tab removed (2026-10-25):** user timed saturday at
   13 s on one carpet, 8.7 s on another (surface). Preview profile now fitted to sim straight
   drives (6-100 in, 50%, turn 180°): cruise 68.5×1.065, accel = decel 230 in/s², +0.1 s end

@@ -234,6 +234,7 @@ export class AutonTab {
     this.undoStack = [];
     this.redoStack = [];
     this.preview = null;     // { t, total, playing, last } while previewing
+    this.loopPreview = true;  // Loop: start again from the beginning at the end
 
     this.bindField();
     new ResizeObserver(() => this.resize()).observe(this.canvas.parentElement);
@@ -622,8 +623,14 @@ export class AutonTab {
     return { pose, current };
   }
 
+  /** Play or pause. Play at the end starts again from the beginning. */
   togglePreview() {
-    if (this.preview && this.preview.playing) { this.preview.playing = false; this.render(); return; }
+    if (this.preview && this.preview.playing) {
+      this.preview.playing = false;
+      cancelAnimationFrame(this.previewFrame); // so a quick pause-play cannot leave two loops running
+      this.render();
+      return;
+    }
     const total = this.timeline().total;
     if (!this.preview || this.preview.t >= total) this.preview = { t: 0, total };
     this.preview.playing = true;
@@ -633,13 +640,27 @@ export class AutonTab {
       if (!preview || !preview.playing) return;
       preview.t = Math.min(preview.total, preview.t + (now - preview.last) / 1000);
       preview.last = now;
-      if (preview.t >= preview.total) preview.playing = false;
+      if (preview.t >= preview.total) {
+        if (this.loopPreview && preview.total > 0) preview.t = 0;
+        else preview.playing = false;
+      }
       this.renderPreview();
-      if (preview.playing) requestAnimationFrame(tick);
+      if (preview.playing) this.previewFrame = requestAnimationFrame(tick);
       else this.render();
     };
     this.render();
-    requestAnimationFrame(tick);
+    this.previewFrame = requestAnimationFrame(tick);
+  }
+
+  /** Back to the beginning, and play. */
+  restartPreview() {
+    this.preview.t = 0;
+    if (!this.preview.playing) this.togglePreview();
+  }
+
+  previewLabel() {
+    if (!this.preview) return '▶ Preview';
+    return this.preview.playing ? '❚❚ Pause' : '▶ Play';
   }
 
   stopPreview() {
@@ -652,8 +673,12 @@ export class AutonTab {
     const preview = this.preview;
     const slider = document.getElementById('auton-scrub');
     if (!preview || !slider) return;
+    // The button follows the state, also when dragging the bar pauses it.
+    const button = document.getElementById('auton-preview');
+    button.textContent = this.previewLabel();
+    button.classList.toggle('playing', preview.playing);
     slider.value = String(preview.t);
-    document.getElementById('auton-preview-time').textContent = `${preview.t.toFixed(1)} s of ${preview.total.toFixed(1)}`;
+    document.getElementById('auton-preview-time').textContent = `${preview.t.toFixed(1)} s`;
     const { current } = this.poseAt(preview.t);
     this.panel.querySelectorAll('.auton-step').forEach((row) => row.classList.toggle('playing', Number(row.dataset.step) === current));
   }
@@ -1027,8 +1052,21 @@ export class AutonTab {
     g.strokeStyle = color;
     g.lineWidth = (faint ? 1 : 2) * k;
     g.strokeRect(-w / 2, -h / 2, w, h);
+    if (faint) {
+      g.restore();
+      this.drawArrow(g, pose, color, 7);
+      return;
+    }
+    // FRONT along the front edge, turned so it never reads upside down.
+    const size = Math.min(11 * k, h * 0.3);
+    g.translate(w / 2 - size * 0.9, 0);
+    g.rotate(Math.cos((-pose.h + 90) * Math.PI / 180) >= 0 ? Math.PI / 2 : -Math.PI / 2);
+    g.fillStyle = color;
+    g.font = `800 ${size}px system-ui, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('FRONT', 0, 0);
     g.restore();
-    this.drawArrow(g, pose, color, faint ? 7 : 11);
   }
 
   // ---- Panel -----------------------------------------------------------------------------------------
@@ -1067,30 +1105,33 @@ export class AutonTab {
     const dirty = this.dirty();
     const playing = this.preview && this.preview.playing;
     const step = route.steps[this.selected];
+    // Each drive's row in the colour of its path on the field.
+    let drives = 0;
+    const driveColors = route.steps.map((st) => (st.drive ? COLORS[drives++ % COLORS.length] : null));
+    const selectedColor = step ? (step.drive ? driveColors[this.selected] : '#8b98a8') : 'var(--green)';
     this.panel.innerHTML = `
-      <button class="auton-preview ${playing ? 'playing' : ''}" id="auton-preview" data-testid="auton-preview">${playing ? '■ Stop preview' : '▶ Preview'}</button>
-      ${this.preview ? `<div class="auton-scrub"><input type="range" id="auton-scrub" min="0" max="${total}" step="0.05" value="${this.preview.t}"
+      <button class="auton-preview ${playing ? 'playing' : ''}" id="auton-preview" data-testid="auton-preview">${this.previewLabel()}</button>
+      ${this.preview ? `<div class="auton-scrub">
+        <button class="icon" id="auton-preview-restart" title="Back to the beginning">⏮\uFE0E</button>
+        <input type="range" id="auton-scrub" min="0" max="${total}" step="0.05" value="${this.preview.t}"
           style="background: ${this.timelineGradient()}" title="Each stretch is a step: drives in their colour on the field (paler while turning in place first), functions in grey">
-        <span id="auton-preview-time" class="muted">${this.preview.t.toFixed(1)} s of ${total.toFixed(1)}</span>
-        <button class="icon" id="auton-preview-close" title="Close the preview">✕</button></div>` : ''}
+        <span id="auton-preview-time" class="muted">${this.preview.t.toFixed(1)} s</span>
+        <button class="icon ${this.loopPreview ? 'on' : ''}" id="auton-preview-loop" title="Loop: play again from the beginning at the end">↻</button></div>` : ''}
 
       <section class="auton-card">
         <div class="auton-card-head">Auton file
           <span class="state">${dirty ? '<b class="warn-text">● not saved</b>' : this.path ? '<span class="ok-text">✓ saved</span>' : ''}</span></div>
         <div class="auton-files">
-          <select id="auton-file" aria-label="Auton file">${this.path ? '' : '<option selected>(new, not saved)</option>'}${fileOptions}</select>
+          <label class="auton-open" title="Open an auton saved on the robot">📂
+            <select id="auton-file" aria-label="Open auton file">${this.path ? '' : '<option selected>(new, not saved)</option>'}${fileOptions}</select></label>
           <button class="btn small" id="auton-new">New</button>
           <button class="btn small" id="auton-history" ${this.path ? '' : 'disabled'}>History</button>
         </div>
         <div class="auton-files">
-          <label class="grow-label">Name <input id="auton-name" value="${escapeHtml(route.name || '')}"></label>
+          <label class="grow-label" title="Shown next to the file name on the robot. Save as… picks the file name.">Label
+            <input id="auton-name" value="${escapeHtml(route.name || '')}"></label>
           <button class="btn primary ${dirty ? 'pulse' : ''}" id="auton-save" data-testid="auton-save">Save</button>
           <button class="btn" id="auton-save-as">Save as…</button>
-        </div>
-        <div class="auton-files robot-size">
-          <span class="muted">Robot</span>
-          <label>front to back <input type="number" step="0.5" min="6" max="30" id="auton-robot-length" value="${route.robot?.length ?? 18}"> in</label>
-          <label>side to side <input type="number" step="0.5" min="6" max="30" id="auton-robot-width" value="${route.robot?.width ?? 18}"> in</label>
         </div>
         ${this.restored && dirty ? `<div class="auton-restored">Your unsaved changes from this browser are back.
           <button class="btn small" id="auton-discard">Discard them</button></div>` : ''}
@@ -1098,7 +1139,7 @@ export class AutonTab {
 
       <section class="auton-card">
         <div class="auton-card-head">Sequence
-          <span class="state"><span class="${total > 30 ? 'bad-text' : ''}" id="auton-time">about ${total.toFixed(1)} s of 30${total > 30 ? ': too long!' : ''}</span>
+          <span class="state"><span class="${total > 30 ? 'bad-text' : ''}" id="auton-time" title="Estimated from the preview; autonomous is 30 s">Estimated time ${total.toFixed(1)} s${total > 30 ? ': over 30 s!' : ''}</span>
           <button class="icon" id="auton-undo" ${this.undoStack.length ? '' : 'disabled'} title="Undo (Ctrl+Z)">↶</button>
           <button class="icon" id="auton-redo" ${this.redoStack.length ? '' : 'disabled'} title="Redo (Ctrl+Shift+Z)">↷</button></span></div>
         <ol class="auton-steps" id="auton-steps">
@@ -1109,7 +1150,8 @@ export class AutonTab {
               facing <input type="number" step="5" data-start="heading" value="${route.start.heading}">°</span></span>
           </li>
           ${route.steps.map((st, i) => `
-          <li class="auton-step ${i === this.selected ? 'selected' : ''} ${st.drive ? 'drive' : 'function'}" data-step="${i}">
+          <li class="auton-step ${i === this.selected ? 'selected' : ''} ${st.drive ? 'drive' : 'function'}" data-step="${i}"
+            ${st.drive ? `style="--step: ${driveColors[i]}"` : ''}>
             <span class="num">${i + 1}</span><span class="what">${this.summary(st, info[i])}</span>
             <span class="time muted">${entries[i].t1 > entries[i].t0 ? `${(entries[i].t1 - entries[i].t0).toFixed(1)} s` : ''}</span>
             <span class="tools"><button class="icon" data-up="${i}" title="Move up">↑</button><button class="icon" data-down="${i}" title="Move down">↓</button><button class="icon bad" data-remove="${i}" title="Remove">✕</button></span>
@@ -1123,13 +1165,21 @@ export class AutonTab {
           : this.mode === 'place-face' ? `Click the point to face${step && step.drive && step.drive.heading && step.drive.heading.away ? ' away from' : ''}: it follows the mouse (Esc keeps it where it is).` : 'New steps go after the selected one.'}</div>
       </section>
 
-      <section class="auton-card selected-card">
+      <section class="auton-card selected-card" style="--step: ${selectedColor}">
         <div class="auton-card-head">${step ? (step.drive ? `Selected: drive ${escapeHtml(step.drive.name)}` : `Selected: ${escapeHtml(this.label(step.action))}`) : 'Selected: start'}</div>
         <div class="auton-detail" id="auton-detail">${this.detail(info)}</div>
       </section>
       <div class="muted auton-help">Drag the yellow end points, white waypoints and hollow bend points. Double-click a drive to add a
         waypoint; right-click a waypoint, bend point or ◆ to remove it. Drag the start (green); its dot turns it.
-        Snaps to half inches (Shift: free).</div>`;
+        Snaps to half inches (Shift: free).</div>
+
+      <section class="auton-card">
+        <div class="auton-card-head">Robot Rendered Size</div>
+        <div class="auton-files robot-size" title="The box drawn on the field, to check clearance. Saved with this auton; the robot code does not use it.">
+          <label>front to back <input type="number" step="0.5" min="6" max="30" id="auton-robot-length" value="${route.robot?.length ?? 18}"> in</label>
+          <label>side to side <input type="number" step="0.5" min="6" max="30" id="auton-robot-width" value="${route.robot?.width ?? 18}"> in</label>
+        </div>
+      </section>`;
     this.bindPanel();
   }
 
@@ -1217,7 +1267,11 @@ export class AutonTab {
     $('auton-preview').addEventListener('click', () => this.togglePreview());
     if ($('auton-scrub')) {
       $('auton-scrub').addEventListener('input', (event) => { this.preview.playing = false; this.preview.t = Number(event.target.value); this.renderPreview(); });
-      $('auton-preview-close').addEventListener('click', () => { this.stopPreview(); this.render(); });
+      $('auton-preview-restart').addEventListener('click', () => this.restartPreview());
+      $('auton-preview-loop').addEventListener('click', (event) => {
+        this.loopPreview = !this.loopPreview;
+        event.currentTarget.classList.toggle('on', this.loopPreview);
+      });
       this.renderPreview();
     }
     $('auton-file').addEventListener('change', (event) => this.open(event.target.value));

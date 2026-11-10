@@ -320,15 +320,17 @@ body.locked .undo, body.locked .star { opacity: .4; pointer-events: none; }
   background: #fff; border: 2px solid #0d1117; box-shadow: 0 0 4px #000a; }
 .auton-scrub input::-moz-range-thumb { width: 6px; height: 20px; border-radius: 3px; background: #fff; border: 2px solid #0d1117; }
 .auton-scrub input::-moz-range-track { background: transparent; }
+.auton-scrub .icon { font-size: 18px; line-height: 1; padding: 2px 4px; }
+.auton-scrub .icon.on { color: var(--honey); }
+#auton-preview-time { min-width: 3.2em; text-align: right; }
 .auton-card { background: var(--panel); border: 1px solid #36404d; border-radius: 12px; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 9px; flex: none; }
 .auton-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 -12px; padding: 8px 12px;
   background: #1f2732; border-bottom: 1px solid #36404d; border-radius: 12px 12px 0 0; font-size: 12px; font-weight: 800;
   text-transform: uppercase; letter-spacing: .06em; color: #c9d4e0; }
 .auton-card-head .state { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 12.5px; color: var(--muted); }
-.selected-card { border-color: #f5b30188; }
-.selected-card .auton-card-head { background: #f5b3011c; color: var(--honey); border-bottom-color: #f5b30155; }
 .auton-files, .auton-add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.auton-files select { flex: 1; min-width: 140px; }
+.auton-open { flex: 1; min-width: 140px; display: flex; align-items: center; gap: 6px; }
+.auton-open select { flex: 1; min-width: 0; font-weight: 700; }
 .grow-label { flex: 1; display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
 .grow-label input { flex: 1; min-width: 80px; }
 .auton-restored { background: #58a6ff14; border: 1px solid #58a6ff55; color: #a5cdff; border-radius: 8px; padding: 6px 10px; font-size: 12.5px;
@@ -336,14 +338,22 @@ body.locked .undo, body.locked .star { opacity: .4; pointer-events: none; }
 .auton-add .btn { flex: 1; padding: 8px; border-color: #4a5668; }
 .auton-hint { font-size: 12px; }
 .auton-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
-.auton-step { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 7px 8px;
-  background: var(--panel-2); border: 1px solid var(--line); border-left: 4px solid #4a5668; border-radius: 8px; cursor: pointer; font-size: 13px; }
-.auton-step.drive { border-left-color: var(--honey); }
-.auton-step.function { border-left-color: #8b98a8; }
-.auton-step.start { border-left-color: var(--green); }
-.auton-step:hover { border-color: #4a5668; }
-.auton-step.selected { border-color: var(--honey); background: #f5b30114; box-shadow: 0 0 0 1px var(--honey) inset; }
-.auton-step.playing { background: #3fb95022; }
+.auton-step { --step: #4a5668; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 7px 8px;
+  background: var(--panel-2); border: 1px solid var(--line); border-left: 5px solid var(--step);
+  border-radius: 8px; cursor: pointer; font-size: 13px; }
+.auton-step.drive { --step: var(--honey); }
+.auton-step.function { --step: #8b98a8; }
+.auton-step.start { --step: var(--green); }
+.auton-step:hover { border-color: #4a5668; border-left-color: var(--step); }
+/* Selected: outlined all round and tinted in its own colour, like the Selected card below. The step
+   the preview is on shows a green ▶ for its number. */
+.auton-step.selected { border-color: var(--step); background: color-mix(in srgb, var(--step) 16%, var(--panel-2));
+  box-shadow: 0 0 0 1px var(--step) inset; }
+.selected-card { --step: var(--honey); border-color: color-mix(in srgb, var(--step) 55%, transparent); }
+.selected-card .auton-card-head { background: color-mix(in srgb, var(--step) 12%, transparent); color: var(--step);
+  border-bottom-color: color-mix(in srgb, var(--step) 35%, transparent); }
+.auton-step.playing .num { font-size: 0; }
+.auton-step.playing .num::before { content: '▶'; font-size: 12px; color: var(--green); }
 .auton-step .num { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 .auton-step .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .auton-step .on-drive { color: #ffe08a; font-size: 12px; margin-top: 2px; }
@@ -375,7 +385,7 @@ body.locked #auton-save, body.locked #auton-save-as { opacity: .4; pointer-event
 .robot-size label { display: flex; gap: 5px; align-items: center; color: var(--muted); font-size: 12.5px; }
 .robot-size input { width: 62px; padding: 3px 6px; }
 /* Locked: the Auton tab and the hardware map editor are view only (Preview, picking a file and History still work). */
-body.locked #auton-panel :is(button, input, select):not(#auton-file, #auton-preview, #auton-preview-close, #auton-scrub, #auton-history),
+body.locked #auton-panel :is(button, input, select):not(#auton-file, #auton-preview, #auton-preview-restart, #auton-preview-loop, #auton-scrub, #auton-history),
 body.locked #hardware :is(button, input, select):not(#hw-map) { opacity: .4; pointer-events: none; }
 .btn.star { padding: 4px 8px; font-size: 15px; line-height: 1; color: var(--muted); }
 .btn.star.on { color: var(--honey); }

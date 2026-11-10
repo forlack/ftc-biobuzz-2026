@@ -931,15 +931,35 @@ try {
   // Preview: the robot drives the auton on the field.
   await b.eval(`document.getElementById('auton-preview').click()`);
   await b.waitFor(`document.getElementById('auton-preview-time') && parseFloat(document.getElementById('auton-preview-time').textContent) > 0.5`);
-  check(await b.eval(`document.getElementById('auton-preview').textContent.includes('Stop')`) && await b.eval(`!!document.querySelector('.auton-step.playing')`),
+  check(await b.eval(`document.getElementById('auton-preview').textContent.includes('Pause')`) && await b.eval(`!!document.querySelector('.auton-step.playing')`),
     'Preview plays the auton on the field and marks the step it is on');
   const bar = await b.eval(`document.getElementById('auton-scrub').style.background`);
   check(/linear-gradient/.test(bar) && /245, 179, 1|f5b301/i.test(bar) && /139, 152, 168|8b98a8/i.test(bar),
     'the preview bar is coloured by step: drives in their field colour, functions in grey');
+  const rowColors = await b.eval(`[...document.querySelectorAll('.auton-step.drive')].map((r) => getComputedStyle(r).borderLeftColor)`);
+  check(rowColors.length > 1 && new Set(rowColors).size === rowColors.length,
+    `each drive in the sequence has its path's colour on the field: ${rowColors.join(', ')}`);
   check(/rgba\(\d+, \d+, \d+, 0\.4\d*\)/.test(bar),
     'a drive that must face another way first shows a paler stretch: the robot turns in place, then drives (as on the robot)');
+  const previewTime = () => b.eval(`parseFloat(document.getElementById('auton-preview-time').textContent)`);
+  const previewButton = () => b.eval(`document.getElementById('auton-preview').textContent`);
   await b.eval(`document.getElementById('auton-preview').click()`);
-  await b.eval(`document.getElementById('auton-preview-close').click()`);
+  check((await previewButton()).includes('Play'), 'Pause pauses: the button then says Play');
+  // Dragging the bar while playing pauses, and the button says so.
+  await b.eval(`document.getElementById('auton-preview').click()`);
+  await b.eval(`(() => { const s = document.getElementById('auton-scrub'); s.value = '1'; s.dispatchEvent(new Event('input')); })()`);
+  check((await previewButton()).includes('Play') && Math.abs(await previewTime() - 1) < 0.05, 'dragging the bar while playing pauses there, and the button says Play');
+  // ⏮ goes back to the beginning and plays.
+  await b.eval(`document.getElementById('auton-preview-restart').click()`);
+  check((await previewButton()).includes('Pause') && await previewTime() < 0.5, '⏮ goes back to the beginning and plays');
+  // Loop (on by default): at the end it starts again instead of stopping.
+  await b.eval(`(() => { const s = document.getElementById('auton-scrub'); s.value = String(Number(s.max) - 0.2); s.dispatchEvent(new Event('input')); })()`);
+  await b.eval(`document.getElementById('auton-preview').click()`);
+  await b.waitFor(`parseFloat(document.getElementById('auton-preview-time').textContent) < 1`);
+  check((await previewButton()).includes('Pause') && await b.eval(`document.getElementById('auton-preview-loop').classList.contains('on')`),
+    'Loop is on by default: at the end the preview starts again from the beginning');
+  await b.screenshot(join(OUT, '6b-auton-preview.png'));
+  await b.eval(`document.getElementById('auton-preview').click()`);
   // Unsaved changes survive a reload (kept in this browser).
   const stepsBefore = await b.eval(`document.querySelectorAll('.auton-step:not(.start)').length`);
   await b.goto(URL);
@@ -948,6 +968,13 @@ try {
   await b.waitFor(`document.getElementById('auton-discard')`);
   check(await b.eval(`document.querySelectorAll('.auton-step:not(.start)').length`) === stepsBefore, 'unsaved changes are still there after reloading the page, with a Discard button');
   await b.screenshot(join(OUT, '6-auton-editor.png'));
+  // The selected step and the Selected card are in that step's colour.
+  await b.eval(`document.querySelectorAll('.auton-step.drive')[1].click()`);
+  await b.waitFor(`document.querySelector('.auton-step.drive.selected') && document.getElementById('drive-name')`);
+  check(await b.eval(`(() => { const row = document.querySelector('.auton-step.selected'), card = document.querySelector('.selected-card .auton-card-head');
+    return getComputedStyle(card).color === getComputedStyle(row).borderLeftColor && getComputedStyle(row).borderTopColor === getComputedStyle(row).borderLeftColor; })()`),
+    "the selected drive is outlined in its colour, and the Selected card heading matches it");
+  await b.screenshot(join(OUT, '6c-auton-selected.png'));
   // Save as a new auton: the robot accepts it, and it runs.
   await b.eval(`(() => { window.prompt = () => 'editor-test'; document.getElementById('auton-save-as').click(); })()`);
   await b.waitFor(`document.querySelector('#toast').textContent.includes('Saved autos/editor-test.json')`);
