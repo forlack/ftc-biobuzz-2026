@@ -7,6 +7,7 @@
 // to the "robot", runs it as the autonomous and checks the robot really did what the route said.
 import { spawn, execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -185,11 +186,25 @@ try {
   const cameraBelow = await b.eval(`(() => { const f = document.getElementById('field-view').getBoundingClientRect(), c = document.getElementById('camera-card').getBoundingClientRect();
     return c.top >= f.bottom && Math.abs(c.width - f.width) < 2; })()`);
   check(cameraBelow, 'the Camera card is below the Field card, the same width');
-  await b.eval(`document.getElementById('camera-toggle').click()`);
+  await b.eval(`document.getElementById('camera-collapse').click()`);
   await sleep(2500);
-  check(await b.eval(`document.getElementById('camera-card').classList.contains('closed') && !document.getElementById('camera-toggle').checked`),
-    'the Camera checkbox hides the picture (the robot stops drawing pictures 2 s after nobody asks)');
-  await b.eval(`document.getElementById('camera-toggle').click()`);
+  check(await b.eval(`document.getElementById('camera-card').classList.contains('closed') && getComputedStyle(document.getElementById('camera-image')).display === 'none'`),
+    'collapsing the Camera card hides the picture (the robot stops drawing pictures 2 s after nobody asks)');
+  await b.eval(`document.getElementById('camera-collapse').click()`);
+  // ▾ on the Field card collapses it (not drawn), and it opens again.
+  await b.eval(`document.getElementById('field-collapse').click()`);
+  check(await b.eval(`getComputedStyle(document.getElementById('field')).display === 'none' && document.getElementById('field-collapse').textContent === '▸'`),
+    'collapsing the Field card hides the field');
+  await b.eval(`document.getElementById('field-collapse').click()`);
+  check(await b.eval(`getComputedStyle(document.getElementById('field')).display !== 'none'`), 'and it opens again');
+  // A chart's legend: click a line to show only it, click it again for all of them.
+  const legendChart = `[...document.querySelectorAll('#charts .chart')].find((c) => c.querySelectorAll('.legend [data-series]').length > 1)`;
+  await b.eval(`${legendChart}.querySelector('.legend [data-series="1"]').click()`);
+  const isolated = await b.eval(`[...${legendChart}.querySelectorAll('.legend [data-series]')].map((i) => i.classList.contains('off'))`);
+  await b.eval(`${legendChart}.querySelector('.legend [data-series="1"]').click()`);
+  const allBack = await b.eval(`[...${legendChart}.querySelectorAll('.legend .off')].length === 0`);
+  check(!isolated[0] && isolated.slice(1).every((off) => off) && allBack,
+    `clicking a line in a chart's legend shows only that line; clicking it again shows them all (${isolated.length} lines)`);
   await api('/api/settings', { method: 'POST', body: { group: 'Vision', name: 'CAMERA_FEED_ON', value: false } });
 
   // Stopping the OpMode clears its telemetry from the table (charts keep their history).
@@ -573,6 +588,26 @@ try {
     `the Load card measures the dashboard: ${load.viewers} viewer, ${load.dashboardCpu} % CPU, ${load.kbPerSecond} KB/s, loop ${load.loopMs} ms`);
   check(load.liveViewers === 0 && load.kbPerSecond < 4,
     `off the Live tab the browser gets status only, no loop data: ${load.kbPerSecond} KB/s`);
+  // Heartbeat: a connection that stops answering (a laptop whose Wi-Fi went off) is dropped within
+  // ~10 s, while one that answers the pings (every browser does, by itself) stays open.
+  const viewersNow = async () => (await api('/api/state')).data.load.viewers;
+  const viewersBefore = await viewersNow();
+  const silent = connect(PORT, 'localhost');
+  silent.on('error', () => {});
+  silent.write('GET /ws HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
+    + 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n');
+  const answering = new WebSocket(`ws://localhost:${PORT}/ws`);
+  let answeringClosed = false;
+  answering.onclose = () => { answeringClosed = true; };
+  let heartbeatDeadline = Date.now() + 8000;
+  while (Date.now() < heartbeatDeadline && await viewersNow() < viewersBefore + 2) await sleep(500);
+  const withBoth = await viewersNow();
+  heartbeatDeadline = Date.now() + 20000;
+  while (Date.now() < heartbeatDeadline && await viewersNow() > viewersBefore + 1) await sleep(500);
+  check(withBoth === viewersBefore + 2 && await viewersNow() === viewersBefore + 1 && !answeringClosed,
+    `a connection that stops answering is dropped by the heartbeat; one that answers stays (viewers ${viewersBefore} → ${withBoth} → ${await viewersNow()})`);
+  silent.destroy();
+  answering.close();
   await b.eval(`(() => {
     const input = [...document.querySelectorAll('table.devices input[data-field="name"]')].find((i) => i.value === 'stinger');
     input.value = 'stingr';
@@ -995,6 +1030,7 @@ try {
   await showAllTelemetry();
   await b.eval(`document.querySelector('[data-tab="auton"]').click()`);
   await b.waitFor(`document.getElementById('draft-dialog').open`);
+  await sleep(500);   // the tab may load twice after a reload; let both finish before answering
   await b.eval(`document.getElementById('draft-discard').click()`);
   await b.waitFor(`!document.getElementById('draft-dialog').open && document.getElementById('auton-robot-length').value === '17.5'`);
   check(!await b.eval(`!!document.querySelector('.auton-card-head .warn-text') || !!document.getElementById('auton-discard')`),

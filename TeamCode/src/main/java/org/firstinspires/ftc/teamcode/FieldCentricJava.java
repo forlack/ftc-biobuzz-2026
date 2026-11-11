@@ -145,9 +145,6 @@ public class FieldCentricJava extends LinearOpMode {
         if (hive != null && Double.isFinite(hive.bearing)) {
             position = LIGHT_GREEN; // Current student test: green means target visible, not aligned.
         }
-        String color = position == LIGHT_GREEN ? "GREEN" : "RED";
-        long pulse = Math.round(600 + position * 1800);
-        telemetry.addData("Aim lights", color + " requested (" + pulse + " us, both lights)");
         // Only write on color changes, avoiding two extra hub commands every loop.
         if (position != lastLightPosition) {
             aimLight1.setPosition(position);

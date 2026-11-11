@@ -105,6 +105,9 @@ main { flex: 1; min-height: 0; display: flex; }
 .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; align-content: start; }
 .chart .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; }
 .chart .legend span { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.chart .legend [data-series] { cursor: pointer; border-radius: 4px; }
+.chart .legend [data-series]:hover { background: #2b3542; }
+.chart .legend .off { opacity: .35; }
 .chart .legend i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
 .chart .legend b { font-weight: 600; min-width: 52px; display: inline-block; }
 .chart .plot { width: 100%; }
@@ -400,6 +403,9 @@ body.locked #hardware :is(button, input, select):not(#hw-map) { opacity: .4; poi
 .camera-note { font-size: 12.5px; color: var(--muted); }
 .camera-note:empty { display: none; }
 .camera-view.closed #camera-image, .camera-view.closed .camera-note, .camera-view.closed .zoom { display: none; }
+.field-view.closed #field, .field-view.closed .view-tools { display: none; }
+.view .collapse { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; width: 18px; padding: 0; margin-right: 4px; }
+.view .collapse:hover { color: var(--honey); }
 /* The right column scrolls when the field, camera and telemetry do not all fit. */
 .side { overflow-y: auto; }
 .side .grow { flex: 0 0 auto; height: 420px; }

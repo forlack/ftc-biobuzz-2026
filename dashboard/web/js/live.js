@@ -5,7 +5,7 @@ import { escapeHtml } from './api.js';
 // Keep the driving view short. All numeric samples still feed charts and CSV.
 const SUMMARY_KEYS = [
   'Status', 'Alliance', 'Battery V', 'Flywheels', 'Pollen RPM', 'Nectar RPM',
-  'Intake', 'Hive', 'Hive X distance in', 'Hive Y height in', 'Hive problem', 'Aim', 'Aim lights', 'Triggers', 'Stinger', 'Step', 'Settings',
+  'Intake', 'Hive', 'Hive X distance in', 'Hive Y height in', 'Hive problem', 'Aim', 'Triggers', 'Stinger', 'Step', 'Settings',
 ];
 
 const COLORS = ['#f5b301', '#58a6ff', '#3fb950', '#bc8cff', '#ff7b72', '#39c5cf', '#d2a8ff', '#ffa657'];
@@ -92,6 +92,7 @@ export class LiveTab {
     this.bindDragging();
     this.bindChartDialog();
     this.field = document.getElementById('field');
+    this.bindFieldCollapse();
     this.fieldImage = new Image();
     this.fieldImage.src = 'fields/biobuzz.webp';
     this.fieldImage.onload = () => this.drawField();
@@ -130,8 +131,8 @@ export class LiveTab {
       <div class="legend"></div><div class="plot"></div>`;
     document.getElementById('charts').appendChild(card);
     const legend = card.querySelector('.legend');
-    legend.innerHTML = spec.series.map((s) =>
-      `<span><i style="background:${s.color}"></i>${escapeHtml(s.label)} <b>—</b></span>`).join('') + '<em class="at"></em>';
+    legend.innerHTML = spec.series.map((s, i) =>
+      `<span data-series="${i + 1}" title="Click to show only this line (click again for all)"><i style="background:${s.color}"></i>${escapeHtml(s.label)} <b>—</b></span>`).join('') + '<em class="at"></em>';
     const holder = card.querySelector('.plot');
     const axis = { stroke: '#8b98a8', grid: { stroke: '#222a35', width: 1 }, ticks: { stroke: '#2a3340' }, font: '11px system-ui' };
     const scales = { x: { time: false } };
@@ -142,6 +143,10 @@ export class LiveTab {
     }
     const chart = { spec, legend, holder, card, plot: null };
     card.querySelector('.remove').addEventListener('click', () => this.removeChart(chart));
+    legend.addEventListener('click', (event) => {
+      const item = event.target.closest('[data-series]');
+      if (item) this.isolate(chart, Number(item.dataset.series));
+    });
     card.querySelector('.expand').addEventListener('click', () => this.toggleExpand(chart));
     card.querySelector('.pause-chart').addEventListener('click', () => this.setPaused(!this.paused));
     card.querySelector('.grip').addEventListener('dragstart', (event) => {
@@ -404,6 +409,18 @@ export class LiveTab {
     }
   }
 
+  /** Legend click: only that line, or every line again if it was already alone. */
+  isolate(chart, index) {
+    const series = chart.plot.series;
+    const alone = series.every((s, i) => i === 0 || s.show === (i === index));
+    for (let i = 1; i < series.length; i++) {
+      chart.plot.setSeries(i, { show: alone || i === index });
+    }
+    chart.legend.querySelectorAll('[data-series]').forEach((item) => {
+      item.classList.toggle('off', !chart.plot.series[Number(item.dataset.series)].show);
+    });
+  }
+
   updateLegend(chart, index) {
     if (!chart.plot) return;
     const data = chart.plot.data;
@@ -492,7 +509,36 @@ export class LiveTab {
   }
 
   /** Pedro field: 144 x 144 in, x right, y up, heading radians counter-clockwise. */
+  /** ▾ on the Field card: collapsed, the field is not drawn (remembered in this browser). */
+  bindFieldCollapse() {
+    const card = document.getElementById('field-view');
+    const button = document.getElementById('field-collapse');
+    this.fieldShown = true;
+    try {
+      this.fieldShown = localStorage.getItem('biobuzz.fieldShown') !== 'no';
+    } catch {
+      // private window: shown
+    }
+    const show = () => {
+      card.classList.toggle('closed', !this.fieldShown);
+      button.textContent = this.fieldShown ? '▾' : '▸';
+      this.dirty = true;
+      window.dispatchEvent(new Event('resize'));   // the camera below moves up or down
+    };
+    button.addEventListener('click', () => {
+      this.fieldShown = !this.fieldShown;
+      try {
+        localStorage.setItem('biobuzz.fieldShown', this.fieldShown ? 'yes' : 'no');
+      } catch {
+        // private window
+      }
+      show();
+    });
+    show();
+  }
+
   drawField() {
+    if (!this.fieldShown) return;
     const canvas = this.field;
     const g = canvas.getContext('2d');
     const size = canvas.width;

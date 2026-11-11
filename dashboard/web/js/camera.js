@@ -1,6 +1,6 @@
 // The Live field card's camera view: the robot's webcam picture, with the hive tags outlined
 // (Vision.CAMERA_FEED_FPS a second), while the card is open and the Live tab is showing. The robot only takes
-// pictures while someone asks for them, so a closed card costs nothing.
+// pictures while someone asks for them, so a collapsed card costs nothing.
 
 const SHOWN = 'biobuzz.cameraShown';
 
@@ -9,7 +9,7 @@ export class CameraView {
     this.card = document.getElementById('camera-card');   // the Camera card, below the field
     this.image = document.getElementById('camera-image');
     this.note = document.getElementById('camera-note');
-    this.box = document.getElementById('camera-toggle');   // the Camera checkbox
+    this.collapse = document.getElementById('camera-collapse');   // ▾ on the Camera card
     this.url = null;
     this.busy = false;
     this.next = 0;
@@ -19,8 +19,8 @@ export class CameraView {
     } catch {
       // private window: shown
     }
-    this.box.addEventListener('change', () => {
-      this.shown = this.box.checked;
+    this.collapse.addEventListener('click', () => {
+      this.shown = !this.shown;
       try {
         localStorage.setItem(SHOWN, this.shown ? 'yes' : 'no');
       } catch {
@@ -35,7 +35,7 @@ export class CameraView {
 
   show() {
     this.card.classList.toggle('closed', !this.shown);
-    this.box.checked = this.shown;
+    this.collapse.textContent = this.shown ? '▾' : '▸';
     window.dispatchEvent(new Event('resize'));   // the field's size changed
   }
 

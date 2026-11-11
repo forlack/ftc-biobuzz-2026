@@ -308,6 +308,22 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   X s" (red with ": over 30 s!" past 30); ↶ ↷ there are undo/redo.
   Field robots: solid ones (start, drive ends, preview) show FRONT inside the front edge instead
   of the heading arrow (turned to never read upside down); faint ones keep the small arrow.
+- **Dashboard heartbeat (2026-11-11):** a laptop that switched off Wi-Fi stayed a "viewer" for
+  minutes (its reader blocked forever, its sender stuck writing; TCP gives up after ~15 min).
+  TelemetryStream.serve pings each WebSocket every 2 s (browsers pong by themselves, no page
+  change); DashboardServer sets a 10 s read timeout, and the reader closes the socket when it
+  ends (frees a stuck sender). e2e: a raw socket that never answers is dropped, a real one stays.
+- **Live tab (2026-11-11):** ▾ collapse on the Field card (not drawn while collapsed) and on the
+  Camera card (replaces the Show checkbox; collapsed = no picture requests, so the robot stops
+  making them). Both remembered per browser (biobuzz.fieldShown / biobuzz.cameraShown). Chart
+  legends: click a line to show only it, click again for all (uPlot setSeries; .off dims). e2e 190.
+- **Stop timing (2026-11-11, from the SDK's OpModeManagerImpl bytecode):** the SDK gives an
+  OpMode's stop() 900 ms (detectStuck(900, "stop()")); if it is still stuck after a force stop it
+  calls AppUtil.restartApp: that was likely the old stop/re-INIT "reboots" (old Vision closed the
+  portal inside the OpMode, and VisionPortal.close() can block uninterruptibly). EasyOpenCV closes
+  the camera in onOpModePostStop, after that timer. libusb "Device handle closed while transfer
+  was still being processed" at each stop with the camera streaming (INIT or running) is that close
+  cutting off a frame in flight: harmless while the camera reopens at the next INIT.
 - **Unsaved changes dialog (2026-11-09):** opening an auton (or New) that has a draft in this
   browser shows #draft-dialog: "Discard them" (back to the robot's copy) or "Keep editing"
   (Esc keeps too); it says when the robot's copy changed since (Save will ask). Came from the
@@ -1727,9 +1743,8 @@ LED troubleshooting 2026-11-07: indicators reported dark. Red moved from exact
 Robot logs source "Aim lights" records commanded color/pulse (not proof of light
 output). Need hardware verification; only Field Centric controls LEDs, not auton.
 
-Aim lights telemetry: one line in DS and dashboard summary during INIT/PLAY
-reports requested color and pulse for both lights; no extra hub sensor reads.
-This is command intent, not optical confirmation. Transition logs retained.
+Aim lights telemetry ("Aim lights" line on the DS and in the dashboard summary) was removed
+2026-11-11 at the user's request: the lights work, the diagnostics are no longer needed.
 
 2026-11-07 follow-up: user manually changed LEDs to red/no target, green/any valid
 target, removed yellow/alignment gating; preserve that test behavior. Removed

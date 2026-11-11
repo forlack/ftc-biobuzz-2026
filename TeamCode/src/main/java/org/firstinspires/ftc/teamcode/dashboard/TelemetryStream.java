@@ -200,7 +200,13 @@ final class TelemetryStream {
             send(output, message("{\"type\":\"hello\",\"boot\":\"" + boot + "\",\"id\":" + viewer.id + "}"));
             send(output, firstState != null ? firstState : stateMessage());
             busyNanos.addAndGet(System.nanoTime() - started);
+            long lastPing = System.nanoTime();
             while (viewer.open && running.getAsBoolean()) {
+                // Heartbeat ping (the browser's pong is what keeps its connection open).
+                if (System.nanoTime() - lastPing >= 2_000_000_000L) {
+                    send(output, PING);
+                    lastPing = System.nanoTime();
+                }
                 byte[] batch = null, status = null, padsNow = null;
                 long batchEnd = 0;
                 boolean padsChanged = false;
@@ -361,6 +367,9 @@ final class TelemetryStream {
     // ---- Websocket framing -----------------------------------------------------------------
 
     /** A complete websocket text frame, ready to write to any number of browsers. */
+    /** A WebSocket ping with no payload: browsers answer it with a pong by themselves. */
+    private static final byte[] PING = {(byte) 0x89, 0};
+
     static byte[] message(String text) {
         byte[] payload = text.getBytes(StandardCharsets.UTF_8);
         int header = payload.length < 126 ? 2 : payload.length < 65536 ? 4 : 10;

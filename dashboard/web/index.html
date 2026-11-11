@@ -62,7 +62,7 @@
         <div class="charts" id="charts"></div>
         <aside class="side">
           <div class="card view field-view" id="field-view">
-            <div class="card-head"><h3>Field</h3><span class="muted" id="pose-text"></span>
+            <div class="card-head"><h3><button class="collapse" id="field-collapse" title="Collapse (the field is not drawn while collapsed)">▾</button>Field</h3><span class="muted" id="pose-text"></span>
               <span class="view-tools">
                 <label class="check" title="Draw the line the robot has driven"><input type="checkbox" id="trail-toggle" checked> Path</label>
                 <button class="zoom" title="Full size (Esc to go back)"></button>
@@ -70,9 +70,8 @@
             <canvas id="field" width="480" height="480"></canvas>
           </div>
           <div class="card view camera-view" id="camera-card">
-            <div class="card-head"><h3>Camera</h3>
+            <div class="card-head"><h3><button class="collapse" id="camera-collapse" title="Collapse (the robot stops taking pictures for it)">▾</button>Camera</h3>
               <span class="view-tools">
-                <label class="check" title="Show the robot's camera (it only takes pictures while shown)"><input type="checkbox" id="camera-toggle" checked> Show</label>
                 <button class="zoom" title="Full size (Esc to go back)"></button>
               </span></div>
             <img id="camera-image" alt="The robot's camera" hidden>

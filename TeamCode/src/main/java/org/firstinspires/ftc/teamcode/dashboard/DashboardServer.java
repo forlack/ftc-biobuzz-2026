@@ -888,7 +888,10 @@ public class DashboardServer {
         output.write(("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                 + "Sec-WebSocket-Accept: " + accept + "\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1));
         output.flush();
-        socket.setSoTimeout(0);
+        // Heartbeat: the stream pings every 2 s and browsers answer by themselves. A computer that
+        // vanished (Wi-Fi off) answers nothing, so after 10 s its read times out and it is closed,
+        // instead of holding a viewer and two threads for the ~15 min TCP takes to give up.
+        socket.setSoTimeout(10000);
 
         TelemetryStream.Viewer viewer = new TelemetryStream.Viewer();
         // Reader: notices when the browser leaves, and which data it wants.
@@ -917,6 +920,10 @@ public class DashboardServer {
                 viewer.open = false;
                 VirtualGamepads.release(viewer.id, 0);   // the browser left: its gamepad stops now
                 stream.poke();
+                try {
+                    socket.close();   // also frees the sender if it is stuck writing to a dead link
+                } catch (IOException ignored) {
+                }
             }
         });
         stream.serve(viewer, output, () -> running);
