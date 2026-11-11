@@ -21,8 +21,8 @@ import java.util.Locale;
 /**
  * Stability soak test for a robot on a stand. The camera runs the whole time (as in teleop), and
  * every EVERY_SECONDS the next device runs for ON_SECONDS at POWER: all four drive motors
- * together, the intake, each shooter, all four transport and trigger servos together, then the
- * stinger (down, then back up). One round is 6 devices, 60 s with the defaults.
+ * together, the intake, each shooter, then every servo together: the four transport and trigger
+ * servos and the stinger (down, then back up). One round is 5 devices, 50 s with the defaults.
  *
  * Each start is written to the robot log ("Smoke test"), so after a restart the log shows which
  * device ran last.
@@ -41,12 +41,12 @@ public class SmokeTest extends LinearOpMode {
     public static double ON_SECONDS = 1;
 
     private static final String[] DEVICES = {
-            "drive (all four)", "intake", "shooterPollen", "shooterNectar", "servos (all four)", "stinger",
+            "drive (all four)", "intake", "shooterPollen", "shooterNectar", "servos (all, with the stinger)",
     };
 
     private DcMotorEx[] drive;
     private DcMotorEx[] motors;     // intake, shooterPollen, shooterNectar (DEVICES 1 to 3)
-    private CRServo[] servos;       // transport and trigger servos, together (DEVICES 4)
+    private CRServo[] servos;       // transport and trigger servos, with the stinger (DEVICES 4)
     private Stinger stinger;
 
     @Override
@@ -141,11 +141,10 @@ public class SmokeTest extends LinearOpMode {
             }
         } else if (device <= 3) {
             motors[device - 1].setPower(power);
-        } else if (device == 4) {
+        } else {
             for (CRServo servo : servos) {
                 servo.setPower(power);
             }
-        } else {
             stinger.set(on);
             stinger.update();
         }

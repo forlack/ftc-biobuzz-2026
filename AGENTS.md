@@ -318,10 +318,10 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   making them). Both remembered per browser (biobuzz.fieldShown / biobuzz.cameraShown). Chart
   legends: click a line to show only it, click again for all (uPlot setSeries; .off dims). e2e 190.
 - **Smoke Test teleop (2026-11-11, helpers/SmokeTest.java, Diagnostics, Tune: Hidden):** soak
-  test on a stand. Camera runs as in teleop; every EVERY_SECONDS (10) the next of 6 devices
+  test on a stand. Camera runs as in teleop; every EVERY_SECONDS (10) the next of 5 devices
   runs ON_SECONDS (1) at POWER (1.0, user wanted full power, configurable): drive (all four
-  together, through MecanumDrive's directions), intake, shooterPollen, shooterNectar, the four
-  transport/trigger CR servos together, stinger (down then up): 6 devices, 60 s a round. Aim lights ignored. Each start is logged
+  together, through MecanumDrive's directions), intake, shooterPollen, shooterNectar, every servo
+  together (4 transport/trigger CR servos + stinger down then up): 5 devices, 50 s a round. Aim lights ignored. Each start is logged
   ("Smoke test" in the robot log) to match a restart to a device. Raw power by name (not the
   mechanism classes). The simulator only lists Field Centric and the auton, so it is
   compile-checked only; first robot run pending.
