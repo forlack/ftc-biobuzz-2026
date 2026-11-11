@@ -185,7 +185,7 @@ public class Vision implements Mechanism {
         Thread thread = new Thread(() -> {
             try {
                 closing.close();
-            } catch (RuntimeException error) {
+            } catch (Throwable error) {   // anything uncaught on a thread restarts the app
                 RobotDiagnostics.error("Camera", "Camera close failed", error);
             }
         }, "camera-close");
@@ -302,7 +302,7 @@ public class Vision implements Mechanism {
                     ByteArrayOutputStream jpeg = new ByteArrayOutputStream();
                     frame.compress(Bitmap.CompressFormat.JPEG, 85, jpeg);
                     CameraFeed.publish(jpeg.toByteArray());
-                } catch (RuntimeException error) {
+                } catch (Throwable error) {   // e.g. out of memory: lose a picture, not the robot
                     problem = "Preview failed: " + error.getMessage();
                     RobotDiagnostics.error("Camera", "Preview encoding failed", error);
                 } finally {

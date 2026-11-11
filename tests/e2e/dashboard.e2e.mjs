@@ -134,6 +134,14 @@ try {
   const scrolls = await b.eval(`(() => { const t = document.querySelector('.side .grow'); const side = document.querySelector('.side');
     return getComputedStyle(t).overflowY === 'auto' && t.scrollHeight > t.clientHeight && side.getBoundingClientRect().bottom <= innerHeight + 1; })()`);
   check(scrolls, 'the telemetry list scrolls inside its card, and the right column stays on the page (it scrolls itself when full)');
+  // Dragged taller (its bottom right corner): it stays that tall after a reload.
+  await b.eval(`document.getElementById('telemetry-card').style.height = '600px'`);
+  await sleep(300);
+  await b.goto(URL);
+  await showAllTelemetry();
+  check(await b.eval(`getComputedStyle(document.getElementById('telemetry-card')).resize === 'vertical' && Math.abs(document.getElementById('telemetry-card').offsetHeight - 600) < 2`),
+    'the Telemetry card can be dragged taller (vertical only), and this browser remembers the height');
+  await b.eval(`(() => { localStorage.removeItem('biobuzz.telemetryHeight'); document.getElementById('telemetry-card').style.height = ''; })()`);
   await b.screenshot(join(OUT, '1-live.png'));
   await b.eval(`[...document.querySelectorAll('.chart')].find((c) => c.querySelector('h3').textContent.includes('Motor power')).querySelector('.remove').click()`);
   check(await b.eval(`![...document.querySelectorAll('.chart h3')].some((h) => h.textContent.includes('Motor power'))`), 'and ✕ removes it');

@@ -408,7 +408,7 @@ body.locked #hardware :is(button, input, select):not(#hw-map) { opacity: .4; poi
 .view .collapse:hover { color: var(--honey); }
 /* The right column scrolls when the field, camera and telemetry do not all fit. */
 .side { overflow-y: auto; }
-.side .grow { flex: 0 0 auto; height: 420px; }
+.side .grow { flex: 0 0 auto; height: 420px; min-height: 160px; resize: vertical; }   /* drag the corner; remembered (live.js) */
 /* Zoomed: big in the middle of the screen; everything else dimmed by its shadow. The column
    is "sticky", which keeps its children in its own layer, so it is lifted above the rest. */
 .view.zoomed { position: fixed; z-index: 20; top: 50%; left: 50%; transform: translate(-50%, -50%);

@@ -47,7 +47,8 @@ export class CameraView {
     this.busy = true;
     try {
       // "The next picture after the one shown": the robot answers as soon as it is made.
-      const response = await fetch(`/api/camera?after=${this.number || 0}`, { cache: 'no-store' });
+      // A request lost on the Wi-Fi would otherwise wait forever and stop the pictures for good.
+      const response = await fetch(`/api/camera?after=${this.number || 0}`, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
       if (response.ok) {
         this.number = Number(response.headers.get('X-Picture')) || 0;
         const url = URL.createObjectURL(await response.blob());

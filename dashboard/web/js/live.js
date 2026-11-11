@@ -93,6 +93,7 @@ export class LiveTab {
     this.bindChartDialog();
     this.field = document.getElementById('field');
     this.bindFieldCollapse();
+    this.rememberTelemetryHeight();
     this.fieldImage = new Image();
     this.fieldImage.src = 'fields/biobuzz.webp';
     this.fieldImage.onload = () => this.drawField();
@@ -509,6 +510,25 @@ export class LiveTab {
   }
 
   /** Pedro field: 144 x 144 in, x right, y up, heading radians counter-clockwise. */
+  /** The Telemetry card is as tall as it was last dragged to, in this browser. */
+  rememberTelemetryHeight() {
+    const card = document.getElementById('telemetry-card');
+    try {
+      const saved = Number(localStorage.getItem('biobuzz.telemetryHeight'));
+      if (saved >= 160) card.style.height = `${saved}px`;
+    } catch {
+      // private window: the default height
+    }
+    new ResizeObserver(() => {
+      if (!card.style.height) return;   // only after someone dragged it
+      try {
+        localStorage.setItem('biobuzz.telemetryHeight', String(Math.round(card.offsetHeight)));
+      } catch {
+        // private window
+      }
+    }).observe(card);
+  }
+
   /** ▾ on the Field card: collapsed, the field is not drawn (remembered in this browser). */
   bindFieldCollapse() {
     const card = document.getElementById('field-view');

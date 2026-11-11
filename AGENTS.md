@@ -317,6 +317,24 @@ Built 2026-10-23 against the simulator, robot-tested 2026-10-24/25, merged into 
   Camera card (replaces the Show checkbox; collapsed = no picture requests, so the robot stops
   making them). Both remembered per browser (biobuzz.fieldShown / biobuzz.cameraShown). Chart
   legends: click a line to show only it, click again for all (uPlot setSeries; .off dims). e2e 190.
+- **Smoke Test teleop (2026-11-11, helpers/SmokeTest.java, Diagnostics, Tune: Hidden):** soak
+  test on a stand. Camera runs as in teleop; every EVERY_SECONDS (10) the next of 6 devices
+  runs ON_SECONDS (1) at POWER (1.0, user wanted full power, configurable): drive (all four
+  together, through MecanumDrive's directions), intake, shooterPollen, shooterNectar, the four
+  transport/trigger CR servos together, stinger (down then up): 6 devices, 60 s a round. Aim lights ignored. Each start is logged
+  ("Smoke test" in the robot log) to match a restart to a device. Raw power by name (not the
+  mechanism classes). The simulator only lists Field Centric and the auton, so it is
+  compile-checked only; first robot run pending.
+- **Robustness audit (2026-11-11):** Stop interrupts the OpMode thread at once
+  (LinearOpMode.internalOnStopRequested → shutdownNow), so our sleep(20) and Vision's 2 s
+  INIT wait end immediately; the auton (iterative) never waits in loop()/stop(). No lock is
+  shared between the OpMode and a network write (Dash, RobotDiagnostics, VirtualGamepads,
+  RobotSettings are in-memory). Every dashboard thread catches Throwable; Vision's camera-close
+  thread and picture encoder now do too (were RuntimeException: an Error there would restart
+  the app). Browser: camera picture requests time out after 5 s (a lost request used to stop
+  the feed until a refresh). Telemetry card: resize: vertical, height remembered
+  (biobuzz.telemetryHeight). Open: FieldCentricJava uses hardwareMap.get for aimLight1/2, so a
+  map without them stops teleop at INIT (offered tryGet). e2e 191.
 - **Stop timing (2026-11-11, from the SDK's OpModeManagerImpl bytecode):** the SDK gives an
   OpMode's stop() 900 ms (detectStuck(900, "stop()")); if it is still stuck after a force stop it
   calls AppUtil.restartApp: that was likely the old stop/re-INIT "reboots" (old Vision closed the
