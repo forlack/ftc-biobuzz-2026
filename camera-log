@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""Save complete robot logcat and show camera/USB messages and warnings live.
+
+Run on robot Wi-Fi: ./camera-log
+USB: ./camera-log --serial YOUR_USB_SERIAL
+Enter marks a camera failure and saves diagnostics; q or Ctrl+C ends recording.
+Only reads the robot. Does not clear logs, change settings, or restart anything.
+"""
+import argparse
+from datetime import datetime
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import threading
+
+
+ROOT = Path(__file__).resolve().parent
+PACKAGE = 'com.qualcomm.ftcrobotcontroller'
+IMPORTANT = re.compile(
+    r'\s[WEF]\s|camera|\buvc|libusb|easyopencv|visionportal|april.?tag|'
+    r'usbhost|usbdevice|usb.*(?:attach|detach|disconnect|reset|error)|'
+    r'fatal signal|tombstone|turbojpeg|tj3decompress|'
+    r'com\.qualcomm\.ftcrobotcontroller', re.IGNORECASE)
+
+
+def find_adb():
+    candidates = []
+    props = ROOT / 'local.properties'
+    if props.is_file():
+        for line in props.read_text().splitlines():
+            if line.startswith('sdk.dir='):
+                candidates.append(Path(line.split('=', 1)[1].strip()) / 'platform-tools/adb')
+    for name in ('ANDROID_HOME', 'ANDROID_SDK_ROOT'):
+        if os.environ.get(name):
+            candidates.append(Path(os.environ[name]) / 'platform-tools/adb')
+    found = shutil.which('adb')
+    if found:
+        candidates.append(Path(found))
+    candidates.extend([Path.home() / 'Library/Android/sdk/platform-tools/adb',
+                       Path.home() / 'Android/Sdk/platform-tools/adb'])
+    return next((str(path) for path in candidates if path.is_file()), None)
+
+
+class Capture:
+    def __init__(self, adb, serial, folder):
+        self.adb = adb
+        self.serial = serial
+        self.folder = folder
+        self.stop = threading.Event()
+        self.lock = threading.Lock()
+        self.process = None
+        self.snapshot_number = 0
+
+    def report(self, message):
+        line = f'[{datetime.now().astimezone().isoformat(timespec="seconds")}] {message}'
+        with self.lock:
+            with (self.folder / 'highlights.txt').open('a') as output:
+                output.write(line + '\n')
+            print(line, flush=True)
+
+    def command(self, args, timeout=8, device=True):
+        command = [self.adb] + (['-s', self.serial] if device else []) + args
+        try:
+            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    text=True, errors='replace', timeout=timeout)
+            return result.returncode, result.stdout
+        except subprocess.TimeoutExpired as error:
+            partial = error.stdout or b''
+            if isinstance(partial, bytes):
+                partial = partial.decode(errors='replace')
+            return 124, partial + f'\nTimed out after {timeout} seconds.\n'
+        except OSError as error:
+            return 1, str(error) + '\n'
+
+    def connect(self):
+        # TCP ADB only; a USB serial must never become an adb connect target.
+        if ':' in self.serial:
+            self.command(['connect', self.serial], device=False)
+        code, output = self.command(['get-state'])
+        return code == 0 and output.strip() == 'device'
+
+    def record(self):
+        # Keep the original unfiltered stream, including stack-trace continuation lines.
+        # Reconnects may replay buffered lines; boundaries are recorded explicitly.
+        with (self.folder / 'logcat-full.txt').open('a', buffering=1) as raw:
+            while not self.stop.is_set():
+                if not self.connect():
+                    self.report('ADB unavailable; retrying in 3 s. Recording has a gap.')
+                    self.stop.wait(3)
+                    continue
+                if self.stop.is_set():
+                    break
+                boundary = f'--- logcat connection {datetime.now().astimezone().isoformat()} ---'
+                raw.write(boundary + '\n')
+                self.report('Recording logcat. Enter = failure snapshot; q / Ctrl+C = finish.')
+                try:
+                    process = subprocess.Popen(
+                        [self.adb, '-s', self.serial, 'logcat', '-b', 'all', '-v', 'threadtime', '*:V'],
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                        text=True, errors='replace', bufsize=1)
+                    with self.lock:
+                        self.process = process
+                        if self.stop.is_set():
+                            process.terminate()
+                    try:
+                        for line in process.stdout:
+                            raw.write(line)
+                            if IMPORTANT.search(line):
+                                self.report(line.rstrip())
+                    finally:
+                        if process.poll() is None:
+                            process.terminate()
+                        try:
+                            process.wait(timeout=3)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait()
+                        process.stdout.close()
+                        with self.lock:
+                            self.process = None
+                except OSError as error:
+                    self.report(f'Cannot run logcat: {error}')
+                    self.stop.set()
+                    return
+                if not self.stop.is_set():
+                    self.report('Logcat ended; reconnecting in 3 s. Buffered lines may repeat.')
+                    self.stop.wait(3)
+
+    def snapshot(self, label, baseline=False):
+        self.snapshot_number += 1
+        folder = self.folder / f'{self.snapshot_number:02d}-{"baseline" if baseline else "failure"}'
+        folder.mkdir()
+        (folder / 'marker.txt').write_text(
+            datetime.now().astimezone().isoformat() + '\n' + label + '\n')
+        self.report(f'MARK: {label}. Saving {folder.name}; logcat continues in background.')
+        jobs = [
+            ('uptime-and-boot-id.txt', ['shell', 'cat', '/proc/uptime',
+                                      '/proc/sys/kernel/random/boot_id'], 5),
+            ('usb.txt', ['shell', 'dumpsys', 'usb'], 5),
+            ('processes.txt', ['shell', 'ps'], 5),
+        ]
+        if not baseline:
+            jobs.extend([
+                ('memory.txt', ['shell', 'dumpsys', 'meminfo', PACKAGE], 8),
+                ('kernel.txt', ['shell', 'dmesg'], 5),
+            ])
+        jobs.append(('pull-app-logs.txt', ['pull', '/sdcard/FIRST/logs', str(folder / 'app-logs')], 15))
+        for name, command, timeout in jobs:
+            code, output = self.command(command, timeout)
+            (folder / name).write_text(output)
+            # Some hubs prohibit dmesg even when the shell returns success.
+            denied = 'permission denied' in output.lower() or 'operation not permitted' in output.lower()
+            self.report(f'  {name}: {"unavailable (see file)" if code or denied else "saved"}')
+        self.report('Snapshot complete. Capture the dropout before re-INIT/reboot when possible.')
+
+    def close(self):
+        self.stop.set()
+        with self.lock:
+            if self.process is not None and self.process.poll() is None:
+                self.process.terminate()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--serial', default='192.168.43.1:5555', help='ADB serial or host:port')
+    parser.add_argument('--adb', default=find_adb(), help='path to adb (normally discovered automatically)')
+    parser.add_argument('--output', type=Path, help='new capture directory (default: timestamped folder on Desktop)')
+    args = parser.parse_args()
+    if not args.adb:
+        parser.error('adb not found; use --adb /path/to/platform-tools/adb')
+    folder = (args.output or Path.home() / 'Desktop' /
+              ('ftc-camera-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f'))).expanduser().resolve()
+    folder.mkdir(parents=True, exist_ok=False)
+    (folder / 'README.txt').write_text(
+        f'Target: {args.serial}\nStarted: {datetime.now().astimezone().isoformat()}\n'
+        'logcat-full.txt: all available buffers, unfiltered; may contain history from before start.\n'
+        'highlights.txt: selected live messages and laptop-time markers.\n'
+        'Numbered folders: baseline and manually marked failure diagnostics.\n'
+        'A reconnect can repeat buffered lines or leave gaps; connection boundaries are included.\n'
+        'A missing/denied kernel log is not evidence that no USB fault occurred.\n'
+        'The script only reads the robot; it never clears logs or restarts anything.\n')
+    capture = Capture(args.adb, args.serial, folder)
+    capture.report(f'Capture folder: {folder}')
+    capture.report('Live display: camera/USB messages, app lifecycle, and all warnings/errors.')
+    capture.report('Buffered history is included: check robot timestamps before treating an error as new.')
+    if not capture.connect():
+        parser.exit(1, f'Cannot reach {args.serial}. Join robot Wi-Fi or use --serial for USB.\n')
+    worker = threading.Thread(target=capture.record, daemon=True)
+    worker.start()
+    try:
+        capture.snapshot('Recording started', baseline=True)
+        while not capture.stop.is_set():
+            try:
+                note = input().strip()
+            except EOFError:
+                break
+            if note.lower() in ('q', 'quit'):
+                break
+            capture.snapshot(note or 'Camera dropout observed')
+    except KeyboardInterrupt:
+        capture.report('Stopping recording.')
+    finally:
+        capture.close()
+        worker.join(timeout=20)
+        capture.report(f'Finished. Logs saved in {folder}')
+
+
+if __name__ == '__main__':
+    main()

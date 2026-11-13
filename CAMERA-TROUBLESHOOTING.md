@@ -1,6 +1,80 @@
 # Camera failures and robot restarts — investigation log
 
-Updated 2026-11-07. Team 24621 Total Chaos.
+Updated 2026-11-12. Team 24621 Total Chaos.
+
+## 2026-11-12 practice: three captures with ./camera-log
+
+Background: 4 days stable at home plus a 1-hour Smoke Test on a stand, then a camera
+dropout at practice. Captures are in `~/Desktop/ftc-camera-20261112-*` (not in Git).
+Time mapping used below: app `monotonicMs` = `/proc/uptime` = kernel dmesg seconds
+(within ~1 s); libusb's bracketed timestamps are NOT kernel time.
+
+**1. "Zombie" camera after a STOP (capture 153719, dead battery in the robot).**
+Run healthy to the end (48 FPS at STOP). First STOP that session: Expansion Hub 2
+unresponsive ~0.25 s (`timeout: abandoning waiting 250ms ... mod=2`, then `REV Hub #2
+has reconnected`). Second STOP: camera closed normally, then the kernel logged
+`usb 1-1: reset high-speed USB device number 2` twice, 0.8 s and 6.4 s after STOP,
+with no OpMode running and nothing in logcat (our code has no USB reset). Re-INIT 4
+minutes later: open, MJPEG 640x480 negotiation, alt setting and "streaming started"
+all succeeded with no errors, but the camera never sent a frame (STREAMING, 0 FPS).
+Later a DS Restart Robot reported the Expansion Hub missing; a hard reboot fixed it.
+The team then found a nearly dead battery had been put in by mistake. Two unrelated
+devices (RS-485 hub and USB camera) failing together points at power (brownout),
+which matches the battery. Not proven: voltage was not logged then.
+
+**2. Deploying while TeleOp was running (capture 155941).** The install killed the
+app with the camera streaming. Kernel: `Signal while waiting for configure endpoint
+command`, `Not enough bandwidth for altsetting 0`. The new app's first INIT failed:
+`setInterfaceAltSetting(1, 5) failed ... UVC_ERROR_IO`, kernel `Not enough bandwidth
+for altsetting 5`. The xHCI bandwidth stayed reserved for the killed app. Our code
+was not involved (fails before any frame). The Oct 31 "insufficient USB bandwidth"
+error is likely the same thing. **Rule: press STOP on the DS before deploying;** if
+forgotten, reboot after the deploy. (Not built: deploy refusing while an OpMode runs.)
+
+**3. Long clean session (capture 160334, good battery, ~22 min).** 7 TeleOp runs:
+7 clean starts and stops, 0 kernel USB resets, 0 bandwidth/UVC errors, 0 hub
+dropouts, no crashes. libusb "transfer still being processed" pairs only at each
+STOP (harmless). 31 "failed to send EOF" (damaged frames), about 1-4 a minute, evenly
+spread: the link still drops data sometimes. Use EOFs per minute as the cable-health
+number before/after any cable or strain-relief change.
+
+**4. Power switch (same day, after capture 3): leading suspect now.** With a new
+battery the robot would not turn back on until someone touched the main power switch's
+spade connectors; nothing felt loose. An intermittent main power contact explains all
+of it: stable sitting still at home, failures after bumps on the field, the Expansion
+Hub and the camera dropping out together (a flicker browns out both: the hub loses its
+link, the Control Hub's USB 5 V to the camera dips -> kernel USB resets -> zombie
+camera), and failures right after STOP, when people handle the robot. The dead battery
+may have added to it or been a coincidence. A spade can be bad without feeling loose:
+spread female terminal, crimp loose on the wire, oxidized/burnt contact, worn switch.
+Next: inspect and tug each crimp; wiggle test with the robot on, TeleOp INIT and
+`./camera-log` running (watch for `unresponsive`, `has reconnected`, `regained power
+after a complete power loss`, `reset high-speed USB device`); replace the switch or
+re-crimp with new terminals and add strain relief; then drive hard again while logging.
+
+**Recovery, from these logs.** The zombie state survives a kernel USB reset and a full
+re-INIT, so software cannot recover it; only removing the camera's power does (hard
+reboot; unplugging/replugging the camera is untested since the Nov 7 re-INIT fix and
+is the best quick try). DS Restart Robot worked once and failed once: some failures
+are app-side and recoverable that way, the zombie state is not. Order to try:
+Restart Robot, then replug camera + INIT, then hard reboot. Mark each with Enter +
+a note in `./camera-log`.
+
+**Prevention.** A solid main power switch and connectors (see 4), charged batteries; strain relief on
+the camera cable. In software only indirect help: the drive slew rate
+(`MecanumDrive.SLEW_RATE_ON`) reduced the battery dip from 9.5 V to ~10.5 V.
+
+**Software changes 2026-11-12:**
+- Aim lights turn **white** when the camera is not working (`Vision.working()`: no
+  frame in the last 1 s, including STREAMING with 0 FPS, camera off, failed or
+  missing). Otherwise red (no hive) / green (hive). White is 2200 us (goBILDA Product
+  Insight #4: above 1900 us is solid white). Expect ~1 s of white at INIT while the
+  camera starts. Field Centric only. Deployed and running on the robot.
+- Diagnostics samples (once a second) now include `batteryMinV` (lowest battery
+  reading since the last sample, null with no OpMode) and `batteryReads`. Reads are
+  the existing 4 Hz ones, so millisecond spikes are missed; for those, look for the
+  hubs' own messages in logcat (`unresponsive`, `has reconnected`, `regained power
+  after a complete power loss`). Not yet on the robot.
 
 ## Fixed: camera dead after re-INIT (cause found, robot-tested 2026-11-07)
 
@@ -275,6 +349,17 @@ Current capture behavior:
 - LED transition event spam was removed; LED command telemetry remains.
 
 Capture promptly after failure, before power cycling if possible:
+
+**Laptop capture helper:** run `./camera-log` on robot Wi-Fi (or
+`./camera-log --serial USB_SERIAL` over USB). It discovers SDK ADB, saves unfiltered
+logcat to a timestamped `~/Desktop/ftc-camera-*` folder, and prints camera/USB
+messages and warnings/errors live. Leave it running during practice. When the
+camera drops, press Enter (or type a note and Enter) to mark the time and save USB
+state, uptime/boot ID, processes, memory, available kernel messages, and saved app
+logs **before re-INIT/reboot**. Logcat continues during snapshots; q or Ctrl+C ends
+recording. ADB disconnects trigger reconnection without restarting ADB or the robot;
+gaps and possible replay of buffered lines are reported. Kernel logs may be denied.
+The helper only reads the robot and never clears logs or changes settings.
 
 1. Robot tab -> Problems -> Download, then also inspect Events for lifecycle order.
 2. If ADB works, preserve all available Android buffers and uptime:

@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
+import org.firstinspires.ftc.teamcode.dashboard.RobotDiagnostics;
 import org.firstinspires.ftc.teamcode.lib.Readouts;
 
 import java.util.ArrayList;
@@ -104,7 +105,11 @@ public class Robot {
                 volts = Math.min(volts, reading);
             }
         }
-        return Double.isFinite(volts) ? volts : previous;
+        if (!Double.isFinite(volts)) {
+            return previous;
+        }
+        RobotDiagnostics.battery(volts); // The robot log keeps the lowest reading each second.
+        return volts;
     }
 
     /** How far off the target, as a % of it (0 with no target); for the dashboard's charts. */

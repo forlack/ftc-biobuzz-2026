@@ -40,7 +40,24 @@ public final class RobotDiagnostics {
         } catch (Exception ignored) { }
     }
 
-    private final String session = Long.toHexString(System.currentTimeMillis()) + "-" + Long.toHexString(System.nanoTime());
+    private static final Object BATTERY_LOCK = new Object();
+    private static double batteryLow = Double.NaN;
+    private static int batteryReads;
+
+    /**
+     * Every battery reading (OpModes read 4 times a second); each sample keeps the lowest since
+     * the last one. Catches a sagging battery, not millisecond spikes between reads.
+     */
+    public static void battery(double volts) {
+        synchronized (BATTERY_LOCK) {
+            if (Double.isNaN(batteryLow) || volts < batteryLow) {
+                batteryLow = volts;
+            }
+            batteryReads++;
+        }
+    }
+
+    private final String session =Long.toHexString(System.currentTimeMillis()) + "-" + Long.toHexString(System.nanoTime());
     private volatile String writeError = "";
     private volatile JSONObject latest = new JSONObject();
 
@@ -49,6 +66,13 @@ public final class RobotDiagnostics {
             sample.put("session", session);
             sample.put("timeMs", System.currentTimeMillis());
             sample.put("monotonicMs", System.nanoTime() / 1_000_000L);
+            synchronized (BATTERY_LOCK) {
+                // null when nothing read the battery this second (no OpMode running).
+                sample.put("batteryMinV", Double.isNaN(batteryLow) ? JSONObject.NULL : (Object) batteryLow);
+                sample.put("batteryReads", batteryReads);
+                batteryLow = Double.NaN;
+                batteryReads = 0;
+            }
             latest = sample;
             append("diagnostics", sample.toString() + "\n", LIMIT);
             java.util.List<JSONObject> events = new java.util.ArrayList<>();

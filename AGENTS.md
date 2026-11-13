@@ -2,9 +2,33 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-11-07
+Last updated: 2026-11-12
 
 ---
+
+## Practice camera update (2026-11-12)
+
+Three `./camera-log` captures; details in CAMERA-TROUBLESHOOTING.md (top section).
+- Dead battery (put in by mistake): Expansion Hub dropped out at STOP, kernel reset the
+  camera's USB twice after another STOP, camera then "zombie" (STREAMING, 0 FPS) until
+  a hard reboot. Brownout is the leading explanation (not proven: no voltage logged).
+- Deploying with TeleOp running leaves USB bandwidth reserved: next INIT fails with
+  `UVC_ERROR_IO` / `Not enough bandwidth`. Press STOP before deploying, else reboot.
+- 22 min with a good battery: no failures; ~1.5 damaged frames (EOF) a minute.
+- Later the same day a new battery would not power on until the main power switch's
+  spade connectors were touched: an intermittent power switch/connection is now the
+  leading suspect for all of it (weakens the dead-battery explanation). Next: wiggle
+  test while logging, replace/re-crimp the switch.
+- Zombie camera cannot be recovered in software. Try Restart Robot, then replug the
+  camera, then hard reboot.
+- New: aim lights white when the camera has sent no frame for 1 s (`Vision.working()`),
+  deployed. Diagnostics samples log `batteryMinV` / `batteryReads` (not yet deployed;
+  4 Hz reads miss millisecond spikes, the user knows).
+
+`./camera-log` is a laptop-only, read-only capture helper: unfiltered logcat saved
+to Desktop, camera/USB and warnings/errors printed live, Enter (or a note + Enter)
+marks a failure and saves diagnostics while logcat continues. q / Ctrl+C stops.
+Verified on the robot 2026-11-12.
 
 ## Camera investigation update (2026-11-07)
 

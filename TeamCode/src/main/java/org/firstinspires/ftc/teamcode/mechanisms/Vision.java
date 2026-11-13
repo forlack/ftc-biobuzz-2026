@@ -244,6 +244,17 @@ public class Vision implements Mechanism {
         return closed || tags == null ? null : finder.hive();
     }
 
+    /** No new frame for this long counts as a dead camera (STREAMING with 0 FPS included). */
+    private static final long CAMERA_DEAD_NANOS = 1_000_000_000L;
+
+    /** False when the camera is off, failed to start, or has sent no frame for a second. */
+    public boolean working() {
+        if (closed || lastFrameNanos == 0) {
+            return false;
+        }
+        return System.nanoTime() - lastFrameNanos < CAMERA_DEAD_NANOS;
+    }
+
     private long nextDiagnostic;
 
     @Override

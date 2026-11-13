@@ -42,10 +42,12 @@ public class FieldCentricJava extends LinearOpMode {
     private Gamepad operate;
 
     // goBILDA PWM RGB indicators, Control Hub servo ports 2 and 3.
-    // Explicit 600–2400 us range: red 1120 us (above off threshold), green 1500 us.
+    // Explicit 600–2400 us range: red 1120 us (above off threshold), green 1500 us,
+    // white 2200 us (goBILDA: anything above 1900 us is solid white).
     private ServoImplEx aimLight1, aimLight2;
     private static final double LIGHT_RED = (1120.0 - 600) / 1800;
     private static final double LIGHT_GREEN = (1500.0 - 600) / 1800;
+    private static final double LIGHT_WHITE = (2200.0 - 600) / 1800;
     private double lastLightPosition = -1;
 
     // Must be ABOVE the buttons -- they register themselves during construction.
@@ -142,7 +144,9 @@ public class FieldCentricJava extends LinearOpMode {
     private void updateAimLights() {
         HiveFinder.Sighting hive = robot.vision.hive(); // Already filtered for our alliance/cell.
         double position = LIGHT_RED;
-        if (hive != null && Double.isFinite(hive.bearing)) {
+        if (!robot.vision.working()) {
+            position = LIGHT_WHITE; // Camera off, failed, or no frames: tell the drivers it is down.
+        } else if (hive != null && Double.isFinite(hive.bearing)) {
             position = LIGHT_GREEN; // Current student test: green means target visible, not aligned.
         }
         // Only write on color changes, avoiding two extra hub commands every loop.
