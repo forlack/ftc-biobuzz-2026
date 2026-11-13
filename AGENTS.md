@@ -19,6 +19,9 @@ Three `./camera-log` captures; details in CAMERA-TROUBLESHOOTING.md (top section
   spade connectors were touched: an intermittent power switch/connection is now the
   leading suspect for all of it (weakens the dead-battery explanation). Next: wiggle
   test while logging, replace/re-crimp the switch.
+- **Found:** replacing the switch revealed the XT30 feeding the Control Hub only half
+  plugged in. Switch replaced, connector seated. Needs a hard field session with
+  `./camera-log` to confirm the camera failures are gone.
 - Zombie camera cannot be recovered in software. Try Restart Robot, then replug the
   camera, then hard reboot.
 - New: aim lights white when the camera has sent no frame for 1 s (`Vision.working()`),

@@ -52,6 +52,14 @@ Next: inspect and tug each crimp; wiggle test with the robot on, TeleOp INIT and
 after a complete power loss`, `reset high-speed USB device`); replace the switch or
 re-crimp with new terminals and add strain relief; then drive hard again while logging.
 
+**5. Found (same day): half-plugged XT30 to the Control Hub.** While replacing the
+power switch the team found one XT30 connector, the one feeding the Control Hub, only
+half plugged in. An intermittent main power feed to the Control Hub matches every
+symptom above. Switch replaced and connector seated. Confirm with a hard field session
+under `./camera-log`: expect no USB resets, no hub dropouts, no zombie camera. If the
+camera still fails with power solid, go back to the camera cable (EOF count) and the
+decoder-crash notes below. Check every XT30 is fully seated during pre-match checks.
+
 **Recovery, from these logs.** The zombie state survives a kernel USB reset and a full
 re-INIT, so software cannot recover it; only removing the camera's power does (hard
 reboot; unplugging/replugging the camera is untested since the Nov 7 re-INIT fix and
