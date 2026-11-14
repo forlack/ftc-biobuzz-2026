@@ -37,9 +37,21 @@ elif args[:1] == ['logcat']:
 elif args[:2] == ['shell', 'dmesg']:
     print('dmesg: Permission denied')
     sys.exit(1)
+elif args[:3] == ['shell', 'am', 'dumpheap']:
+    assert args[3] == 'com.qualcomm.ftcrobotcontroller' and args[4].startswith('/data/local/tmp/'), args
+    (root / 'heap-size').write_text('2048')
+elif args[:3] == ['shell', 'ls', '-l']:
+    size = (root / 'heap-size').read_text()
+    print('-rw-r--r-- 1 shell shell ' + size + ' 2026-11-14 10:00 ' + args[3])
+elif args[:3] == ['shell', 'rm', '-f']:
+    assert args[3].startswith('/data/local/tmp/camera-log-'), args
+    (root / 'heap-removed').touch()
 elif args[:1] == ['shell']:
     assert args[1] in ('cat', 'dumpsys', 'ps'), args
     print('diagnostic: ' + ' '.join(args))
+elif args[:1] == ['pull'] and args[1].endswith('.hprof'):
+    Path(args[2]).write_bytes(b'JAVA PROFILE 1.0.3')
+    print('pulled heap')
 elif args[:2] == ['pull', '/sdcard/FIRST/logs']:
     folder = Path(args[2])
     folder.mkdir()
@@ -71,7 +83,7 @@ class CameraLogTests(unittest.TestCase):
                     if process.poll() is not None or time.monotonic() > deadline:
                         self.fail('Fake logcat did not start: ' + process.communicate(timeout=2)[0])
                     time.sleep(0.05)
-                console, _ = process.communicate('Impact at field wall\nq\n', timeout=15)
+                console, _ = process.communicate('Impact at field wall\nheap cycle 5\nq\n', timeout=30)
                 self.assertEqual(process.returncode, 0, console)
                 raw = (output / 'logcat-full.txt').read_text()
                 self.assertIn('hidden context', raw)
@@ -84,6 +96,12 @@ class CameraLogTests(unittest.TestCase):
                 self.assertIn('Impact at field wall', (output / '02-failure/marker.txt').read_text())
                 self.assertTrue((output / '01-baseline/app-logs/events.jsonl').is_file())
                 self.assertTrue((output / '02-failure/app-logs/events.jsonl').is_file())
+                self.assertIn('cycle 5', (output / '03-failure/marker.txt').read_text())
+                self.assertTrue((output / '03-failure/heap.hprof').read_bytes().startswith(b'JAVA PROFILE'))
+                self.assertFalse((output / '02-failure/heap.hprof').exists())
+                self.assertTrue((root / 'heap-removed').exists())
+                self.assertIn('heap.hprof: saved', console)
+                self.assertTrue((output / '01-baseline/memory.txt').is_file())
                 if reconnect:
                     self.assertGreaterEqual(raw.count('--- logcat connection'), 2)
                     self.assertIn('reconnecting in 3 s', console)

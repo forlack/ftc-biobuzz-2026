@@ -193,6 +193,25 @@ public class Vision implements Mechanism {
         thread.start();
     }
 
+    /**
+     * One AprilTag processor for the life of the app (SDK 12.0 never frees a processor given to
+     * a VisionPortal; see SharedProcessor). Its settings never change, so sharing it is safe.
+     */
+    private static AprilTagProcessor sharedTags;
+
+    /** Call holding CAMERA_LOCK. */
+    private static AprilTagProcessor sharedTags() {
+        if (sharedTags == null) {
+            sharedTags = new AprilTagProcessor.Builder()
+                    // goBILDA 3122-0004-0001 factory calibration at 640x480.
+                    .setLensIntrinsics(545.584, 545.584, 350.588, 223.150)
+                    .setTagLibrary(AprilTagGameDatabase.getBioBuzzTagLibrary())
+                    .setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)
+                    .build();
+        }
+        return sharedTags;
+    }
+
     private void open() {
         WebcamName camera = hardwareMap.tryGet(WebcamName.class, CAMERA);
         if (camera == null) {
@@ -200,12 +219,8 @@ public class Vision implements Mechanism {
             return;
         }
         try {
-            tags = new AprilTagProcessor.Builder()
-                    // goBILDA 3122-0004-0001 factory calibration at 640x480.
-                    .setLensIntrinsics(545.584, 545.584, 350.588, 223.150)
-                    .setTagLibrary(AprilTagGameDatabase.getBioBuzzTagLibrary())
-                    .setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)
-                    .build();
+            tags = sharedTags();
+            tags.getFreshDetections();   // drop the last session's leftover result
             portal = new VisionPortal.Builder()
                     .setCamera(camera)
                     .setCameraResolution(new Size(640, 480))
@@ -213,7 +228,7 @@ public class Vision implements Mechanism {
                     .setStreamFormat(VisionPortal.StreamFormat.MJPEG)
                     // No preview on the hub itself (it has no screen); the dashboard's uses getFrameBitmap.
                     .enableLiveView(false)
-                    .addProcessor(tags)
+                    .addProcessor(SharedProcessor.next(tags))   // not tags itself: see SharedProcessor
                     .build();
         } catch (RuntimeException error) {
             // A camera that will not start must never stop the OpMode.

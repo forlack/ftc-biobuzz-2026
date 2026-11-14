@@ -2,6 +2,30 @@
 
 Updated 2026-11-12. Team 24621 Total Chaos.
 
+## 2026-11-14: memory leak on every camera INIT (SDK bug, fixed in our code)
+
+Symptom: repeated INIT/STOP made the robot slower each time, then it crashed/rebooted.
+Capture `ftc-camera-20261114-102902-*`: 20 Field Centric INIT/STOP cycles, then a heap
+dump (`heap` in `./camera-log`). App Native Heap 4.8 MB -> 568 MB (~28 MB per INIT),
+low-memory killer active during the dump, crash after.
+
+Cause: FTC SDK 12.0 `VisionPortal.Builder.addProcessor()` puts every processor in a
+private static list `attachedProcessors` and never removes it (bytecode: only
+`contains`/`add`). Each AprilTagProcessor keeps its native detector and Mats (freed
+only in `finalize()`). Heap dump: 1 VisionPortalImpl alive (ours, latest), 17
+AprilTagProcessorImpl held only by that list. Reported upstream:
+https://github.com/FIRST-Tech-Challenge/FtcRobotController/issues/2366 (2026-11-14).
+
+Fix (`mechanisms/SharedProcessor.java`, `Vision.sharedTags()`): one AprilTagProcessor
+for the life of the app; each new portal gets a tiny pass-through `VisionProcessor`
+(only those pile up in the SDK list). Only the newest pass-through forwards frames, so
+two sessions never use the shared processor at once. A leftover result from the last
+session is dropped at open. The SDK refuses the same processor twice, so passing the
+shared processor directly is impossible. Verified: robot and sim builds; desktop check
+of the pass-through logic. **Robot check pending:** 20 INIT/STOP cycles + `heap`;
+expect one AprilTagProcessorImpl and flat native memory (~47 MB after the first).
+Remove when the SDK fixes #2366.
+
 ## 2026-11-12 practice: three captures with ./camera-log
 
 Background: 4 days stable at home plus a 1-hour Smoke Test on a stand, then a camera
@@ -368,6 +392,11 @@ logs **before re-INIT/reboot**. Logcat continues during snapshots; q or Ctrl+C e
 recording. ADB disconnects trigger reconnection without restarting ADB or the robot;
 gaps and possible replay of buffered lines are reported. Kernel logs may be denied.
 The helper only reads the robot and never clears logs or changes settings.
+Type `heap` (optionally `heap cycle 5`) + Enter to also save a Java heap dump of the
+robot app (`heap.hprof` in that snapshot folder) for the INIT memory leak. The app
+pauses for a few seconds while it writes, so never while driving. The dump goes to
+`/data/local/tmp` on the robot, is pulled, then deleted. Every snapshot (baseline too)
+now saves `memory.txt` (`dumpsys meminfo`).
 
 1. Robot tab -> Problems -> Download, then also inspect Events for lifecycle order.
 2. If ADB works, preserve all available Android buffers and uptime:

@@ -6,6 +6,15 @@ Last updated: 2026-11-12
 
 ---
 
+## Camera INIT memory leak (2026-11-14)
+
+SDK 12.0 bug: `VisionPortal.Builder.attachedProcessors` (static) keeps every processor
+forever; a new AprilTagProcessor per INIT leaked ~28-40 MB native, and repeated INITs
+slowed then crashed the robot (heap dump proof in CAMERA-TROUBLESHOOTING.md). Reported:
+FtcRobotController issue #2366. Fix: `mechanisms/SharedProcessor` + `Vision.sharedTags()`
+(one processor per app, a pass-through per portal). Built; robot check (20 cycles +
+`./camera-log` `heap`) pending. Until verified: power-cycle before matches.
+
 ## Practice camera update (2026-11-12)
 
 Three `./camera-log` captures; details in CAMERA-TROUBLESHOOTING.md (top section).
@@ -31,7 +40,10 @@ Three `./camera-log` captures; details in CAMERA-TROUBLESHOOTING.md (top section
 `./camera-log` is a laptop-only, read-only capture helper: unfiltered logcat saved
 to Desktop, camera/USB and warnings/errors printed live, Enter (or a note + Enter)
 marks a failure and saves diagnostics while logcat continues. q / Ctrl+C stops.
-Verified on the robot 2026-11-12.
+Verified on the robot 2026-11-12. `heap` + Enter also saves a heap
+dump (2026-11-14, fake-ADB tested only) for the camera INIT memory leak: each Field
+Centric INIT leaves ~40 MB native memory (Nov 12 diagnostics: 47 -> 87 -> 128 MB after
+each STOP); repeated INITs slow the robot, then it reboots. Power-cycle before matches.
 
 ## Camera investigation update (2026-11-07)
 

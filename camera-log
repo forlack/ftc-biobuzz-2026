@@ -4,7 +4,10 @@
 Run on robot Wi-Fi: ./camera-log
 USB: ./camera-log --serial YOUR_USB_SERIAL
 Enter marks a camera failure and saves diagnostics; q or Ctrl+C ends recording.
-Only reads the robot. Does not clear logs, change settings, or restart anything.
+"heap" (+ optional note) + Enter also saves a Java heap dump of the robot app, for
+finding memory leaks. The app pauses for a few seconds while it dumps: never while
+driving. The dump is written to /data/local/tmp on the robot, pulled, then deleted.
+Otherwise only reads the robot. Does not clear logs, change settings, or restart anything.
 """
 import argparse
 from datetime import datetime
@@ -14,6 +17,7 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 
 
 ROOT = Path(__file__).resolve().parent
@@ -94,7 +98,8 @@ class Capture:
                     break
                 boundary = f'--- logcat connection {datetime.now().astimezone().isoformat()} ---'
                 raw.write(boundary + '\n')
-                self.report('Recording logcat. Enter = failure snapshot; q / Ctrl+C = finish.')
+                self.report('Recording logcat. Enter = failure snapshot; heap + Enter = snapshot '
+                            'with heap dump; q / Ctrl+C = finish.')
                 try:
                     process = subprocess.Popen(
                         [self.adb, '-s', self.serial, 'logcat', '-b', 'all', '-v', 'threadtime', '*:V'],
@@ -128,7 +133,7 @@ class Capture:
                     self.report('Logcat ended; reconnecting in 3 s. Buffered lines may repeat.')
                     self.stop.wait(3)
 
-    def snapshot(self, label, baseline=False):
+    def snapshot(self, label, baseline=False, heap=False):
         self.snapshot_number += 1
         folder = self.folder / f'{self.snapshot_number:02d}-{"baseline" if baseline else "failure"}'
         folder.mkdir()
@@ -141,11 +146,9 @@ class Capture:
             ('usb.txt', ['shell', 'dumpsys', 'usb'], 5),
             ('processes.txt', ['shell', 'ps'], 5),
         ]
+        jobs.append(('memory.txt', ['shell', 'dumpsys', 'meminfo', PACKAGE], 8))
         if not baseline:
-            jobs.extend([
-                ('memory.txt', ['shell', 'dumpsys', 'meminfo', PACKAGE], 8),
-                ('kernel.txt', ['shell', 'dmesg'], 5),
-            ])
+            jobs.append(('kernel.txt', ['shell', 'dmesg'], 5))
         jobs.append(('pull-app-logs.txt', ['pull', '/sdcard/FIRST/logs', str(folder / 'app-logs')], 15))
         for name, command, timeout in jobs:
             code, output = self.command(command, timeout)
@@ -153,7 +156,35 @@ class Capture:
             # Some hubs prohibit dmesg even when the shell returns success.
             denied = 'permission denied' in output.lower() or 'operation not permitted' in output.lower()
             self.report(f'  {name}: {"unavailable (see file)" if code or denied else "saved"}')
+        if heap:
+            self.heap_dump(folder)
         self.report('Snapshot complete. Capture the dropout before re-INIT/reboot when possible.')
+
+    def heap_dump(self, folder):
+        # am dumpheap returns before the app finishes writing: wait until the size stops growing.
+        remote = f'/data/local/tmp/camera-log-{datetime.now().strftime("%Y%m%d-%H%M%S")}.hprof'
+        self.report('  heap dump: the robot app pauses for a few seconds while it writes...')
+        code, output = self.command(['shell', 'am', 'dumpheap', PACKAGE, remote], 30)
+        if code or 'error' in output.lower() or 'exception' in output.lower():
+            (folder / 'heap-dump.txt').write_text(output)
+            self.report('  heap.hprof: unavailable (see heap-dump.txt)')
+            return
+        size, steady, deadline = -1, 0, time.monotonic() + 90
+        while steady < 2 and time.monotonic() < deadline and not self.stop.is_set():
+            time.sleep(1)
+            _, listing = self.command(['shell', 'ls', '-l', remote], 5)
+            fields = listing.split()
+            current = int(fields[4]) if len(fields) > 4 and fields[4].isdigit() else -1
+            steady = steady + 1 if current > 0 and current == size else 0
+            size = current
+        if steady < 2:
+            self.report('  heap.hprof: not finished after 90 s; left on the robot at ' + remote)
+            return
+        code, output = self.command(['pull', remote, str(folder / 'heap.hprof')], 300)
+        (folder / 'heap-dump.txt').write_text(output)
+        self.command(['shell', 'rm', '-f', remote], 10)
+        megabytes = size / 1048576
+        self.report(f'  heap.hprof: {"unavailable (see heap-dump.txt)" if code else f"saved ({megabytes:.0f} MB)"}')
 
     def close(self):
         self.stop.set()
@@ -198,7 +229,11 @@ def main():
                 break
             if note.lower() in ('q', 'quit'):
                 break
-            capture.snapshot(note or 'Camera dropout observed')
+            words = note.split(None, 1)
+            if words and words[0].lower() == 'heap':
+                capture.snapshot(words[1] if len(words) > 1 else 'Heap dump', heap=True)
+            else:
+                capture.snapshot(note or 'Camera dropout observed')
     except KeyboardInterrupt:
         capture.report('Stopping recording.')
     finally:
