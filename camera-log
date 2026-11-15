@@ -197,11 +197,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--serial', default='192.168.43.1:5555', help='ADB serial or host:port')
     parser.add_argument('--adb', default=find_adb(), help='path to adb (normally discovered automatically)')
-    parser.add_argument('--output', type=Path, help='new capture directory (default: timestamped folder on Desktop)')
+    parser.add_argument('--output', type=Path, help='new capture directory (default: logs/<date>/ timestamped folder)')
     args = parser.parse_args()
     if not args.adb:
         parser.error('adb not found; use --adb /path/to/platform-tools/adb')
-    folder = (args.output or Path.home() / 'Desktop' /
+    folder = (args.output or ROOT / 'logs' / datetime.now().strftime('%Y-%m-%d') /
               ('ftc-camera-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f'))).expanduser().resolve()
     folder.mkdir(parents=True, exist_ok=False)
     (folder / 'README.txt').write_text(

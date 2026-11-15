@@ -2,9 +2,26 @@
 
 Living context for this workspace. Update as things change.
 
-Last updated: 2026-11-12
+Last updated: 2026-11-14
 
 ---
+
+## Competition 2026-11-14: three separate problems; running with vision off
+
+Details: CAMERA-TROUBLESHOOTING.md (top section). Plan (user): run with
+`VISION_ON = false` for a while and see if the robot stays stable (one hard match with
+vision off was clean).
+1. Hub froze after a wall hit (Pinpoint light stayed on, so power was present; needed a
+   power cycle). Power glitch at the Control Hub XT30/switch vs the camera's USB under
+   the hit. Next: wiggle test with the camera streaming, secure the camera cable.
+2. Teleop camera dead (STREAMING, 0 FPS) in two matches, then STOP froze the DS and the
+   app restarted. Not reproduced in the pits. Both failures followed a short teleop INIT
+   in the queue minutes earlier; the one match without it worked. Unproven.
+3. AprilTag SIGSEGV (09:05): upstream workerpool race (fixed 2024-06-24, after the
+   apriltag 6319d84 inside org.openftc:apriltag 2.1.0 that SDK 12.0 bundles). ~70%.
+   Proposed after the competition, not built: `setNumThreads(1)`, or plugin 2.2.0.
+`./match-log` (run after a match, before power-cycling) and `./camera-log` save to
+`logs/<date>/` (gitignored). None of the above is a code change on the robot.
 
 ## Camera INIT memory leak (2026-11-14)
 

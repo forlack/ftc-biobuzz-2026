@@ -1,6 +1,77 @@
 # Camera failures and robot restarts — investigation log
 
-Updated 2026-11-12. Team 24621 Total Chaos.
+Updated 2026-11-14. Team 24621 Total Chaos.
+
+## 2026-11-14 competition: three separate problems
+
+Logs: `logs/2026-11-14/` (gitignored). Times are robot clock (about 1h04m behind the
+laptop until ~14:00, then matching it). Current plan (user, 2026-11-14): run with
+`VISION_ON = false` for a while and see if the robot stays stable. One full match
+with vision off and hard hits was clean (no logs pulled).
+
+**Problem 1: hub froze after hitting a wall (~14:36:10).** Teleop camera was streaming
+at 41-54 FPS. Our 1 Hz diagnostics stop dead at 14:36:09 with no crash, error or
+warning (the SDK log ends earlier: unflushed writes were lost). The hub booted from
+scratch about 3 3/4 minutes later (clock reset), i.e. only after a power cycle. The
+Pinpoint's light stayed on (it is powered from the Control Hub's I2C port), so the hub
+had power: the Android side froze hard, it was not a power cut or an app crash (an app
+crash restarts itself in ~12 s with the clock intact). Candidates: a millisecond power
+glitch (XT30 into the Control Hub, power switch, battery connector) hanging the SoC
+while the hub's microcontroller rode through; the camera's USB connection glitching
+under the hit and locking up the kernel (Linux 3.10; this is a plausible mechanism, not
+a documented Control Hub failure); static. The kernel log could not help (wiped by the
+power cycle). Next: wiggle test with teleop running and the camera streaming (tug the
+Control Hub XT30, power switch, camera USB at both ends); secure the camera cable at
+the hub's USB port; on a repeat, note Control Hub and Expansion Hub LEDs before
+power-cycling. Control Hub OS 1.1.6 (current); its kernel is Linux 3.10.245 built by
+REV 2025-05-08: there is no newer kernel to update to.
+
+**Problem 2: teleop camera dead in two matches (11:58 and 12:26), then STOP froze the
+DS and the app restarted.** Camera open, MJPEG negotiation and "streaming started" all
+succeeded, then no pictures: diagnostics for the 12:26 match show STREAMING at 0 FPS
+every second of teleop (aim lights white; the drive team saw red briefly at the start).
+At the end-of-match STOP our OpMode finished cleanly, then nothing was logged for
+~11-12 s (no Fatal signal) and the app restarted with the clock intact: most likely the
+SDK hung closing the dead camera and restarted the app (unproven: no log in the gap).
+Not the memory leak (fresh boot, second camera session), not deploy-while-running, not
+AprilTag (it never got a frame). Ruled out by pit tests: PLAY pressed immediately after
+INIT (6 + 11 tries, all 45-55 FPS), low battery, auton followed by teleop (worked in
+earlier practices). Common to both failed matches and to no pit test: fresh boot, a
+short teleop INIT/STOP in the queue (camera check), minutes idle plus auton (4.5 / 12
+min), then teleop = second camera session -> dead. The 14:36 match skipped the queue
+INIT and the camera worked (one data point). Static on the event field is still
+possible. Pit test not yet run: power on, teleop INIT until lights red/green, STOP,
+wait 5-10 min, auton, teleop INIT + PLAY. On any field failure, run `./match-log`
+BEFORE power-cycling (the kernel log shows whether the camera's USB reset).
+
+**Problem 3: app crash inside AprilTag (09:05:26, during camera work).** SIGSEGV on an
+AprilTag worker thread. The unwind tables (`llvm-dwarfdump --eh-frame` on the AAR's
+arm64 `libapriltag.so`, BuildID 682e02eb...) show `connected_components` ends at
+0x32028; the crash (pc 0x32270) is in the next, unnamed function, which is
+`do_unionfind_line2` (the union-find root-chasing loop reading `parent[root]`); its
+caller (lr 0x32564) is `do_unionfind_task2`, whose code reads `struct unionfind_task`
+fields at the source's offsets. Source: SDK 12.0 uses org.openftc:apriltag 2.1.0
+(OpenFTC/EOCV-AprilTag-Plugin), which pins AprilRobotics/apriltag 6319d84
+(2024-06-08). Upstream fixed a workerpool race on 2024-06-24 (`aa5951a` predicate for
+spurious wakeups, `c16bba6` wait for worker start; neither in 6319d84): a spuriously
+woken worker can be counted as finished twice, so the main thread moves on and frees
+the union-find buffers (~600 KB, returned to the OS, so any later read faults) while
+another worker is still in union-find. Fits the location, the fault type and the
+rarity (once in many hours). About 70% likely, not proven (one dump; memory corruption
+from elsewhere is still possible). Fixes, after the competition and with permission:
+`AprilTagProcessor.Builder.setNumThreads(1)` (SDK default 3; one thread never uses the
+workerpool; measure FPS), or force org.openftc:apriltag 2.2.0 (May 2026, has both
+fixes, on Maven Central, but 109 upstream commits and unchecked with SDK 12.0). Worth
+reporting to FIRST (ask the SDK to move to plugin 2.2.0). This bug cannot freeze the
+hub (problem 1) or stop the camera sending pictures (problem 2).
+
+**Tools added.** `./match-log`: after a match, pulls kernel log (dmesg; lost on power
+cycle), all logcat buffers, `robotControllerLog.txt(.1)` (survives reboots), our
+diagnostics (`/sdcard/FIRST/logs`, 1 Hz camera state/FPS, CPU, memory; about 1 hour),
+the SDK's `matchlogs`, usb/meminfo/ps, and writes `summary.txt` (uptime, kernel USB
+events after startup, crash lines). Read-only. `./camera-log` and `./match-log` save to
+`logs/<date>/`. How to tell incidents apart: app restart = new process with the clock
+intact (~12 s); hub boot = log timestamps restart at 12-31 16:00 (clock reset).
 
 ## 2026-11-14: memory leak on every camera INIT (SDK bug, fixed in our code)
 
@@ -29,7 +100,7 @@ Remove when the SDK fixes #2366.
 ## 2026-11-12 practice: three captures with ./camera-log
 
 Background: 4 days stable at home plus a 1-hour Smoke Test on a stand, then a camera
-dropout at practice. Captures are in `~/Desktop/ftc-camera-20261112-*` (not in Git).
+dropout at practice. Captures are in `logs/2026-11-12/ftc-camera-*` (gitignored; moved from the Desktop).
 Time mapping used below: app `monotonicMs` = `/proc/uptime` = kernel dmesg seconds
 (within ~1 s); libusb's bracketed timestamps are NOT kernel time.
 

@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Pull every log needed to diagnose a match failure, in one go.
+
+Run after the match, BEFORE power-cycling the robot (a power cycle erases the
+kernel log, which shows whether the camera's USB connection reset):
+    ./match-log                      (robot Wi-Fi)
+    ./match-log --serial USB_SERIAL  (USB)
+    ./match-log "camera white at teleop start"   (optional note)
+
+Saves to a logs/<date>/ timestamped folder (next to this script). Only reads the robot: it never
+clears logs, changes settings, or restarts anything.
+"""
+import argparse
+from datetime import datetime
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+
+
+ROOT = Path(__file__).resolve().parent
+PACKAGE = 'com.qualcomm.ftcrobotcontroller'
+
+# (file name, adb arguments, timeout seconds). Text output is saved to the file.
+COMMANDS = [
+    ('robot-time.txt', ['shell', 'date; cat /proc/uptime /proc/sys/kernel/random/boot_id'], 10),
+    ('kernel.txt', ['shell', 'dmesg'], 20),
+    ('logcat-all.txt', ['logcat', '-d', '-b', 'all', '-v', 'threadtime'], 90),
+    ('usb.txt', ['shell', 'dumpsys', 'usb'], 10),
+    ('memory.txt', ['shell', 'dumpsys', 'meminfo', PACKAGE], 15),
+    ('processes.txt', ['shell', 'ps'], 10),
+]
+# (remote path, local name). Missing files are reported, not fatal.
+PULLS = [
+    ('/sdcard/robotControllerLog.txt', 'robotControllerLog.txt'),
+    ('/sdcard/robotControllerLog.txt.1', 'robotControllerLog.txt.1'),
+    ('/sdcard/FIRST/logs', 'app-logs'),
+    ('/sdcard/FIRST/matchlogs', 'matchlogs'),
+]
+KERNEL_USB = re.compile(r'usb .*(disconnect|reset|new .*speed|device descriptor|error|unable)|'
+                        r'xhci|ehci|ohci|over-?current', re.IGNORECASE)
+
+
+def find_adb():
+    candidates = []
+    props = ROOT / 'local.properties'
+    if props.is_file():
+        for line in props.read_text().splitlines():
+            if line.startswith('sdk.dir='):
+                candidates.append(Path(line.split('=', 1)[1].strip()) / 'platform-tools/adb')
+    for name in ('ANDROID_HOME', 'ANDROID_SDK_ROOT'):
+        if os.environ.get(name):
+            candidates.append(Path(os.environ[name]) / 'platform-tools/adb')
+    found = shutil.which('adb')
+    if found:
+        candidates.append(Path(found))
+    candidates.extend([Path.home() / 'Library/Android/sdk/platform-tools/adb',
+                       Path.home() / 'Android/Sdk/platform-tools/adb'])
+    return next((str(path) for path in candidates if path.is_file()), None)
+
+
+def run(adb, serial, args, timeout):
+    command = [adb] + (['-s', serial] if serial else []) + args
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, errors='replace', timeout=timeout)
+        return result.returncode, result.stdout
+    except subprocess.TimeoutExpired as error:
+        partial = error.stdout or b''
+        if isinstance(partial, bytes):
+            partial = partial.decode(errors='replace')
+        return 124, partial + f'\nTimed out after {timeout} seconds.\n'
+    except OSError as error:
+        return 1, str(error) + '\n'
+
+
+def boot_time(line):
+    match = re.match(r'\[\s*(\d+)\.', line)
+    return bool(match) and int(match.group(1)) < 30
+
+
+def summarize(folder):
+    """Plain-language notes on what the files contain, for a first look."""
+    notes = []
+    uptime = (folder / 'robot-time.txt').read_text().split()
+    seconds = next((float(word) for word in uptime if re.fullmatch(r'\d+\.\d+', word)), None)
+    if seconds is not None:
+        notes.append(f'Robot (Android) has been up {seconds / 60:.1f} min.')
+        if seconds < 180:
+            notes.append('  Recently booted: if it was power-cycled after the failure, the '
+                         "failure's kernel log is gone.")
+    kernel = (folder / 'kernel.txt').read_text()
+    if 'permission denied' in kernel.lower() or 'operation not permitted' in kernel.lower():
+        notes.append('Kernel log: not readable on this robot.')
+    else:
+        usb = [line for line in kernel.splitlines() if KERNEL_USB.search(line)]
+        boot = [line for line in usb if boot_time(line)]
+        usb = [line for line in usb if not boot_time(line)]
+        notes.append(f'Kernel log: {len(boot)} USB lines from startup (first 30 s) not shown.')
+        notes.append(f'Kernel log: {len(kernel.splitlines())} lines, {len(usb)} USB events '
+                     'after startup (connect/disconnect/reset/errors):')
+        notes.extend('  ' + line for line in usb[-25:])
+    logcat = (folder / 'logcat-all.txt').read_text(errors='replace')
+    crashes = [line for line in logcat.splitlines()
+               if re.search(r'Fatal signal|FATAL EXCEPTION|Abort message', line)]
+    notes.append(f'Logcat: {len(crashes)} crash lines.')
+    notes.extend('  ' + line for line in crashes[-10:])
+    return '\n'.join(notes) + '\n'
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('note', nargs='*', help='what happened (saved with the logs)')
+    parser.add_argument('--serial', default='192.168.43.1:5555', help='ADB serial or host:port')
+    parser.add_argument('--adb', default=find_adb(), help='path to adb (normally discovered automatically)')
+    parser.add_argument('--output', type=Path, help='new folder (default: logs/<date>/ timestamped folder)')
+    args = parser.parse_args()
+    if not args.adb:
+        parser.error('adb not found; use --adb /path/to/platform-tools/adb')
+
+    # TCP ADB only; a USB serial must never become an adb connect target.
+    if ':' in args.serial:
+        run(args.adb, None, ['connect', args.serial], 10)
+    code, state = run(args.adb, args.serial, ['get-state'], 10)
+    if code != 0 or state.strip() != 'device':
+        parser.exit(1, f'Cannot reach {args.serial}. Join robot Wi-Fi or use --serial for USB.\n')
+
+    folder = (args.output or ROOT / 'logs' / datetime.now().strftime('%Y-%m-%d') /
+              ('ftc-match-' + datetime.now().strftime('%Y%m%d-%H%M%S'))).expanduser().resolve()
+    folder.mkdir(parents=True, exist_ok=False)
+    (folder / 'README.txt').write_text(
+        f'Target: {args.serial}\nLaptop time: {datetime.now().astimezone().isoformat()}\n'
+        f'Note: {" ".join(args.note) or "(none)"}\n'
+        'robot-time.txt: robot clock, uptime (s), boot id. The robot clock can differ from the laptop.\n'
+        'kernel.txt: kernel log since boot (USB connect/disconnect/reset). Lost on power cycle.\n'
+        'logcat-all.txt: Android log buffers (recent history only).\n'
+        'robotControllerLog.txt(.1): the FTC app log, kept across reboots.\n'
+        'app-logs: our diagnostics/events. matchlogs: the SDK per-OpMode logs.\n'
+        'summary.txt: a first look; read the files for the full picture.\n')
+    print(f'Saving to {folder}')
+    for name, command, timeout in COMMANDS:
+        code, output = run(args.adb, args.serial, command, timeout)
+        (folder / name).write_text(output)
+        print(f'  {name}: {"saved" if code == 0 else "problem (see file)"}')
+    for remote, local in PULLS:
+        code, output = run(args.adb, args.serial, ['pull', remote, str(folder / local)], 120)
+        (folder / 'pull-log.txt').open('a').write(f'$ pull {remote}\n{output}\n')
+        print(f'  {local}: {"saved" if code == 0 else "not found or failed (see pull-log.txt)"}')
+    summary = summarize(folder)
+    (folder / 'summary.txt').write_text(summary)
+    print('\n' + summary)
+    print(f'Done. Logs in {folder}')
+
+
+if __name__ == '__main__':
+    main()

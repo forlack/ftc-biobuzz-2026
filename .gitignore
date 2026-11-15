@@ -96,3 +96,6 @@ sim/build/
 sim/.gradle/
 .robot-sync.json
 tests/e2e/out/
+
+# Robot logs pulled by camera-log / match-log (large, may include heap dumps)
+/logs/
